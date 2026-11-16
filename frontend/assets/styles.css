@@ -360,3 +360,284 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
   body { background: #fff; }
   .sheet { box-shadow: none; background-image: none; }
 }
+
+/* ================================================================================================
+   TEACHER SCREEN (/teacher/) — appended section. Nothing above this line is changed.
+
+   Chat + fee ledger. Reuses the tokens, .sheet, .stamp and :focus-visible rules defined above and
+   introduces no new colour: every ink here is --ink (12.6:1 on --paper-edge, 13.1:1 on --paper),
+   --ink-soft (6.3:1 on --paper-edge, 7.0:1 on --paper) or an existing stamp token.
+   Touch targets are 2.75rem = 44px. The prefers-reduced-motion block above already disables the
+   message-arrive slide, because it matches on *.
+   ================================================================================================ */
+
+/* A label only a screen reader needs (the chat input label). */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- back to the hello page ---------- */
+
+.crumbs { margin: 1rem 0 0; font-size: 0.9rem; }
+
+/* 44px tall target without looking like a button. */
+.crumbs__link {
+  display: inline-block;
+  padding: 0.6rem 0.2rem;
+  min-height: 2.75rem;
+}
+
+/* ---------- chat ---------- */
+
+.chat__log {
+  display: block;
+  max-height: 24rem;          /* about a phone screen of history, then it scrolls */
+  overflow-y: auto;
+  margin: 0 0 0.5rem;
+  overscroll-behavior: contain;
+}
+
+.chat__messages { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.chat__empty { margin: 0; }
+
+.chat__empty-heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.chat__examples {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Example prompts look like something pencilled in, not like buttons: they are not clickable. */
+.chat__example {
+  padding: 0.25rem 0.6rem;
+  background: var(--paper);
+  border: 1px dashed var(--rule);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.msg {
+  max-width: 88%;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+  line-height: var(--rule-h);
+  animation: msg-in 160ms ease-out;
+}
+
+/* The teacher writes in the margin on the right; Panthiya answers on the ruled part. */
+.msg--teacher {
+  align-self: flex-end;
+  background: var(--paper-edge);
+  border-color: var(--rule);
+}
+
+.msg--panthiya {
+  align-self: flex-start;
+  background: #fff;
+  border-left: 3px solid var(--margin-line);
+}
+
+.msg__who {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.msg__text { display: block; }
+
+@keyframes msg-in {
+  from { transform: translateY(0.25rem); opacity: 0; }
+}
+
+.chat__status {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: var(--rule-h);
+  color: var(--ink-soft);
+}
+.chat__status:empty { margin: 0; line-height: 0; }
+
+/* ---------- composer ---------- */
+
+.composer { display: grid; gap: 0.5rem; margin: 0; }
+
+.composer__input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: var(--radius);
+}
+
+.composer__row { display: flex; gap: 0.5rem; justify-content: space-between; }
+
+.composer__mic,
+.composer__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.35rem 1rem;
+  font: inherit;
+  font-size: 0.95rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.composer__send {
+  color: var(--paper);
+  background: var(--ink);
+  border: 1.5px solid var(--ink);
+  font-weight: 600;
+}
+
+/* Disabled state is drawn with a dashed border and --ink-soft text rather than opacity, so it
+   still reads at 7.0:1 instead of fading under the 4.5:1 floor. */
+.composer__mic {
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink-soft);
+}
+
+.composer__mic[disabled],
+.composer__send[disabled] { cursor: not-allowed; }
+.composer__send[disabled] { background: var(--ink-soft); border-color: var(--ink-soft); }
+
+/* A microphone, drawn in CSS so there is nothing to download. */
+.composer__mic-glyph {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.85rem;
+  border: 1.5px solid currentColor;
+  border-radius: 0.3rem 0.3rem 0.3rem 0.3rem;
+  border-bottom-width: 3px;
+}
+
+.composer__note {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* ---------- fee ledger ---------- */
+
+.ledger {
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 0 var(--paper-edge);
+}
+
+.ledger__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--paper-edge);
+  border-bottom: 2px solid var(--margin-line);
+}
+
+.ledger__month { margin: 0; font-weight: 600; }
+
+.ledger__total { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+
+.ledger__total-amount {
+  margin-left: 0.3rem;
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger__status {
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.ledger__status:empty { display: none; }
+
+.ledger__list { margin: 0; padding: 0; list-style: none; }
+
+.ledger__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.9rem;
+  border-bottom: 1px dashed var(--rule);
+}
+.ledger__row:last-child { border-bottom: 0; }
+
+.ledger__name { flex: 1 1 auto; min-width: 0; }
+
+.ledger__amount {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The ledger stamps sit in a tight row, so they are a size smaller than the M0 sample stamps.
+   Tamil spells "paid" in fourteen letters, so a stamp may shrink and wrap onto a second line
+   rather than push the amount off the row. */
+.ledger__row .stamp {
+  flex: 0 1 auto;
+  max-width: 45%;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  white-space: normal;
+  text-align: center;
+}
+
+/* The third stamp. Amber ink is already in the palette at 4.8:1 on paper and 5.9:1 on the white
+   ledger row, so "due" reuses --stamp-draft rather than adding a fourth colour; the two never
+   appear in the same list (fees here, parent drafts in M4). */
+.stamp--due { color: var(--stamp-draft); transform: rotate(1.5deg); }
+
+/* ---------- teacher screen, wider screens ---------- */
+
+@media (min-width: 40rem) {
+  .composer { grid-template-columns: 1fr auto; align-items: start; }
+  .composer__row { justify-content: flex-end; }
+  .chat__log { max-height: 28rem; }
+}
+
+/* ---------- teacher screen, print ---------- */
+
+@media print {
+  .crumbs, .composer, .composer__note, .chat__empty, .chat__status { display: none; }
+  .chat__log { max-height: none; overflow: visible; }
+  .ledger { box-shadow: none; }
+}

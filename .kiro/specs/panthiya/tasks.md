@@ -36,18 +36,18 @@ stops and asks before those.
 ## M1 — data model + teacher chat for attendance and fees · branch `feat/m1-teacher-chat`
 
 - [ ] 1.1 **[human]** Day-1 Sinhala test: `scripts/test-sinhala.mjs` against candidate models, pick one, record the verdict — design §2.1
-- [ ] 1.2 `backend/template.yaml` — the 8 DynamoDB tables with the keys and GSIs in design §4, on-demand, no wildcard IAM — req 13.1–13.3
-- [ ] 1.3 `backend/lib/names.mjs` — the shared `nameKey` normaliser: NFKC, homoglyph table, Sinhala/Tamil transliteration — design §4.1
-- [ ] 1.4 `tests/unit/names.test.mjs` — `Dilmi`, `දිල්මි`, `Dіlmі` (Cyrillic), `DILMI`, `Dilmi-ge` all collapse to one key — req 9.6
-- [ ] 1.5 `backend/lib/auth.mjs` — read role and `sub` from verified claims; `requireRole()`; `resolveScope()` — req 1.2–1.7
-- [ ] 1.6 `backend/lib/audit.mjs` — `writeAudit()` called in the same invocation as every data write — req 10.1, 10.2
+- [x] 1.2 `backend/template.yaml` — the 8 DynamoDB tables with the keys and GSIs in design §4, on-demand, no wildcard IAM — req 13.1–13.3
+- [x] 1.3 `backend/lib/names.mjs` — the shared `nameKey` normaliser: NFKC, homoglyph table, Sinhala/Tamil transliteration — design §4.1
+- [x] 1.4 `tests/unit/names.test.mjs` — `Dilmi`, `දිල්මි`, `Dіlmі` (Cyrillic), `DILMI`, `Dilmi-ge` all collapse to one key — req 9.6
+- [x] 1.5 `backend/lib/auth.mjs` — read role and `sub` from verified claims; `requireRole()`; `resolveScope()` — req 1.2–1.7
+- [x] 1.6 `backend/lib/audit.mjs` — `writeAudit()` called in the same invocation as every data write — req 10.1, 10.2
 - [ ] 1.7 `backend/functions/actions-teacher/` — `addStudent`, `markAttendance`, `recordFee`, `addMarks`, each re-authorising every model-supplied identifier — req 2.1–2.4, 3.1–3.4, 4.1–4.3, 5.1–5.3
 - [ ] 1.8 Fee and mark validation: numeric, range-checked, amount confirmed back before persisting — req 4.5, 5.2
 - [ ] 1.9 `backend/functions/chat/` — orchestrator: claims → `sessionAttributes` → `InvokeAgent`; input length limits — req 1.3, 5 (API limits)
 - [ ] 1.10 Agent instructions assembled from the steering rules, with the server-set role preamble — design §6.1
 - [ ] 1.11 **[human]** Create the Bedrock agent + the Teacher action group; record IDs as SAM parameters
-- [ ] 1.12 `backend/seed/seed.mjs` — one demo class, 12 fictional students, fictional parents, realistic fees — req 13.7
-- [ ] 1.13 `frontend/teacher/` — chat screen and fee ledger with Paid/Unpaid stamps — req 12.x
+- [x] 1.12 `backend/seed/seed.mjs` — one demo class, 12 fictional students, fictional parents, realistic fees — req 13.7
+- [x] 1.13 `frontend/teacher/` — chat screen and fee ledger with Paid/Unpaid stamps — req 12.x
 - [ ] 1.14 `tests/unit/` — one test file per teacher action, including "non-teacher role is denied"
 - [ ] 1.15 **[human]** First `sam deploy` (ask before running; costs money)
 
