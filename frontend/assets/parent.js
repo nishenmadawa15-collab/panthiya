@@ -7,11 +7,11 @@
 // Same hard rule as teacher.js: strings reach the DOM through textContent only, never as HTML
 // (requirement 12.7).
 //
-// ponytail: this file repeats the language shell from teacher.js (initialLang, loadPack, apply,
-// setText, fillSlots, t) rather than importing it. teacher.js already carries the note that the
-// third page should lift those into assets/i18n.mjs — this is that third page, so the lift is now
-// worth doing, but it edits teacher.js and app.js, which other lanes own right now. Do it in one
-// commit when those lanes are quiet; nothing here changes except the import.
+// The language shell lives in assets/i18n.js and is shared by every page. It owns the data-i18n
+// pass, the title, document.lang, the language buttons and the textContent-only rule; this file
+// registers a re-render with onLang() so a language switch redraws dynamic content in place.
+
+import { init, t, setText, onLang } from './i18n.js';
 
 /* ================================================================================================
    1. Data access — the only part of this screen that knows where data comes from.
@@ -83,48 +83,6 @@ async function askQuestion(text) {
   return { answerKey: MOCK.answerKey };
 }
 
-/* ================================================================================================
-   2. Language
-   ================================================================================================ */
-
-const LANGS = ['si', 'ta', 'en'];
-const FALLBACK = 'en';
-const STORAGE_KEY = 'panthiya.lang';
-
-/** The only way text is allowed to enter the page. */
-function setText(el, value) {
-  el.textContent = value;
-}
-
-/** Fill {name} slots in a pack string. No regex, so a value with $ or \ cannot bite. */
-function fillSlots(template, values) {
-  let out = template;
-  for (const [name, value] of Object.entries(values)) {
-    out = out.split(`{${name}}`).join(String(value));
-  }
-  return out;
-}
-
-/** Remembered choice, else the device language if we speak it, else English. */
-function initialLang() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (LANGS.includes(saved)) return saved;
-  } catch {
-    // Private mode or blocked storage: fall through to the device language.
-  }
-  for (const tag of navigator.languages ?? [navigator.language ?? '']) {
-    const base = String(tag).toLowerCase().split('-')[0];
-    if (LANGS.includes(base)) return base;
-  }
-  return FALLBACK;
-}
-
-async function loadPack(lang) {
-  const res = await fetch(`/i18n/${lang}.json`, { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`language pack ${lang} failed: ${res.status}`);
-  return res.json();
-}
 
 /* ================================================================================================
    3. State
@@ -133,23 +91,11 @@ async function loadPack(lang) {
 // Everything the screen shows is derived from this, so a language switch is a re-render, not a
 // reload: a message already on screen is stored as a pack key and comes back in the new language.
 const state = {
-  lang: FALLBACK,
-  pack: {},
   inbox: null,          // {child, teacher, messages[]} once loaded
   asked: [],            // {side: 'parent'|'assistant', text?: string, key?: string}
   threadStatusKey: 'parent.thread.loading',
   askStatusKey: '',
 };
-
-/** One pack string, with optional {slot} values. Never returns undefined into the DOM. */
-function t(key, values) {
-  const value = state.pack[key];
-  if (typeof value !== 'string') {
-    console.warn(`[panthiya] missing ${state.lang} key:`, key);
-    return '';
-  }
-  return values ? fillSlots(value, values) : value;
-}
 
 const el = (id) => document.getElementById(id);
 
@@ -380,82 +326,9 @@ dom.askForm.addEventListener('submit', async (event) => {
    7. Wiring
    ================================================================================================ */
 
-function apply(pack, lang) {
-  const missing = [];
-
-  for (const node of document.querySelectorAll('[data-i18n]')) {
-    const key = node.dataset.i18n;
-    const value = pack[key];
-    if (typeof value === 'string') setText(node, value);
-    else missing.push(key);
-  }
-
-  // An input placeholder is an attribute, not text content, so it needs its own pass.
-  for (const node of document.querySelectorAll('[data-i18n-placeholder]')) {
-    const key = node.dataset.i18nPlaceholder;
-    const value = pack[key];
-    if (typeof value === 'string') node.setAttribute('placeholder', value);
-    else missing.push(key);
-  }
-
-  // Screen readers need to know which language they are pronouncing. (requirement 12.3)
-  document.documentElement.lang = pack['meta.lang'] ?? lang;
-
-  if (pack['app.name'] && pack['parent.heading']) {
-    document.title = `${pack['app.name']} · ${pack['parent.heading']}`;
-  }
-  const desc = document.querySelector('meta[name="description"]');
-  if (desc && pack['meta.description']) desc.setAttribute('content', pack['meta.description']);
-
-  for (const btn of document.querySelectorAll('.lang')) {
-    const isCurrent = btn.dataset.lang === lang;
-    btn.setAttribute('aria-pressed', String(isCurrent));
-    const full = pack[`lang.${btn.dataset.lang}.full`];
-    if (full) btn.setAttribute('aria-label', full);
-  }
-
-  if (missing.length) console.warn(`[panthiya] missing ${lang} keys:`, missing);
-}
-
-function notify(message) {
-  const node = document.createElement('p');
-  node.className = 'noscript';
-  setText(node, message);
-  document.body.prepend(node);
-}
-
-async function setLang(lang, { persist = true } = {}) {
-  let pack;
-  try {
-    pack = await loadPack(lang);
-  } catch (err) {
-    console.error(err);
-    if (lang !== FALLBACK) return setLang(FALLBACK, { persist: false });
-    notify('Panthiya could not load its text. Please refresh.');
-    return;
-  }
-
-  state.pack = pack;
-  state.lang = lang;
-  apply(pack, lang);
-  renderThread();
-  renderAsk();
-
-  if (persist) {
-    try {
-      localStorage.setItem(STORAGE_KEY, lang);
-    } catch {
-      // Not being able to remember the choice is not worth bothering the user about.
-    }
-  }
-}
-
-for (const btn of document.querySelectorAll('.lang')) {
-  btn.addEventListener('click', () => setLang(btn.dataset.lang));
-}
-
 async function start() {
-  await setLang(initialLang(), { persist: false });
+  onLang(() => { renderThread(); renderAsk(); });
+  await init({ titleKey: 'parent.heading' });
 
   try {
     const inbox = await loadInbox();

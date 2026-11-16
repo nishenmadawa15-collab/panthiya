@@ -103,9 +103,16 @@ function transliterate(text, { consonants, vowelSigns, independent, virama }) {
  * Sinhala and Tamil mark possession and direction with suffixes that a teacher types inline:
  * "Dilmi-ge attendance", "කසුන්ට". Stripping them is what makes Singlish input resolve.
  * Only stripped when a real stem remains, so short names survive.
+ *
+ * Every entry here must be a suffix that is really ADDED to a name, never a letter sequence that
+ * names genuinely end in. `nge` was in this list and silently broke every name ending in "n":
+ * "කසුන්ගේ" became "kasu", which no longer matched "Kasun" — the demo's primary student. `wa`/`va`
+ * were just as bad, turning the very common surname "Silva" into "Sil". Stripping is asymmetric by
+ * nature (the mention carries the suffix, the roster entry does not), so an over-strip is an
+ * under-match, and an under-match in policyCheck is a leak.
  */
 // Longest first: Tamil "யின்" must be stripped as "yin", not clipped to "in" and left as "…y".
-const SUFFIXES = ['nge', 'gen', 'yin', 'ine', 'tta', 'ge', 'ta', 'wa', 'va', 'in', 'ku', 'ai', 's']
+const SUFFIXES = ['gen', 'yin', 'ge', 'ta', 'in', 'ku', 'ai', 's']
   .sort((a, b) => b.length - a.length);
 
 function stripSuffix(s) {
@@ -116,11 +123,27 @@ function stripSuffix(s) {
 }
 
 /**
+ * Every stem a token could plausibly be: itself, plus the result of removing each suffix that
+ * matches. Generating all of them rather than picking one removes the guess — "kasunge" yields
+ * both "kasunge" and "kasun", and a match on any of them is a match.
+ */
+function stems(normalised) {
+  const out = new Set([normalised]);
+  for (const suffix of SUFFIXES) {
+    if (normalised.length - suffix.length >= 3 && normalised.endsWith(suffix)) {
+      out.add(normalised.slice(0, -suffix.length));
+    }
+  }
+  return out;
+}
+
+/**
  * Canonical key for a name, in any of the four input languages or any script mixture.
  * Returns '' for input that holds no letters, which callers must treat as "no match", never as
  * a wildcard that matches everything.
  */
-export function nameKey(input) {
+/** Normalise to a comparable Latin form. No suffix stripping — `stems()` owns that. */
+function normalise(input) {
   if (typeof input !== 'string') return '';
 
   // NFKC folds full-width forms, ligatures and compatibility characters into their plain shapes.
@@ -144,26 +167,28 @@ export function nameKey(input) {
   s = s.toLowerCase()
     .normalize('NFD').replace(/\p{M}/gu, '')   // drop accents, now that scripts are Latin
     .replace(/[^a-z0-9]/g, '')                 // drop spaces, hyphens, punctuation
-    .replace(/(.)\1+/g, '$1');                 // "aa" -> "a", "ll" -> "l"
+    .replace(/(.)+/g, '$1');                 // "aa" -> "a", "ll" -> "l"
 
   // A key with no letter is not a name. Without this, a bare number in a reply ("72") would be a
   // candidate key, and any roster entry that was mis-entered as digits would match marks text.
-  if (!/[a-z]/.test(s)) return '';
-
-  return stripSuffix(s);
+  return /[a-z]/.test(s) ? s : '';
 }
 
 /**
- * Aggressively folded key, for blocking decisions only.
- * Merges the consonant distinctions that Sinhala, Tamil and Latin spellings of the same name
- * disagree about, so දිල්මි, தில்மி, "Dilmi" and "Thilmi" all land on one key.
+ * Canonical key for a name, in any of the four input languages or any script mixture.
+ * Returns '' for input that holds no letters, which callers must treat as "no match", never as
+ * a wildcard that matches everything.
  */
-export function foldedKey(input) {
-  let s = nameKey(input);
-  if (!s) return '';
+export function nameKey(input) {
+  const s = normalise(input);
+  return s ? stripSuffix(s) : '';
+}
 
+/** The consonant fold. Applied to an already-normalised stem. */
+function fold(s) {
+  if (!s) return '';
   // Digraphs first, or the single-letter rules below would break them apart.
-  s = s
+  return s
     .replace(/th|dh/g, 't')
     .replace(/sh|ch|zh/g, 's')
     .replace(/ng/g, 'n')
@@ -174,18 +199,62 @@ export function foldedKey(input) {
     .replace(/[vw]/g, 'v')
     .replace(/[jz]/g, 's')
     .replace(/[aeiou]/g, 'a')   // vowel quality is the least reliable thing across scripts
-    .replace(/(.)\1+/g, '$1');
+    .replace(/(.)+/g, '$1');
+}
 
-  return s;
+/**
+ * Aggressively folded key, for blocking decisions only.
+ * Merges the consonant distinctions that Sinhala, Tamil and Latin spellings of the same name
+ * disagree about, so දිල්මි, தில்மி, "Dilmi" and "Thilmi" all land on one key.
+ */
+export function foldedKey(input) {
+  return fold(nameKey(input));
+}
+
+/**
+ * Every folded key a piece of text could stand for: the whole thing, each suffix-stripped stem,
+ * and — for a multi-word name — each individual word.
+ *
+ * The last part is what makes a roster of full display names usable. The roster holds
+ * "Dilmi Fernando"; the agent writes "Dilmi got 72". Without indexing the parts, that reply did
+ * not match and policyCheck waved through the precise leak it exists to catch.
+ */
+export function keyVariants(input) {
+  if (typeof input !== 'string') return new Set();
+
+  const out = new Set();
+  const add = (value) => {
+    for (const stem of stems(value)) {
+      const key = fold(stem);
+      if (key) out.add(key);
+    }
+  };
+
+  const whole = normalise(input);
+  if (whole) add(whole);
+
+  // Split on whitespace and punctuation BEFORE normalising, so "Dilmi Fernando" yields two parts.
+  const parts = input.split(/[\s.,;:/\|()[\]{}"'‘’“”]+/u).filter(Boolean);
+  if (parts.length > 1) {
+    for (const part of parts) {
+      const n = normalise(part);
+      // Two letters is an initial or noise, not a name worth matching on.
+      if (n.length >= 3) add(n);
+    }
+  }
+
+  return out;
 }
 
 /**
  * Do two names refer to the same person, as far as a blocking decision is concerned?
- * Empty keys never match, so a reply containing no name cannot match a roster entry.
+ * Empty inputs never match, so a reply containing no name cannot match a roster entry.
  */
 export function namesMatch(a, b) {
-  const ka = foldedKey(a);
-  return ka !== '' && ka === foldedKey(b);
+  const va = keyVariants(a);
+  if (va.size === 0) return false;
+  for (const key of keyVariants(b)) if (va.has(key)) return true;
+  return false;
 }
 
 /**
@@ -199,10 +268,12 @@ export function namesMatch(a, b) {
 export function findNames(text, names) {
   if (typeof text !== 'string' || !text) return [];
 
+  // One index entry per variant of each roster name, including each word of a full name.
   const wanted = new Map();
   for (const name of names) {
-    const key = foldedKey(name);
-    if (key) wanted.set(key, name);
+    for (const key of keyVariants(name)) {
+      if (!wanted.has(key)) wanted.set(key, name);
+    }
   }
   if (wanted.size === 0) return [];
 
@@ -216,8 +287,10 @@ export function findNames(text, names) {
     // Check single tokens and adjacent pairs, since "Dil mi" and "දිල් මි" split across a space.
     for (const candidate of [tokens[i], i + 1 < tokens.length ? tokens[i] + tokens[i + 1] : null]) {
       if (!candidate) continue;
-      const found = wanted.get(foldedKey(candidate));
-      if (found) hits.add(found);
+      for (const key of keyVariants(candidate)) {
+        const found = wanted.get(key);
+        if (found) { hits.add(found); break; }
+      }
     }
   }
   return [...hits];

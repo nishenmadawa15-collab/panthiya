@@ -64,7 +64,33 @@ export const put = async (params) => {
   return (await docClient()).send(new PutCommand(params));
 };
 
+/**
+ * One row by its exact key.
+ *
+ * `query` can do this too (and `actions-teacher` uses it that way for composite keys), but a
+ * single-key read of a table whose PK is the whole key — `messages.messageId`,
+ * `students.studentId` — is a GetItem, and spelling it as a Query obscures that.
+ */
+export const get = async (params) => {
+  const { GetCommand } = await loadSdk();
+  return (await docClient()).send(new GetCommand(params));
+};
+
+/**
+ * Delete one row by its exact key.
+ *
+ * The ONLY delete in Panthiya, and it exists for exactly one caller: requirement 13.8's
+ * `DELETE /teacher/students/{id}`, where a teacher erases everything held about one child. It is
+ * deliberately not reachable from `audit.mjs` (requirement 10.4: the audit log has no delete API)
+ * and the audit_log table is granted `PutItem` only in `template.yaml`, so the capability added
+ * here cannot be pointed at the log even by mistake.
+ */
+export const del = async (params) => {
+  const { DeleteCommand } = await loadSdk();
+  return (await docClient()).send(new DeleteCommand(params));
+};
+
 /** The injected dependency object every other module takes. One call at the top of a handler. */
 export function deps() {
-  return { query, put, tables: tables() };
+  return { query, get, put, del, tables: tables() };
 }

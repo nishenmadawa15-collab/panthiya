@@ -131,3 +131,44 @@ test('a successful reply carries no blocking layer', async () => {
   const res = await handleChat({ claims: teacher, body: { message: 'Kasun was absent' }, deps });
   assert.deepEqual(res.body, { reply: 'Attendance recorded for Kasun.', blockedBy: null });
 });
+
+test('a distressed student receives the human-written reply, not an empty block', async () => {
+  // design §7.3: the point is not only to stop tutoring, it is to answer kindly with the 1926
+  // helpline. Returning reply:null would stop the tutoring and leave the child with nothing.
+  const deps = fakeDeps({
+    distressCheck: async () => ({ hit: true, kind: 'distress' }),
+    distressReply: (kind, lang) => `fixed ${kind} reply in ${lang}`,
+  });
+  const res = await handleChat({
+    claims: { sub: 's-1', role: 'student' },
+    body: { message: 'I am going to fail and my father will kill me', lang: 'si' },
+    deps,
+  });
+  assert.equal(res.body.blockedBy, 'distress');
+  assert.equal(res.body.reason, 'distress');
+  assert.equal(res.body.reply, 'fixed distress reply in si');
+  assert.equal(deps.calls.length, 0);
+});
+
+test('a medical question is answered as medical, not as generic distress', async () => {
+  const deps = fakeDeps({
+    distressCheck: async () => ({ hit: true, kind: 'medical' }),
+    distressReply: (kind) => `fixed ${kind} reply`,
+  });
+  const res = await handleChat({
+    claims: { sub: 's-1', role: 'student' },
+    body: { message: 'what medicine keeps me awake all night to study?' },
+    deps,
+  });
+  assert.equal(res.body.reason, 'medical');
+  assert.equal(res.body.reply, 'fixed medical reply');
+});
+
+test('the deployed chat path actually wires the wellbeing check', async () => {
+  // It was dead code once: orchestrate.mjs supported deps.distressCheck, and index.mjs never
+  // passed one, so §7.3 existed in tests and nowhere else.
+  const src = await import('node:fs').then((fs) =>
+    fs.readFileSync(new URL('../../backend/functions/chat/index.mjs', import.meta.url), 'utf8'));
+  assert.match(src, /distressCheck:/, 'chat/index.mjs must pass a distressCheck into handleChat');
+  assert.match(src, /distressReply/, 'chat/index.mjs must pass a distressReply into handleChat');
+});

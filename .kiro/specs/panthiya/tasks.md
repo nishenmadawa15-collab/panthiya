@@ -61,11 +61,11 @@ stops and asks before those.
 - [ ] 2.2 HTTP API JWT authorizer wired to the pool; every route behind it — req 1.2
 - [ ] 2.3 Hosted-UI sign-in in the front-end; token stored in memory, not `localStorage` — req 1.1
 - [ ] 2.4 `students.byParent` linkage; `resolveScope('parent')` returns only linked children — req 1.6
-- [ ] 2.5 `backend/functions/actions-parent/getMyChildSummary` — denies any child not in scope — req 7.2, 7.3
-- [ ] 2.6 `backend/functions/read/` — `/parent/inbox`, `/teacher/drafts`, `/teacher/audit` — req 7.1, 10.3
-- [ ] 2.7 `draftParentUpdate` + the approval gate; drafts invisible to parents until approved — req 6.1–6.6
-- [ ] 2.8 `frontend/parent/` — WhatsApp-style thread and ask box — req 7.6
-- [ ] 2.9 `tests/unit/` — parent asking about another child is denied at the Lambda, not just the prompt — req 7.3
+- [x] 2.5 `backend/functions/actions-parent/getMyChildSummary` — denies any child not in scope — req 7.2, 7.3
+- [x] 2.6 `backend/functions/read/` — `/parent/inbox`, `/teacher/drafts`, `/teacher/audit` — req 7.1, 10.3
+- [x] 2.7 `draftParentUpdate` + the approval gate; drafts invisible to parents until approved — req 6.1–6.6
+- [x] 2.8 `frontend/parent/` — WhatsApp-style thread and ask box — req 7.6
+- [x] 2.9 `tests/unit/` — parent asking about another child is denied at the Lambda, not just the prompt — req 7.3
 - [ ] 2.10 Student export and delete endpoints — req 13.8
 
 **Done when:** a parent sees only their own child, and an approved update appears in their thread.
@@ -75,12 +75,12 @@ stops and asks before those.
 ## M3 — guardrail + policyCheck + audit log · branch `feat/m3-defence-layers`
 
 - [ ] 3.1 **[human]** Create the Bedrock Guardrail per design §6.3; attach to the agent; record the ID
-- [ ] 3.2 `backend/functions/policy-check/` — checks 1–6 from design §7.1, fail closed — req 9.2–9.4
-- [ ] 3.3 Final-answer detection and the `[[EXAMPLE]]` contract — design §7.2
-- [ ] 3.4 Distress pre-check ahead of the agent call, with the localised 1926 response — design §7.3, req 8.5
-- [ ] 3.5 `chat` calls policyCheck on every reply and returns `blockedBy` — req 9.2, 9.5
+- [x] 3.2 `backend/functions/policy-check/` — checks 1–6 from design §7.1, fail closed — req 9.2–9.4
+- [x] 3.3 Final-answer detection and the `[[EXAMPLE]]` contract — design §7.2
+- [x] 3.4 Distress pre-check ahead of the agent call, with the localised 1926 response — design §7.3, req 8.5
+- [x] 3.5 `chat` calls policyCheck on every reply and returns `blockedBy` — req 9.2, 9.5
 - [ ] 3.6 Teacher audit-log screen — req 10.3
-- [ ] 3.7 `tests/unit/policy-check.test.mjs` — a case per check, plus base64 and homoglyph variants — req 9.6
+- [x] 3.7 `tests/unit/policy-check.test.mjs` — a case per check, plus base64 and homoglyph variants — req 9.6
 - [ ] 3.8 First 10 red-team cases pass offline against policyCheck
 
 **Done when:** a reply naming another child is blocked by code even with the guardrail switched off.

@@ -3,6 +3,10 @@
 
 import { claimsFromEvent } from '../../lib/auth.mjs';
 import { handleChat } from './orchestrate.mjs';
+// Layer 3 owns the wellbeing wording as well as the blocking checks, so the chat path imports it
+// rather than keeping a second copy that could drift. Both functions package the whole backend
+// root (see the packaging note in template.yaml), so this import ships.
+import { classify, distressReply } from '../policy-check/distress.mjs';
 
 const AGENT_ID = process.env.BEDROCK_AGENT_ID;
 const AGENT_ALIAS_ID = process.env.BEDROCK_AGENT_ALIAS_ID;
@@ -71,6 +75,10 @@ export async function handler(event) {
     deps: {
       invokeAgent,
       policyCheck,
+      // design §7.3: checked before the agent is invoked at all, so a student in difficulty costs
+      // no tokens and a jailbreak has nothing to steer.
+      distressCheck: classify,
+      distressReply,
       today: todayInColombo(),
       // One Bedrock session per user per day keeps multi-message attacks (B7, C6) inside one
       // session where policyCheck sees the whole thread, without carrying history forever.

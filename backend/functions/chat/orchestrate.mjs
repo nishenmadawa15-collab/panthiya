@@ -41,13 +41,20 @@ export async function handleChat({ claims, body, deps }) {
   // design §7.3: a student in distress gets a fixed, human-written reply. No model creativity in a
   // wellbeing moment, no tokens spent, and nothing to jailbreak.
   if (role === 'student' && deps.distressCheck) {
-    let distressed = false;
+    let result = false;
     try {
-      distressed = await deps.distressCheck(message, lang);
+      result = await deps.distressCheck(message, lang);
     } catch {
-      distressed = true;   // if the wellbeing check is broken, err towards care, not towards tutoring
+      result = true;   // if the wellbeing check is broken, err towards care, not towards tutoring
     }
-    if (distressed) return blocked('distress', 'wellbeing');
+    if (result) {
+      // A boolean is enough to block; `{hit, kind}` also picks which fixed reply to send.
+      const kind = (typeof result === 'object' && result.kind) || 'distress';
+      // This reply is written by a human and stored, never generated. A child in difficulty should
+      // not be the one turn where the model improvises, and there is nothing here to jailbreak.
+      const reply = deps.distressReply ? deps.distressReply(kind, lang) : null;
+      return { status: 200, body: { reply, blockedBy: 'distress', reason: kind } };
+    }
   }
 
   // --- the model ---------------------------------------------------------------------------------

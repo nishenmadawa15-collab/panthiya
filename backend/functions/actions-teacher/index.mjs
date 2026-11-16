@@ -17,7 +17,11 @@
 
 import { deny, DenyError } from '../../lib/auth.mjs';
 import { ACTIONS } from './actions.mjs';
+import { DRAFT_ACTIONS } from './drafts.mjs';
 import { InputError } from './validate.mjs';
+
+/** The action table of design §6.2, in full: the four writes plus the draft/approval pair. */
+const DISPATCH = { ...ACTIONS, ...DRAFT_ACTIONS };
 
 /** Keep Bedrock's routing fields to the shape of our own schema names before echoing them. */
 const safeName = (v) => (typeof v === 'string' ? v.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) : '') || 'unknown';
@@ -76,7 +80,7 @@ const PROMPTS = {
  *   suite deliberately has no dependencies installed to pull it from.
  */
 export const handler = async (event, provided) => {
-  const action = ACTIONS[event?.function];
+  const action = DISPATCH[event?.function];
 
   // An unknown or absent action name is a routing mistake or a probe, not a request. Fail closed
   // with the same refusal a wrong role gets, so neither learns anything from the difference.

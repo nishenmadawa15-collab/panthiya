@@ -55,7 +55,6 @@ Globals:
     Architectures: [arm64]
     MemorySize: 256
     Timeout: 10
-    Handler: index.handler # resolves to index.mjs (ES modules, no build step)
     Environment:
       Variables:
         ENVIRONMENT: !Ref Environment
@@ -70,6 +69,12 @@ Globals:
         VOICE_BUCKET: !Ref VoiceBucket
         MODEL_ID: !Ref ModelId
 
+# Packaging note: CodeUri is the backend root, not each function's own directory, because every
+# handler imports the shared modules in backend/lib/. With a per-function CodeUri those imports
+# resolve fine on a laptop and then fail with MODULE_NOT_FOUND on the first real invocation, since
+# SAM would only ship that one directory. The bundle is a few hundred KB of plain JS with no
+# dependencies, so shipping all of backend/ to every function costs nothing worth optimising.
+# tests/unit/packaging.test.mjs checks that every relative import stays inside the packaged root.
 Resources:
   # =========================================================================
   # 1. DynamoDB — design §4. On-demand billing, SSE on, point-in-time
@@ -447,7 +452,8 @@ Resources:
   ChatFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/chat/
+      CodeUri: ./
+      Handler: functions/chat/index.handler
       Timeout: 29 # the agent round-trip is the slow part; API Gateway caps at 30
       Environment:
         Variables:
@@ -480,7 +486,8 @@ Resources:
   ActionsTeacherFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/actions-teacher/
+      CodeUri: ./
+      Handler: functions/actions-teacher/index.handler
       Policies:
         - Statement:
             - Sid: TeacherReadWriteOwnDomain
@@ -532,7 +539,8 @@ Resources:
   ActionsParentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/actions-parent/
+      CodeUri: ./
+      Handler: functions/actions-parent/index.handler
       Policies:
         - Statement:
             - Sid: ParentReadOnly
@@ -560,14 +568,16 @@ Resources:
   ActionsStudentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/actions-student/
+      CodeUri: ./
+      Handler: functions/actions-student/index.handler
 
   # policy-check — layer 3. Needs the roster names only, to spot a reply that
   # mentions another student (design §7). Read-only on students, nothing else.
   PolicyCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/policy-check/
+      CodeUri: ./
+      Handler: functions/policy-check/index.handler
       Timeout: 5 # it runs on every reply; it must be fast or fail closed
       Policies:
         - Statement:
@@ -586,7 +596,8 @@ Resources:
   ReadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/read/
+      CodeUri: ./
+      Handler: functions/read/index.handler
       Policies:
         - Statement:
             - Sid: ReadOnlyViews
@@ -640,7 +651,8 @@ Resources:
   VoiceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/voice/
+      CodeUri: ./
+      Handler: functions/voice/index.handler
       Policies:
         - Statement:
             - Sid: VoiceObjectsOnly
@@ -668,7 +680,8 @@ Resources:
   RedteamFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: functions/redteam/
+      CodeUri: ./
+      Handler: functions/redteam/index.handler
       Timeout: 29
       Environment:
         Variables:

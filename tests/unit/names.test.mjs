@@ -86,3 +86,63 @@ test('Sinhala vowel signs and the virama do not break tokenisation', () => {
   assert.deepEqual(findNames('දිල්මිගේ', ROSTER), ['Dilmi']);
   assert.deepEqual(findNames('කසුන්ට කියන්න', ROSTER), ['Kasun']);
 });
+
+// --- regressions ---------------------------------------------------------------------------------
+// Both of these were real bugs that shipped green: the suite agreed with them because it used
+// single-word roster names, while the real roster holds full display names.
+
+const FULL_ROSTER = [
+  'Kasun Perera', 'Dilmi Fernando', 'Nimal Silva', 'Tharindu Bandara',
+  'Sanduni Jayawardena', 'Mathavan Selvarajah', 'Ruwan Dissanayake',
+];
+
+test('a first name alone matches a full roster name', () => {
+  // The roster holds "Dilmi Fernando"; the agent writes "Dilmi got 72". Before this, findNames
+  // returned nothing and policyCheck waved through the exact leak it exists to catch.
+  assert.deepEqual(findNames('Dilmi scored 72 in the November test', FULL_ROSTER), ['Dilmi Fernando']);
+  assert.deepEqual(findNames('Kasun was absent on Thursday', FULL_ROSTER), ['Kasun Perera']);
+  assert.deepEqual(findNames('Kasun Perera was absent', FULL_ROSTER), ['Kasun Perera']);
+});
+
+test('a surname alone also matches', () => {
+  assert.deepEqual(findNames('Silva has not paid this month', FULL_ROSTER), ['Nimal Silva']);
+});
+
+test('a possessive does not eat the last letter of a name', () => {
+  // "nge" was in the suffix list, so "කසුන්ගේ" stripped to "kasu" and stopped matching "Kasun" —
+  // the demo's primary student, and every other name ending in "n".
+  for (const [possessive, expected] of [
+    ['කසුන්ගේ', 'Kasun Perera'],
+    ['Kasun-ge', 'Kasun Perera'],
+    ['රුවන්ගේ', 'Ruwan Dissanayake'],
+    ['මාධවන්ගේ', 'Mathavan Selvarajah'],
+  ]) {
+    assert.deepEqual(findNames(possessive, FULL_ROSTER), [expected], `${possessive} should match ${expected}`);
+  }
+  assert.equal(nameKey('කසුන්ගේ'), 'kasun');
+});
+
+test('a surname is not mangled by an accusative suffix rule', () => {
+  // "va" was in the suffix list, turning the very common surname "Silva" into "Sil".
+  assert.equal(nameKey('Nimal Silva'), 'nimalsilva');
+  assert.equal(nameKey('Silva'), 'silva');
+});
+
+test('full roster names still do not collide with one another', () => {
+  for (const a of FULL_ROSTER) {
+    for (const b of FULL_ROSTER) {
+      if (a === b) continue;
+      assert.ok(!namesMatch(a, b), `${a} must not match ${b}`);
+    }
+  }
+});
+
+test('cross-script matching survives the full-name roster', () => {
+  assert.deepEqual(findNames('දිල්මිගේ ලකුණු 72ක්', FULL_ROSTER), ['Dilmi Fernando']);
+  assert.deepEqual(findNames('தில்மியின் மதிப்பெண்கள்', FULL_ROSTER), ['Dilmi Fernando']);
+  assert.deepEqual(findNames('D\u0456lm\u0456 got 85 marks', FULL_ROSTER), ['Dilmi Fernando']);
+  assert.deepEqual(
+    findNames('ඊයේ පන්තියට කසුන්, දිල්මි ආවේ නැහැ', FULL_ROSTER).sort(),
+    ['Dilmi Fernando', 'Kasun Perera'],
+  );
+});

@@ -111,3 +111,19 @@ test('ink colours meet 4.5:1 on paper, and the focus ring meets 3:1', () => {
   // The pressed language button inverts: paper text on ink.
   assert.ok(ratio(paper, t.ink) >= 4.5, 'pressed language button fails contrast');
 });
+
+test('front-end scripts are .js, never .mjs', () => {
+  // A .mjs file is served as text/plain by several static servers, and a browser refuses to
+  // execute a module with a non-JavaScript MIME type — silently. The whole site rendered with
+  // every string blank and not one console error. Browsers do not need .mjs; the type="module"
+  // attribute already says it is a module. Node is the only thing here that needs the extension.
+  for (const name of readdirSync(new URL('frontend/assets/', ROOT))) {
+    assert.ok(!name.endsWith('.mjs'),
+      `frontend/assets/${name}: rename to .js, or it may be served as text/plain and never run`);
+  }
+
+  for (const file of htmlFiles()) {
+    const html = read(file);
+    assert.ok(!/src="[^"]*\.mjs"/.test(html), `${file} loads a .mjs script`);
+  }
+});
