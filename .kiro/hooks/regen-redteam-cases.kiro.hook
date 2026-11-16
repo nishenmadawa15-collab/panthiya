@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Regenerate the red-team cases",
+  "description": "docs/RED-TEAM-CASES.md is the document a judge reads; tests/redteam/cases.json is what actually runs on the /redteam page. This keeps them identical. Also fires when the product rules change, because a new rule usually needs a new attack to prove it.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "docs/RED-TEAM-CASES.md",
+      ".kiro/steering/product.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run `node scripts/gen-redteam-cases.mjs`, then `npm test`. If the generator refuses to parse the document, fix the document's table formatting rather than loosening the parser — the 36 cases are a deliverable and the count is asserted on purpose. If `.kiro/steering/product.md` was what changed, also check whether the new or amended rule needs a new attack case in docs/RED-TEAM-CASES.md to prove it holds, and say so rather than silently leaving the rule untested."
+  }
+}
