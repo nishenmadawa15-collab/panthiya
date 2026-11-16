@@ -38,3 +38,6 @@ tmp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Generated seed request files (contain no secrets, but no need to commit)
+backend/seed/out/
