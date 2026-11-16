@@ -25,7 +25,7 @@ stops and asks before those.
 - [x] 0.11 `docs/BUILD-LOG.md` started
 - [x] 0.12 `.kiro/hooks/` — run-tests-on-save and build-log hooks
 - [x] 0.13 `git init`, first conventional commit on `feat/m0-hello`
-- [ ] 0.14 **[human]** Create the public GitHub repo `panthiya`, give the agent the URL, push
+- [x] 0.14 Create the public GitHub repo `panthiya`, give the agent the URL, push
 - [ ] 0.15 **[human]** Connect Amplify Hosting to GitHub `main`, confirm the live URL opens on a phone
 - [ ] 0.16 **[human]** Verify Bedrock Managed Agents + model access in `ap-south-1`; record the region in BUILD-LOG
 
@@ -57,10 +57,10 @@ stops and asks before those.
 
 ## M2 — Cognito roles + parent view · branch `feat/m2-roles-parent`
 
-- [ ] 2.1 Cognito user pool, groups `teacher` / `parent` / `student`, in `template.yaml` — req 1.1
-- [ ] 2.2 HTTP API JWT authorizer wired to the pool; every route behind it — req 1.2
+- [x] 2.1 Cognito user pool, groups `teacher` / `parent` / `student`, in `template.yaml` — req 1.1
+- [x] 2.2 HTTP API JWT authorizer wired to the pool; every route behind it — req 1.2
 - [ ] 2.3 Hosted-UI sign-in in the front-end; token stored in memory, not `localStorage` — req 1.1
-- [ ] 2.4 `students.byParent` linkage; `resolveScope('parent')` returns only linked children — req 1.6
+- [x] 2.4 `students.byParent` linkage; `resolveScope('parent')` returns only linked children — req 1.6
 - [x] 2.5 `backend/functions/actions-parent/getMyChildSummary` — denies any child not in scope — req 7.2, 7.3
 - [x] 2.6 `backend/functions/read/` — `/parent/inbox`, `/teacher/drafts`, `/teacher/audit` — req 7.1, 10.3
 - [x] 2.7 `draftParentUpdate` + the approval gate; drafts invisible to parents until approved — req 6.1–6.6

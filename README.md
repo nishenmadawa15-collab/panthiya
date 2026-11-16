@@ -12,7 +12,7 @@ Built by **Nishen Madawa Abedeera**, cybersecurity undergraduate at SLTC, Sri La
 | | |
 |---|---|
 | Live app | _TODO: Amplify URL once M0 is deployed_ |
-| Build status | **M0 — hello page** (see [`.kiro/specs/panthiya/tasks.md`](.kiro/specs/panthiya/tasks.md)) |
+| Build status | **M0–M3 code complete**, 270 tests passing · 41/79 tasks ([plan](.kiro/specs/panthiya/tasks.md) · [next session](docs/NEXT-SESSION.md)) |
 | Licence | [MIT](LICENSE) |
 | Demo video | _TODO: M7_ |
 
@@ -235,6 +235,7 @@ unit tests on save and keep `docs/BUILD-LOG.md` current. The full account, with 
 | [`.kiro/specs/panthiya/tasks.md`](.kiro/specs/panthiya/tasks.md) | The M0–M7 plan |
 | [`docs/RED-TEAM-CASES.md`](docs/RED-TEAM-CASES.md) | The 36 attacks and what a pass looks like |
 | [`docs/BUILD-LOG.md`](docs/BUILD-LOG.md) | What was built, what broke, how it was fixed |
+| [`docs/NEXT-SESSION.md`](docs/NEXT-SESSION.md) | Current state, what needs AWS access, and the next lanes |
 | [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md) | The under-3-minute demo _(M7)_ |
 
 ---

@@ -46,6 +46,10 @@ here as such. A log that only records successes is useless for the write-up and 
 **270 tests pass.** Three separate bugs this session would have survived a green suite and failed on
 AWS. All three now have a test that reads the real configuration rather than a mock.
 
+| 2026-11-16 | session end | `docs/NEXT-SESSION.md` — where we are, what only Nishen can do, and tomorrow's lanes with a specialist named for each | **Convention drift worth recording:** `structure.md` asks for one feature branch per milestone. After `feat/m1-teacher-chat` was merged, M2/M3/M5 work landed directly on `main` because the session stayed checked out there. `main` is correct and green, nothing was lost, but the next milestone starts on a proper branch again |
+
+**End of day: 41 of 79 tasks done, 270 tests passing, $0 spent, nothing deployed.**
+
 ## Decisions still open
 
 | # | Decision | Needed by |
