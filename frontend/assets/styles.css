@@ -641,3 +641,263 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
   .chat__log { max-height: none; overflow: visible; }
   .ledger { box-shadow: none; }
 }
+
+/* ================================================================================================
+   PARENT INBOX (/parent/) — appended section. Nothing above this line is changed.
+
+   The approved thread and the ask box must never be mistaken for each other (product.md rule 4),
+   so they are told apart four ways at once, not one:
+     1. container — the thread is the white ruled .sheet; the ask box is a cream panel inside a
+        dashed amber frame, which is the only dashed frame on the screen;
+     2. bubble     — an approved update has a solid green left edge; an assistant answer has a
+        dashed amber left edge and sits on cream;
+     3. words      — every approved update carries the green "approved by the teacher" stamp and
+        every assistant answer carries the amber "not approved" stamp. Text, not colour, so the
+        difference survives greyscale, high-contrast mode and a screen reader;
+     4. structure  — two separate <section>s with their own headings, and no composer in the
+        thread at all: the parent cannot write into it and no answer can be appended to it.
+
+   No new colour is introduced: every ink here is --ink (13.1:1 on paper), --ink-soft (7.0:1),
+   --stamp-paid (5.0:1), --stamp-draft (4.8:1) or --focus. The one literal, #FFF4D6, is the caution
+   wash already used by .noscript above; --ink on it is 12.5:1 and --stamp-draft 4.6:1.
+   Touch targets are 2.75rem = 44px. The prefers-reduced-motion block above already disables the
+   arrive animations, because it matches on *.
+   ================================================================================================ */
+
+/* ---------- who this inbox belongs to ---------- */
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  margin: var(--rule-h) 0 0;
+  line-height: var(--rule-h);
+}
+
+.who__label {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.who__value { font-weight: 600; }
+
+/* ---------- the approved thread ---------- */
+
+.thread__intro {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  padding-left: 0.8rem;
+  border-left: 3px solid var(--stamp-paid);
+}
+
+.thread {
+  display: block;
+  max-height: 30rem;          /* about a phone screen of history, then it scrolls */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.thread__messages { display: flex; flex-direction: column; gap: 0.75rem; }
+
+/* A day separator, pencilled across the page like a chat app's date chip. */
+.thread__day {
+  align-self: center;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.7rem;
+  background: var(--paper-edge);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+/* An approved update: the teacher's side of a WhatsApp thread — left, solid, green-edged. */
+.note {
+  align-self: flex-start;
+  max-width: 92%;
+  padding: 0.35rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-left: 4px solid var(--stamp-paid);
+  border-radius: var(--radius);
+  animation: msg-in 160ms ease-out;
+}
+
+.note__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 0.6rem;
+  margin: 0;
+}
+
+.note__who {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--stamp-paid);
+}
+
+.note__time {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.note__text { margin: 0; line-height: var(--rule-h); }
+
+.note__foot { margin: 0.3rem 0 0.1rem; }
+
+/* The approval stamp. Green ink, already in the palette at 5.0:1 on paper and 5.7:1 on white. */
+.stamp--approved {
+  color: var(--stamp-paid);
+  transform: rotate(-1.5deg);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  white-space: normal;
+}
+
+.thread__empty { margin: 0; }
+
+.thread__empty-heading {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.thread__empty-body { margin: 0; line-height: var(--rule-h); }
+
+.thread__status {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: var(--rule-h);
+  color: var(--ink-soft);
+}
+.thread__status:empty { margin: 0; line-height: 0; }
+
+/* ---------- the ask box ---------- */
+
+/* The dashed amber frame is the signal: everything inside it is the assistant, not the teacher. */
+.ask {
+  padding: 0.9rem 0.9rem 1rem;
+  background: var(--paper);
+  border: 2px dashed var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+.ask__heading { border-bottom-color: var(--stamp-draft); }
+
+.ask__caution {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: #FFF4D6;
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.ask__intro {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.ask__log {
+  display: block;
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+}
+
+.ask__messages { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.ask__empty { margin: 0; }
+
+.qa {
+  max-width: 92%;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+  animation: msg-in 160ms ease-out;
+}
+
+/* The parent's own question, on the right, exactly where their own messages sit in WhatsApp. */
+.qa--parent {
+  align-self: flex-end;
+  background: var(--paper-edge);
+  border-color: var(--rule);
+}
+
+/* The assistant's answer: cream, dashed amber edge — visibly not one of the notes above. */
+.qa--assistant {
+  align-self: flex-start;
+  background: var(--paper);
+  border-left: 4px dashed var(--stamp-draft);
+}
+
+.qa__who {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.qa--assistant .qa__who { color: var(--stamp-draft); font-weight: 600; }
+
+.qa__text { margin: 0; line-height: var(--rule-h); }
+
+.qa__flag { margin: 0.3rem 0 0.1rem; }
+
+.stamp--unverified {
+  color: var(--stamp-draft);
+  transform: rotate(1deg);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  white-space: normal;
+}
+
+.ask__status {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: var(--rule-h);
+  color: var(--ink-soft);
+}
+.ask__status:empty { margin: 0; line-height: 0; }
+
+/* ---------- parent inbox, wider screens ---------- */
+
+@media (min-width: 40rem) {
+  .ask { padding: 1.25rem; }
+  .thread { max-height: 34rem; }
+  .ask__log { max-height: 24rem; }
+  .note, .qa { max-width: 80%; }
+}
+
+/* ---------- parent inbox, print ----------
+   A parent may want the approved updates on paper. The ask box is not a record, so it does not
+   print: a printed assistant answer loses its frame and could be waved about as a teacher's word. */
+
+@media print {
+  .crumbs, .ask, .thread__status { display: none; }
+  .thread { max-height: none; overflow: visible; }
+}

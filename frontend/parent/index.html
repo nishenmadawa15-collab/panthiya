@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Panthiya — the parent inbox: approved updates about your own child, and a place to ask.">
+<meta name="theme-color" content="#FBF7EE">
+<title>Panthiya · පන්තිය</title>
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<script type="module" src="/assets/parent.js"></script>
+</head>
+<body>
+
+<a class="skip" href="#main" data-i18n="skip.link"></a>
+
+<noscript>
+  <p class="noscript">Panthiya needs JavaScript to switch languages and to show your messages. An AI
+  assistant for Sri Lankan tuition classes: parents receive verified updates about their own child.</p>
+</noscript>
+
+<header class="masthead">
+  <div class="brand">
+    <span class="brand__mark" aria-hidden="true">ප</span>
+    <div class="brand__text">
+      <h1 class="brand__name" data-i18n="app.name"></h1>
+      <p class="brand__tagline" data-i18n="app.tagline"></p>
+    </div>
+  </div>
+
+  <nav class="langs">
+    <span class="langs__label" id="lang-label" data-i18n="lang.label"></span>
+    <div class="langs__group" role="group" aria-labelledby="lang-label">
+      <button type="button" class="lang" data-lang="si" lang="si" data-i18n="lang.si"></button>
+      <button type="button" class="lang" data-lang="ta" lang="ta" data-i18n="lang.ta"></button>
+      <button type="button" class="lang" data-lang="en" lang="en" data-i18n="lang.en"></button>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+
+  <p class="crumbs">
+    <a class="footer__link crumbs__link" href="/" data-i18n="nav.home"></a>
+  </p>
+
+  <section class="sheet" aria-labelledby="parent-heading">
+    <h2 class="hero__greeting" id="parent-heading" data-i18n="parent.heading"></h2>
+
+    <!-- The child's and teacher's names are data, not UI text, so they carry no data-i18n key;
+         parent.js fills them from the inbox through textContent. -->
+    <p class="who">
+      <span class="who__label" data-i18n="parent.child_label"></span>
+      <span class="who__value" id="parent-child"></span>
+    </p>
+    <p class="who">
+      <span class="who__label" data-i18n="parent.teacher_label"></span>
+      <span class="who__value" id="parent-teacher"></span>
+    </p>
+
+    <p class="hero__body" data-i18n="parent.note"></p>
+  </section>
+
+  <!-- ---------- the approved thread ----------
+       Teacher-approved updates only (requirement 7.1). There is deliberately no composer here:
+       the parent cannot write into this thread, and nothing the assistant says can land in it. -->
+  <section class="block" aria-labelledby="thread-heading">
+    <h3 class="block__heading" id="thread-heading" data-i18n="parent.thread.heading"></h3>
+    <p class="thread__intro" data-i18n="parent.thread.intro"></p>
+
+    <!-- role="log" + aria-live: a newly approved update is announced without stealing focus.
+         tabindex="0" so the history can be scrolled from the keyboard (requirement 12.4). -->
+    <div class="sheet thread" id="thread" role="log" aria-live="polite"
+         aria-labelledby="thread-heading" tabindex="0">
+
+      <div class="thread__empty" id="thread-empty" hidden>
+        <p class="thread__empty-heading" data-i18n="parent.empty_heading"></p>
+        <p class="thread__empty-body" data-i18n="parent.empty_body"></p>
+      </div>
+
+      <!-- Messages and day separators are appended here by parent.js, through textContent only. -->
+      <div class="thread__messages" id="thread-messages"></div>
+    </div>
+
+    <p class="thread__status" id="thread-status" role="status"></p>
+  </section>
+
+  <!-- ---------- the ask box ----------
+       A separate region, drawn differently, labelled on every single answer: an assistant answer
+       is NOT a teacher-approved update (product.md rule 4). -->
+  <section class="block ask" aria-labelledby="ask-heading">
+    <h3 class="block__heading ask__heading" id="ask-heading" data-i18n="parent.ask.heading"></h3>
+
+    <p class="ask__caution" id="ask-caution" data-i18n="parent.ask.caution"></p>
+    <p class="ask__intro" data-i18n="parent.ask.intro"></p>
+
+    <div class="ask__log" id="ask-log" role="log" aria-live="polite"
+         aria-labelledby="ask-heading" tabindex="0">
+
+      <div class="ask__empty" id="ask-empty">
+        <p class="chat__empty-heading" data-i18n="parent.ask.empty_heading"></p>
+        <ul class="chat__examples">
+          <li class="chat__example" data-i18n="parent.ask.example.attendance"></li>
+          <li class="chat__example" data-i18n="parent.ask.example.fee"></li>
+          <li class="chat__example" data-i18n="parent.ask.example.marks"></li>
+        </ul>
+      </div>
+
+      <div class="ask__messages" id="ask-messages"></div>
+    </div>
+
+    <p class="ask__status" id="ask-status" role="status"></p>
+
+    <form class="composer" id="ask-form">
+      <label class="vh" for="ask-input" data-i18n="parent.ask.input_label"></label>
+      <!-- maxlength matches the API input limit in design.md §5 (message <= 2000 characters). -->
+      <input class="composer__input" id="ask-input" name="question" type="text"
+             maxlength="2000" autocomplete="off" enterkeyhint="send"
+             aria-describedby="ask-caution"
+             data-i18n-placeholder="parent.ask.input_placeholder">
+
+      <div class="composer__row">
+        <button class="composer__send" id="ask-send" type="submit" data-i18n="parent.ask.send"></button>
+      </div>
+    </form>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p class="footer__line footer__small" data-i18n="footer.demo_data"></p>
+</footer>
+
+</body>
+</html>
