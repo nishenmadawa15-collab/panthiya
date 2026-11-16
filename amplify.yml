@@ -1,0 +1,20 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Panthiya front-end is plain HTML, CSS and ES modules. Nothing to install."
+    build:
+      commands:
+        - echo "Nothing to build. Amplify serves frontend/ as-is."
+        # Fail the deploy rather than ship a page with no text.
+        - test -f frontend/index.html
+        - test -f frontend/i18n/si.json
+        - test -f frontend/i18n/ta.json
+        - test -f frontend/i18n/en.json
+  artifacts:
+    baseDirectory: frontend
+    files:
+      - '**/*'
+  cache:
+    paths: []

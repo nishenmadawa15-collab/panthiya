@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Append to the build log",
+  "description": "Keeps docs/BUILD-LOG.md current. The Kiro write-up and both hackathon submissions are assembled from this log, so a task is not finished until its line exists.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": []
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Append one row to the table in docs/BUILD-LOG.md for the task just completed: today's date, the milestone and task number from .kiro/specs/panthiya/tasks.md, one line on what was built, and one line on any problem hit and how it was solved (write 'none' if there was none). Do not rewrite earlier rows. Then tick that task in tasks.md."
+  }
+}

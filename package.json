@@ -1,0 +1,16 @@
+{
+  "name": "panthiya",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An AI assistant for Sri Lankan tuition classes, with rules it does not break.",
+  "license": "MIT",
+  "author": "Nishen Madawa Abedeera",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/unit/**/*.test.mjs\""
+  },
+  "comment": "No dependencies, by design. Tests use the Node.js built-in runner; the front-end has no build step.",
+  "engines": {
+    "node": ">=20"
+  }
+}

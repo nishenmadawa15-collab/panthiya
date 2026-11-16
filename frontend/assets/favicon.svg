@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Panthiya">
+  <rect width="32" height="32" rx="3" fill="#FBF7EE"/>
+  <rect x="2.5" y="2.5" width="27" height="27" rx="2" fill="#FFFFFF" stroke="#E4DCCB"/>
+  <g stroke="#C9D7E4" stroke-width="1.6" stroke-linecap="round">
+    <path d="M12 11h15"/>
+    <path d="M12 16h15"/>
+    <path d="M12 21h11"/>
+  </g>
+  <path d="M9 3v26" stroke="#C2443A" stroke-width="1.8"/>
+</svg>

@@ -1,0 +1,53 @@
+{
+  "meta.lang": "en",
+  "meta.label": "English",
+  "meta.description": "Panthiya is an AI assistant for Sri Lankan tuition classes. Attendance, fees and marks by voice or chat, with rules it never breaks.",
+
+  "skip.link": "Skip to main content",
+
+  "app.name": "Panthiya",
+  "app.tagline": "Your tuition class, on autopilot — and it never breaks the rules.",
+
+  "lang.label": "Language",
+  "lang.si": "සිං",
+  "lang.ta": "தமிழ்",
+  "lang.en": "EN",
+  "lang.si.full": "Sinhala",
+  "lang.ta.full": "Tamil",
+  "lang.en.full": "English",
+
+  "hero.greeting": "Hello! I am Panthiya.",
+  "hero.body": "Teachers record attendance, fees and marks just by speaking. Parents get trusted updates about their own child. Students get a tutor that gives hints, never answers.",
+
+  "roles.heading": "Three people, three sets of permissions",
+  "roles.teacher.title": "Teacher",
+  "roles.teacher.body": "Attendance, fees, marks — speak or type in Sinhala, Tamil or English. The only role that can change data.",
+  "roles.parent.title": "Parent",
+  "roles.parent.body": "A message thread about your own child only, with every update approved by the teacher first.",
+  "roles.student.title": "Student",
+  "roles.student.body": "Hints for past papers in Maths, Science and ICT. Worked examples of a different problem. Never the answer.",
+
+  "rules.heading": "The rules it never breaks",
+  "rules.item1": "No other child's marks, fees or attendance. Ever.",
+  "rules.item2": "Only the teacher can change money or marks.",
+  "rules.item3": "No final exam answers, in any language or encoding.",
+  "rules.item4": "Every change is written to an audit log.",
+  "rules.item5": "If a student is struggling, it stops teaching and helps.",
+  "rules.note": "Enforced in three places: the agent instructions, a Bedrock Guardrail, and a final policy check in code.",
+
+  "stamps.heading": "Stamps",
+  "stamps.paid": "Paid",
+  "stamps.absent": "Absent",
+  "stamps.draft": "Needs approval",
+
+  "status.heading": "Build status",
+  "status.now": "M0 — hello page live",
+  "status.next": "Next: M1 — teacher chat for attendance and fees",
+  "status.milestone": "Milestone",
+
+  "footer.built_by": "Built for Sri Lankan classes, by a Sri Lankan student.",
+  "footer.author": "Nishen Madawa Abedeera · SLTC",
+  "footer.license": "MIT licensed",
+  "footer.repo": "Source on GitHub",
+  "footer.demo_data": "Demo data only. All students and parents shown are fictional."
+}

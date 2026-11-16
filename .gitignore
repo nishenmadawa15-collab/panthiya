@@ -1,0 +1,40 @@
+# Panthiya .gitignore
+#
+# IMPORTANT: .kiro/ is NEVER ignored. Kiroween requires it in the repository, and the steering
+# docs and specs are the most interesting part of this project. Do not add it here.
+
+# Secrets and credentials — never commit any of these
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+credentials
+samconfig.toml
+aws-exports.js
+amplify/.config/
+amplifyconfiguration.json
+
+# SAM / CloudFormation build output
+backend/.aws-sam/
+.aws-sam/
+packaged.yaml
+
+# Node
+node_modules/
+npm-debug.log*
+.npm/
+
+# Local test and scratch output
+coverage/
+*.local.json
+scratch/
+tmp/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

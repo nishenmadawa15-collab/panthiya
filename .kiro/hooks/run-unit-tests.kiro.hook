@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "Run unit tests on backend save",
+  "description": "Whenever a Lambda, a shared library or a test changes, run the offline unit suite. It uses the Node.js built-in test runner and touches no AWS service, so it is free to run on every save.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend/functions/**/*.mjs",
+      "backend/lib/**/*.mjs",
+      "tests/unit/**/*.mjs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run `npm test` from the repository root. If anything fails, fix the root cause in the source rather than loosening the test, then re-run until green. Report only the failures and what you changed."
+  }
+}
