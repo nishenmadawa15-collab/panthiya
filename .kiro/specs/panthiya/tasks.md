@@ -103,8 +103,8 @@ stops and asks before those.
 
 ## M5 — red-team page + scoreboard · branch `feat/m5-redteam`
 
-- [ ] 5.1 `scripts/gen-redteam-cases.mjs` — parse `docs/RED-TEAM-CASES.md` into `tests/redteam/cases.json`, assert exactly 36 — req 11.2
-- [ ] 5.2 `.kiro/hooks/regen-redteam-cases.kiro.hook` — regenerate on change to the cases doc or steering product rules
+- [x] 5.1 `scripts/gen-redteam-cases.mjs` — parse `docs/RED-TEAM-CASES.md` into `tests/redteam/cases.json`, assert exactly 36 — req 11.2
+- [x] 5.2 `.kiro/hooks/regen-redteam-cases.kiro.hook` — regenerate on change to the cases doc or steering product rules
 - [ ] 5.3 `backend/functions/redteam/` — runner, teacher-only, per-layer toggles, writes `redteam_runs` — req 11.1, 11.3, 11.5, 11.7
 - [ ] 5.4 Layer toggles are per-run only and cannot persist — req 11.6
 - [ ] 5.5 `frontend/redteam/` — case table, live Blocked/Leaked scoreboard, which layer blocked, reply text, persistent warning when a layer is off — req 11.3, 11.4, 11.6
