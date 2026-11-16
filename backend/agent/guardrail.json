@@ -74,38 +74,88 @@
   },
   "contentPolicyConfig": {
     "filtersConfig": [
-      { "type": "HATE", "inputStrength": "HIGH", "outputStrength": "HIGH" },
-      { "type": "INSULTS", "inputStrength": "HIGH", "outputStrength": "HIGH" },
-      { "type": "SEXUAL", "inputStrength": "HIGH", "outputStrength": "HIGH" },
-      { "type": "VIOLENCE", "inputStrength": "HIGH", "outputStrength": "HIGH" },
-      { "type": "MISCONDUCT", "inputStrength": "HIGH", "outputStrength": "HIGH" },
-      { "type": "PROMPT_ATTACK", "inputStrength": "HIGH", "outputStrength": "NONE" }
+      {
+        "type": "HATE",
+        "inputStrength": "HIGH",
+        "outputStrength": "HIGH"
+      },
+      {
+        "type": "INSULTS",
+        "inputStrength": "HIGH",
+        "outputStrength": "HIGH"
+      },
+      {
+        "type": "SEXUAL",
+        "inputStrength": "HIGH",
+        "outputStrength": "HIGH"
+      },
+      {
+        "type": "VIOLENCE",
+        "inputStrength": "HIGH",
+        "outputStrength": "HIGH"
+      },
+      {
+        "type": "MISCONDUCT",
+        "inputStrength": "HIGH",
+        "outputStrength": "HIGH"
+      },
+      {
+        "type": "PROMPT_ATTACK",
+        "inputStrength": "HIGH",
+        "outputStrength": "NONE"
+      }
     ]
   },
   "wordPolicyConfig": {
     "wordsConfig": [
-      { "text": "developer mode" },
-      { "text": "dev mode" },
-      { "text": "ignore all rules" },
-      { "text": "ignore all previous instructions" },
-      { "text": "ignore your instructions" },
-      { "text": "system:" },
-      { "text": "role=teacher" },
-      { "text": "role = teacher" },
-      { "text": "act as the teacher" },
-      { "text": "pretend you are the teacher" },
-      { "text": "ඩිවලපර් මෝඩ්" },
-      { "text": "නීති නොසලකන්න" },
-      { "text": "සියලු නීති නොසලකා හරින්න" },
-      { "text": "ගුරුවරයා ලෙස හැසිරෙන්න" },
-      { "text": "niti nosalakanna" },
-      { "text": "teacher wage hadenna" },
-      { "text": "டெவலப்பர் மோட்" },
-      { "text": "விதிகளை புறக்கணி" },
-      { "text": "எல்லா விதிகளையும் புறக்கணி" },
-      { "text": "ஆசிரியராக செயல்படு" }
+      {
+        "text": "developer mode"
+      },
+      {
+        "text": "dev mode"
+      },
+      {
+        "text": "ignore all previous instructions"
+      },
+      {
+        "text": "ignore your instructions"
+      },
+      {
+        "text": "system:"
+      },
+      {
+        "text": "role=teacher"
+      },
+      {
+        "text": "role = teacher"
+      },
+      {
+        "text": "act as the teacher"
+      },
+      {
+        "text": "pretend you are the teacher"
+      },
+      {
+        "text": "ඩිවලපර් මෝඩ්"
+      },
+      {
+        "text": "ගුරුවරයා ලෙස හැසිරෙන්න"
+      },
+      {
+        "text": "teacher wage hadenna"
+      },
+      {
+        "text": "டெவலப்பர் மோட்"
+      },
+      {
+        "text": "ஆசிரியராக செயல்படு"
+      }
     ],
-    "managedWordListsConfig": [{ "type": "PROFANITY" }]
+    "managedWordListsConfig": [
+      {
+        "type": "PROFANITY"
+      }
+    ]
   },
   "sensitiveInformationPolicyConfig": {
     "piiEntitiesConfig": [
@@ -150,7 +200,13 @@
     ]
   },
   "tags": [
-    { "key": "project", "value": "panthiya" },
-    { "key": "layer", "value": "2" }
+    {
+      "key": "project",
+      "value": "panthiya"
+    },
+    {
+      "key": "layer",
+      "value": "2"
+    }
   ]
 }

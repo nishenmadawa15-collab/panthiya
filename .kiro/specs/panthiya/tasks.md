@@ -44,7 +44,7 @@ stops and asks before those.
 - [x] 1.7 `backend/functions/actions-teacher/` — `addStudent`, `markAttendance`, `recordFee`, `addMarks`, each re-authorising every model-supplied identifier — req 2.1–2.4, 3.1–3.4, 4.1–4.3, 5.1–5.3
 - [x] 1.8 Fee and mark validation: numeric, range-checked, amount confirmed back before persisting — req 4.5, 5.2
 - [ ] 1.9 `backend/functions/chat/` — orchestrator: claims → `sessionAttributes` → `InvokeAgent`; input length limits — req 1.3, 5 (API limits)
-- [ ] 1.10 Agent instructions assembled from the steering rules, with the server-set role preamble — design §6.1
+- [x] 1.10 Agent instructions assembled from the steering rules, with the server-set role preamble — design §6.1
 - [ ] 1.11 **[human]** Create the Bedrock agent + the Teacher action group; record IDs as SAM parameters
 - [x] 1.12 `backend/seed/seed.mjs` — one demo class, 12 fictional students, fictional parents, realistic fees — req 13.7
 - [x] 1.13 `frontend/teacher/` — chat screen and fee ledger with Paid/Unpaid stamps — req 12.x
