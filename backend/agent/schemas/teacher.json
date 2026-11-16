@@ -1,0 +1,275 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Panthiya teacher actions",
+    "version": "1.0.0",
+    "description": "Actions available only in a teacher session. The session role and the caller's identity are supplied by the server in sessionAttributes and are never parameters here; every identifier below is treated as an unverified hint and is re-authorised against the classes this teacher owns before anything is read or written. Design §6.2."
+  },
+  "paths": {
+    "/addStudent": {
+      "post": {
+        "operationId": "addStudent",
+        "summary": "Add a student to one of the teacher's own classes",
+        "description": "Add one student to a class the teacher owns. Use only when the teacher states a class and a student name. Do not guess a class name; ask which class if it is unclear. The student is added only if this teacher owns the class, and the write is recorded in the audit log.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["className", "studentName"],
+                "properties": {
+                  "className": {
+                    "type": "string",
+                    "description": "The class as the teacher named it, for example 'Grade 11 Maths' or '11 ශ්‍රේණිය ගණිතය'. Pass it exactly as written; it is matched against the classes this teacher owns."
+                  },
+                  "studentName": {
+                    "type": "string",
+                    "description": "The new student's name exactly as the teacher wrote it, in any script. Do not translate or transliterate it."
+                  },
+                  "parentContact": {
+                    "type": "string",
+                    "description": "Optional parent phone number, only if the teacher supplied one in this message. Never invent, complete or guess a number, and never repeat it back in your reply."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result of the add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "description": "added, duplicate, or denied" },
+                    "studentName": { "type": "string", "description": "Name as stored" },
+                    "className": { "type": "string", "description": "Class as stored" },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher. If status is denied, state the reason given here and nothing more." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markAttendance": {
+      "post": {
+        "operationId": "markAttendance",
+        "summary": "Record attendance for named students on one date",
+        "description": "Record attendance for one or more students on a single date, in a class the teacher owns. Every name is resolved inside the teacher's own classes; any name that does not resolve is reported back unrecorded, never guessed at. Each recorded row goes to the audit log.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["names", "date", "status"],
+                "properties": {
+                  "names": {
+                    "type": "array",
+                    "description": "The student names the teacher listed, one per element, exactly as written, in any script. Include only names the teacher actually said; never expand 'everyone' into a list of your own.",
+                    "items": { "type": "string" }
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "The date in YYYY-MM-DD. Resolve 'today' or 'yesterday' relative to the date the server gives you; if no date was stated, use today."
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Attendance status that applies to every name in this call. Split a mixed request into one call per status.",
+                    "enum": ["present", "absent", "late"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Which names were recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recorded": { "type": "array", "description": "Names recorded, as stored", "items": { "type": "string" } },
+                    "unresolved": { "type": "array", "description": "Names that matched nobody in this teacher's classes. Report these back and ask the teacher, do not retry with a different spelling.", "items": { "type": "string" } },
+                    "date": { "type": "string", "description": "Date as stored" },
+                    "status": { "type": "string", "description": "Status as stored" },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recordFee": {
+      "post": {
+        "operationId": "recordFee",
+        "summary": "Record a fee payment for one student",
+        "description": "Record one fee payment for a student in a class the teacher owns. Use only the amount and period the teacher stated. The amount is validated server-side (greater than 0 and at most 100000); an out-of-range or non-numeric amount is rejected rather than rounded. The write is recorded in the audit log, and only a teacher session can reach this action.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["studentName", "amount", "period"],
+                "properties": {
+                  "studentName": {
+                    "type": "string",
+                    "description": "The student's name exactly as the teacher wrote it, in any script. Resolved inside this teacher's own classes only."
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Amount paid in Sri Lankan rupees, as a number, exactly as the teacher stated it. Do not convert, round or infer an amount."
+                  },
+                  "period": {
+                    "type": "string",
+                    "description": "The month the payment is for, as YYYY-MM. Resolve 'this month' or 'November' against the server date; if the teacher named no period, ask rather than assume."
+                  },
+                  "method": {
+                    "type": "string",
+                    "description": "Optional payment method, only if the teacher said how it was paid.",
+                    "enum": ["cash", "bank", "online"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result of the fee write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "description": "recorded, rejected, or denied" },
+                    "studentName": { "type": "string", "description": "Name as stored" },
+                    "amount": { "type": "number", "description": "Amount as stored" },
+                    "period": { "type": "string", "description": "Period as stored" },
+                    "balance": { "type": "number", "description": "Remaining balance for that period, if the handler computed one" },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher. Repeat the stored figures, not the ones you sent." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/addMarks": {
+      "post": {
+        "operationId": "addMarks",
+        "summary": "Record a mark for one student on one assessment",
+        "description": "Record one score for a student in a class the teacher owns. The score is validated server-side (0 <= score <= maxScore); anything outside that is rejected, not clamped. The write is recorded in the audit log.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["studentName", "assessment", "score", "maxScore"],
+                "properties": {
+                  "studentName": {
+                    "type": "string",
+                    "description": "The student's name exactly as the teacher wrote it, in any script. Resolved inside this teacher's own classes only."
+                  },
+                  "assessment": {
+                    "type": "string",
+                    "description": "What the mark is for, as the teacher named it, for example 'November test' or 'Unit 3 paper'."
+                  },
+                  "score": {
+                    "type": "number",
+                    "description": "The score the teacher stated. Never estimate or adjust it."
+                  },
+                  "maxScore": {
+                    "type": "number",
+                    "description": "The maximum possible score. Use 100 only if the teacher said out of 100; otherwise ask."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result of the marks write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "description": "recorded, rejected, or denied" },
+                    "studentName": { "type": "string", "description": "Name as stored" },
+                    "assessment": { "type": "string", "description": "Assessment as stored" },
+                    "score": { "type": "number", "description": "Score as stored" },
+                    "maxScore": { "type": "number", "description": "Maximum as stored" },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/draftParentUpdate": {
+      "post": {
+        "operationId": "draftParentUpdate",
+        "summary": "Draft a parent update for the teacher to approve",
+        "description": "Build a draft message to the parents of one student in a class the teacher owns. The draft is assembled from stored attendance, fees and marks rows only; it is saved with status 'draft' and is not visible to any parent until the teacher approves it in the app. Pass on the returned draft text as it stands, add no fact of your own, keep it respectful and never shaming, and tell the teacher it is awaiting their approval. If the handler reports a mismatch, quote the stored value.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["studentName"],
+                "properties": {
+                  "studentName": {
+                    "type": "string",
+                    "description": "The student the update is about, exactly as the teacher wrote the name, in any script. Resolved inside this teacher's own classes only."
+                  },
+                  "focus": {
+                    "type": "string",
+                    "description": "Optional. What the teacher wants the update to cover. Omit for a general update. Suggested values: attendance, fees, marks, overall.",
+                    "enum": ["attendance", "fees", "marks", "overall"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The draft and any mismatch found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draftId": { "type": "string", "description": "Id of the saved draft" },
+                    "status": { "type": "string", "description": "Always 'draft' on success, or 'denied'" },
+                    "draftText": { "type": "string", "description": "The draft, built only from stored rows. Show it unchanged." },
+                    "basedOn": { "type": "array", "description": "The stored rows the draft was built from", "items": { "type": "string" } },
+                    "mismatch": { "type": "string", "description": "Set when the teacher's stated fact contradicts stored data: quote this stored value to the teacher and use it." },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher, including that approval is required" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

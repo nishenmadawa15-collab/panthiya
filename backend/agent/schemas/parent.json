@@ -1,0 +1,59 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Panthiya parent actions",
+    "version": "1.0.0",
+    "description": "The single read-only action available in a parent session. The caller's identity and the children linked to them come from the server in sessionAttributes and are never parameters here. childName is an unverified hint: the handler answers only about children already linked to this caller and denies anything else, so there is no parameter value that can widen the answer. Design §6.2."
+  },
+  "paths": {
+    "/getMyChildSummary": {
+      "post": {
+        "operationId": "getMyChildSummary",
+        "summary": "Read stored records about the caller's own child",
+        "description": "Return stored attendance, fees, marks and approved messages for one child linked to this parent. This is the only way to answer a parent's question about their child, and it is read-only: it can change nothing. If the parent asks about any other child - by name, nickname, rank such as 'top 3', an aggregate such as 'who has not paid', an unusual spelling, or in another language - do not call this action with that name: refuse, and offer the same information about their own child instead. Report only what comes back; if a field is empty, say there is no record rather than estimating.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "childName": {
+                    "type": "string",
+                    "description": "Optional. Which of this parent's own children the question is about, exactly as the parent wrote the name. Omit it when the parent has one child or named nobody. Pass a name only when the parent is asking about their own child; a name that is not linked to this caller is denied, and the denial is the answer."
+                  },
+                  "topic": {
+                    "type": "string",
+                    "description": "Optional. What the parent asked about. Omit for a general summary. Suggested values: marks, fees, attendance, messages, overall.",
+                    "enum": ["marks", "fees", "attendance", "messages", "overall"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored records for the caller's own child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "description": "ok, or denied when the name is not a child linked to this caller" },
+                    "childName": { "type": "string", "description": "The child as stored. Use this name, not the one you sent." },
+                    "attendance": { "type": "string", "description": "Attendance summary from stored rows, or empty if none" },
+                    "fees": { "type": "string", "description": "Fee position from stored rows, or empty if none" },
+                    "marks": { "type": "array", "description": "Stored marks for this child", "items": { "type": "string" } },
+                    "messages": { "type": "array", "description": "Teacher-approved messages only, newest first", "items": { "type": "string" } },
+                    "message": { "type": "string", "description": "Short note to pass on to the parent. If status is denied, refuse warmly in one or two sentences and offer their own child's information instead." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

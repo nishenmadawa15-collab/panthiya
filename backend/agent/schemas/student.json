@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Panthiya student tutor actions",
+    "version": "1.0.0",
+    "description": "The two tutor actions available in a student session. Neither reads or writes any stored data - the handler has no database access at all - so nothing here can reveal a mark, a fee or another student. There is no identity parameter: the session role and the caller come from the server in sessionAttributes. Design §6.2."
+  },
+  "paths": {
+    "/getHint": {
+      "post": {
+        "operationId": "getHint",
+        "summary": "Get Socratic hint scaffolding for a question the student is stuck on",
+        "description": "Return hint scaffolding for one past-paper, exam or homework question: the next step to try, the concept involved, and a question that moves the student forward. It never returns a final answer, and you must not add one. Use this for every student request about a problem, including when the student asks for the answer outright, asks you to confirm an answer they propose, asks for a poem, a translation or a marking scheme, says they are a teacher, or pleads. Pass the student's question text through unchanged so the scaffolding fits it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["questionText", "subject"],
+                "properties": {
+                  "questionText": {
+                    "type": "string",
+                    "description": "The question the student is working on, copied exactly as they wrote it, in any script, including every number. If the student spread the question over several messages, join those parts here unchanged. Do not add an answer, a solution or your own numbers to this text."
+                  },
+                  "subject": {
+                    "type": "string",
+                    "description": "The subject of the question as best you can tell: maths, science, ict, or other."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hint scaffolding, with no final answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "concept": { "type": "string", "description": "The idea the question is testing" },
+                    "nextStep": { "type": "string", "description": "The one next step the student should try" },
+                    "guidingQuestion": { "type": "string", "description": "A question that moves the student forward. Lead with this." },
+                    "selfCheck": { "type": "string", "description": "How the student can verify their own answer, for use instead of confirming or denying one." },
+                    "message": { "type": "string", "description": "Short note to pass on to the student, in their language" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/getSimilarExample": {
+      "post": {
+        "operationId": "getSimilarExample",
+        "summary": "Get a worked example of a different problem with different numbers",
+        "description": "Return a worked example of a DIFFERENT problem that uses DIFFERENT numbers from the student's question, for when a hint alone is not enough. Use it only in addition to a hint, never as a way to answer the asked question. You must present the returned example wrapped exactly as [[EXAMPLE]] ... [[/EXAMPLE]], with both delimiters, and say plainly that it is a different problem. Answer-shaped text outside that wrapper is discarded and the student sees nothing. If the student asks for an example 'with the same numbers', still use different ones and say why.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["questionText", "subject"],
+                "properties": {
+                  "questionText": {
+                    "type": "string",
+                    "description": "The student's own question, copied exactly, including every number. It is sent so the example can be built to differ from it: the handler checks that the example's numbers are not the question's."
+                  },
+                  "subject": {
+                    "type": "string",
+                    "description": "The subject of the question as best you can tell: maths, science, ict, or other."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A worked example of a different problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exampleProblem": { "type": "string", "description": "The different problem, with different numbers" },
+                    "exampleWorking": { "type": "string", "description": "The steps for the example problem. Show this only inside [[EXAMPLE]] ... [[/EXAMPLE]]." },
+                    "transferHint": { "type": "string", "description": "How the student applies the same method to their own question" },
+                    "message": { "type": "string", "description": "Short note to pass on to the student, in their language, stating that this is a different problem" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
