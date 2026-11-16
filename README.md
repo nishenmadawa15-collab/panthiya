@@ -136,7 +136,7 @@ docs/               red-team cases, build log, write-ups, submissions
 No build step and no dependencies for the front-end.
 
 ```bash
-git clone https://github.com/<your-user>/panthiya.git
+git clone https://github.com/nishenmadawa15-collab/panthiya.git
 cd panthiya
 python -m http.server 8000 --directory frontend
 # open http://localhost:8000
