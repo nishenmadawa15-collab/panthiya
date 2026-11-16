@@ -138,6 +138,30 @@ server-side encryption with the AWS-owned key.
 | `audit_log` | `classId` | `ts#ulid` | — | append-only; no update or delete API exists (req 10.4) |
 | `redteam_runs` | `runId` | `caseId` (`_meta` row holds totals) | `byTeacher` (teacherId → runId) | `expiresAt` TTL, 30 days |
 
+### 4.0 Composite GSI attributes (decided during M1)
+
+DynamoDB cannot compose a sort key from two fields, so each composite sort key is a real stored
+attribute. **Every handler that writes one of these rows must write the composite attribute too**,
+or the item is invisible to its index:
+
+| Table | Index | Stored attribute | Value |
+|---|---|---|---|
+| `attendance` | `byClass` | `dateStudentId` | `<date>#<studentId>` |
+| `messages` | `byParent`, `byTeacher` | `statusCreatedAt` | `<status>#<createdAt>` |
+| `audit_log` | — (table SK) | `tsUlid` | `<ISO-8601-UTC>#<uuid>` |
+
+Routing decisions taken at the same time:
+
+- `POST /teacher/drafts/{id}/approve` and `DELETE /teacher/students/{id}` are **writes**, so they are
+  served by `actions-teacher`. The `read` function stays genuinely read-only, which keeps its IAM
+  policy free of any write action.
+- The red-team runner has **no** `bedrock:InvokeAgent` permission. A live run therefore goes through
+  `POST /chat` like a real user, which means every case exercises the full path including
+  `policyCheck`. A runner with its own agent access would prove less than the demo claims.
+- Transcribe job names must start with `panthiya-`; the IAM policy is scoped to that prefix.
+- `Cognito::UserPoolDomain` arrives with hosted-UI sign-in in M2 task 2.3.
+- **Open:** API and voice-bucket CORS are `*` until the Amplify origin exists. Tighten in M2.
+
 ### 4.1 Name normalisation (`nameKey`)
 
 Used for both student lookup and the policyCheck foreign-name scan, so an attacker cannot evade one

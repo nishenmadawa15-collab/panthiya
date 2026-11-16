@@ -1,0 +1,788 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Panthiya backend — 8 DynamoDB tables, 8 Lambdas, one HTTP API behind a Cognito
+  JWT authorizer, and an S3 bucket for voice notes.
+  Implements design.md §4 (data model), §3.3 (per-Lambda IAM), §5 (API surface)
+  and requirements 13.1–13.3. Everything scales to zero; nothing here is billed
+  hourly (req 13.2). The Bedrock agent and guardrail are created by hand
+  (M1 task 1.11) and passed in as parameters.
+
+# ---------------------------------------------------------------------------
+# Parameters — no account IDs, no secrets. Replace the Bedrock defaults after
+# task 1.11 creates the agent, e.g.
+#   sam deploy --parameter-overrides BedrockAgentId=ABC1234567 ...
+# ---------------------------------------------------------------------------
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Stage name and suffix used in resource names.
+
+  BedrockAgentId:
+    Type: String
+    Default: REPLACEME00
+    Description: Bedrock agent id from M1 task 1.11 (10-char id, e.g. ABC1234567).
+
+  BedrockAgentAliasId:
+    Type: String
+    Default: TSTALIASID
+    Description: Agent alias id. TSTALIASID is the working draft alias Bedrock creates for you.
+
+  GuardrailId:
+    Type: String
+    Default: ""
+    Description: Bedrock guardrail id (design §6.3). Empty until the guardrail exists.
+
+  GuardrailVersion:
+    Type: String
+    Default: DRAFT
+    Description: Guardrail version to apply.
+
+  ModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    Description: Model the agent uses. Nova Lite until the day-1 Sinhala test says otherwise (design §2.1).
+
+# ---------------------------------------------------------------------------
+# Globals — shared Lambda config. Table names reach the code only as
+# environment variables; nothing is hardcoded in a handler.
+# ---------------------------------------------------------------------------
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+    Handler: index.handler # resolves to index.mjs (ES modules, no build step)
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        CLASSES_TABLE: !Ref ClassesTable
+        STUDENTS_TABLE: !Ref StudentsTable
+        ATTENDANCE_TABLE: !Ref AttendanceTable
+        FEES_TABLE: !Ref FeesTable
+        MARKS_TABLE: !Ref MarksTable
+        MESSAGES_TABLE: !Ref MessagesTable
+        AUDIT_LOG_TABLE: !Ref AuditLogTable
+        REDTEAM_RUNS_TABLE: !Ref RedteamRunsTable
+        VOICE_BUCKET: !Ref VoiceBucket
+        MODEL_ID: !Ref ModelId
+
+Resources:
+  # =========================================================================
+  # 1. DynamoDB — design §4. On-demand billing, SSE on, point-in-time
+  #    recovery off (demo data only). GSI sort keys that hold a composite
+  #    value are named after the value, e.g. dateStudentId = "date#studentId".
+  # =========================================================================
+
+  ClassesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-classes"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: classId
+          AttributeType: S
+        - AttributeName: teacherId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: classId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byTeacher
+          KeySchema:
+            - AttributeName: teacherId # Cognito sub
+              KeyType: HASH
+            - AttributeName: classId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  StudentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-students"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: studentId
+          AttributeType: S
+        - AttributeName: classId
+          AttributeType: S
+        - AttributeName: displayName
+          AttributeType: S
+        - AttributeName: parentSub
+          AttributeType: S
+      KeySchema:
+        - AttributeName: studentId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byClass
+          KeySchema:
+            - AttributeName: classId
+              KeyType: HASH
+            - AttributeName: displayName
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: byParent
+          KeySchema:
+            - AttributeName: parentSub
+              KeyType: HASH
+            - AttributeName: studentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  AttendanceTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-attendance"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: studentId
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: S
+        - AttributeName: classId
+          AttributeType: S
+        - AttributeName: dateStudentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: studentId
+          KeyType: HASH
+        - AttributeName: date # YYYY-MM-DD
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: byClass
+          KeySchema:
+            - AttributeName: classId
+              KeyType: HASH
+            - AttributeName: dateStudentId # "date#studentId"
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  FeesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-fees"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: studentId
+          AttributeType: S
+        - AttributeName: period
+          AttributeType: S
+        - AttributeName: classId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: studentId
+          KeyType: HASH
+        - AttributeName: period # YYYY-MM
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: byClass
+          KeySchema:
+            - AttributeName: classId
+              KeyType: HASH
+            - AttributeName: period
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  MarksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-marks"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: studentId
+          AttributeType: S
+        - AttributeName: assessmentId
+          AttributeType: S
+        - AttributeName: classId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: studentId
+          KeyType: HASH
+        - AttributeName: assessmentId # "date#slug"
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: byClass
+          KeySchema:
+            - AttributeName: classId
+              KeyType: HASH
+            - AttributeName: assessmentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-messages"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: messageId
+          AttributeType: S
+        - AttributeName: parentSub
+          AttributeType: S
+        - AttributeName: teacherId
+          AttributeType: S
+        - AttributeName: statusCreatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: messageId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byParent
+          KeySchema:
+            - AttributeName: parentSub
+              KeyType: HASH
+            - AttributeName: statusCreatedAt # "status#createdAt"
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: byTeacher
+          KeySchema:
+            - AttributeName: teacherId
+              KeyType: HASH
+            - AttributeName: statusCreatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # Append-only (req 10.4). No GSI, and no Lambda gets UpdateItem or
+  # DeleteItem on this table anywhere in the template.
+  AuditLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-audit-log"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: classId
+          AttributeType: S
+        - AttributeName: tsUlid
+          AttributeType: S
+      KeySchema:
+        - AttributeName: classId
+          KeyType: HASH
+        - AttributeName: tsUlid # "ts#ulid"
+          KeyType: RANGE
+
+  # The only table with a TTL: red-team runs self-delete after 30 days,
+  # which is also a cost guard (design §10).
+  RedteamRunsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-redteam-runs"
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: runId
+          AttributeType: S
+        - AttributeName: caseId
+          AttributeType: S
+        - AttributeName: teacherId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: runId
+          KeyType: HASH
+        - AttributeName: caseId # "_meta" row holds the run totals
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: byTeacher
+          KeySchema:
+            - AttributeName: teacherId
+              KeyType: HASH
+            - AttributeName: runId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # =========================================================================
+  # 2. S3 — voice notes. No public access at all, SSE on, and objects are
+  #    deleted after one day (design §10 cost guard).
+  # =========================================================================
+  VoiceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-voice-notes-after-1-day
+            Status: Enabled
+            Prefix: voice/
+            ExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      # Needed so the browser can PUT to the presigned URL. The URL itself is
+      # the only credential; CORS does not grant access.
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT]
+            AllowedOrigins: ["*"]
+            AllowedHeaders: ["*"]
+            MaxAge: 300
+
+  # =========================================================================
+  # 3. Cognito — one pool, one browser client (no secret), three groups.
+  #    The role comes from the group claim in the ID token and is read
+  #    server-side only (req 1.3).
+  # =========================================================================
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-users"
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true # demo accounts are created by the maintainer
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AWS::StackName}-web"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false # public browser client; a secret could not be kept
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      IdTokenValidity: 60
+      AccessTokenValidity: 60
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        IdToken: minutes
+        AccessToken: minutes
+        RefreshToken: days
+      PreventUserExistenceErrors: ENABLED
+
+  TeacherGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: teacher
+      UserPoolId: !Ref UserPool
+
+  ParentGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: parent
+      UserPoolId: !Ref UserPool
+
+  StudentGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: student
+      UserPoolId: !Ref UserPool
+
+  # =========================================================================
+  # 4. HTTP API — every route is behind the Cognito JWT authorizer, which
+  #    verifies signature, issuer, audience and expiry before our code runs
+  #    (req 1.2). Throttling is a cost guard, not a security control.
+  # =========================================================================
+  PanthiyaApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+              audience:
+                - !Ref UserPoolClient
+      CorsConfiguration:
+        AllowOrigins: ["*"] # the app is served from Amplify on another origin
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [GET, POST, DELETE, OPTIONS]
+        MaxAge: 300
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 10
+        ThrottlingBurstLimit: 20
+
+  # =========================================================================
+  # 5. Lambdas. SAM creates one role per function, so each policy below is
+  #    that function's entire reach. Every DynamoDB resource is a literal
+  #    table or index ARN — no "*", no AmazonDynamoDBFullAccess (req 13.3).
+  # =========================================================================
+
+  # chat — orchestrator. Touches no table: it talks to the agent and then to
+  # policy-check, and that is all it is allowed to do.
+  ChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/chat/
+      Timeout: 29 # the agent round-trip is the slow part; API Gateway caps at 30
+      Environment:
+        Variables:
+          BEDROCK_AGENT_ID: !Ref BedrockAgentId
+          BEDROCK_AGENT_ALIAS_ID: !Ref BedrockAgentAliasId
+          GUARDRAIL_ID: !Ref GuardrailId
+          GUARDRAIL_VERSION: !Ref GuardrailVersion
+          POLICY_CHECK_FUNCTION: !Ref PolicyCheckFunction
+      Policies:
+        - Statement:
+            - Sid: InvokeTheOneAgentAlias
+              Effect: Allow
+              Action: bedrock:InvokeAgent
+              Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/${BedrockAgentId}/${BedrockAgentAliasId}"
+            - Sid: InvokePolicyCheckOnly
+              Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt PolicyCheckFunction.Arn
+      Events:
+        Chat:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: POST
+            Path: /chat
+
+  # actions-teacher — the only writing Lambda. Read/write on the six data
+  # tables, and PutItem (never Update, never Delete) on audit_log so the log
+  # stays append-only (req 10.4).
+  ActionsTeacherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/actions-teacher/
+      Policies:
+        - Statement:
+            - Sid: TeacherReadWriteOwnDomain
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:BatchGetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:BatchWriteItem
+              Resource:
+                - !GetAtt ClassesTable.Arn
+                - !Sub "${ClassesTable.Arn}/index/byTeacher"
+                - !GetAtt StudentsTable.Arn
+                - !Sub "${StudentsTable.Arn}/index/byClass"
+                - !Sub "${StudentsTable.Arn}/index/byParent"
+                - !GetAtt AttendanceTable.Arn
+                - !Sub "${AttendanceTable.Arn}/index/byClass"
+                - !GetAtt FeesTable.Arn
+                - !Sub "${FeesTable.Arn}/index/byClass"
+                - !GetAtt MarksTable.Arn
+                - !Sub "${MarksTable.Arn}/index/byClass"
+                - !GetAtt MessagesTable.Arn
+                - !Sub "${MessagesTable.Arn}/index/byParent"
+                - !Sub "${MessagesTable.Arn}/index/byTeacher"
+            - Sid: AuditLogAppendOnly
+              Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+      Events:
+        # Teacher writes that arrive over HTTP rather than through the agent.
+        ApproveDraft:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: POST
+            Path: /teacher/drafts/{id}/approve
+        DeleteStudent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: DELETE
+            Path: /teacher/students/{id}
+
+  # actions-parent — read-only, and only the tables a parent answer can be
+  # built from. No PutItem anywhere, so a confused agent cannot write.
+  ActionsParentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/actions-parent/
+      Policies:
+        - Statement:
+            - Sid: ParentReadOnly
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                - !GetAtt StudentsTable.Arn
+                - !Sub "${StudentsTable.Arn}/index/byClass"
+                - !Sub "${StudentsTable.Arn}/index/byParent"
+                - !GetAtt FeesTable.Arn
+                - !Sub "${FeesTable.Arn}/index/byClass"
+                - !GetAtt AttendanceTable.Arn
+                - !Sub "${AttendanceTable.Arn}/index/byClass"
+                - !GetAtt MarksTable.Arn
+                - !Sub "${MarksTable.Arn}/index/byClass"
+                - !GetAtt MessagesTable.Arn
+                - !Sub "${MessagesTable.Arn}/index/byParent"
+
+  # actions-student — deliberately NO Policies block, so its role carries only
+  # CloudWatch Logs write. The tutor needs no stored data, so a student data
+  # leak is impossible by IAM rather than by prompt (design §1, §3.3).
+  # Do not add DynamoDB permissions here.
+  ActionsStudentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/actions-student/
+
+  # policy-check — layer 3. Needs the roster names only, to spot a reply that
+  # mentions another student (design §7). Read-only on students, nothing else.
+  PolicyCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/policy-check/
+      Timeout: 5 # it runs on every reply; it must be fast or fail closed
+      Policies:
+        - Statement:
+            - Sid: RosterNamesReadOnly
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                - !GetAtt StudentsTable.Arn
+                - !Sub "${StudentsTable.Arn}/index/byClass"
+                - !Sub "${StudentsTable.Arn}/index/byParent"
+
+  # read — inbox, drafts, audit and the single-student export (req 13.8).
+  # Read-only everywhere, including audit_log.
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/read/
+      Policies:
+        - Statement:
+            - Sid: ReadOnlyViews
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:BatchGetItem
+                - dynamodb:Query
+              Resource:
+                - !GetAtt StudentsTable.Arn
+                - !Sub "${StudentsTable.Arn}/index/byClass"
+                - !Sub "${StudentsTable.Arn}/index/byParent"
+                - !GetAtt FeesTable.Arn
+                - !Sub "${FeesTable.Arn}/index/byClass"
+                - !GetAtt AttendanceTable.Arn
+                - !Sub "${AttendanceTable.Arn}/index/byClass"
+                - !GetAtt MarksTable.Arn
+                - !Sub "${MarksTable.Arn}/index/byClass"
+                - !GetAtt MessagesTable.Arn
+                - !Sub "${MessagesTable.Arn}/index/byParent"
+                - !Sub "${MessagesTable.Arn}/index/byTeacher"
+                - !GetAtt AuditLogTable.Arn
+      Events:
+        ParentInbox:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: GET
+            Path: /parent/inbox
+        TeacherDrafts:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: GET
+            Path: /teacher/drafts
+        TeacherAudit:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: GET
+            Path: /teacher/audit
+        StudentExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: GET
+            Path: /teacher/students/{id}/export
+
+  # voice — presigns an S3 PUT and starts a Transcribe job. No table access.
+  # S3 is scoped to the voice/ prefix; Transcribe to job names we create.
+  VoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/voice/
+      Policies:
+        - Statement:
+            - Sid: VoiceObjectsOnly
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "${VoiceBucket.Arn}/voice/*"
+            - Sid: TranscribeOwnJobs
+              Effect: Allow
+              Action:
+                - transcribe:StartTranscriptionJob
+                - transcribe:GetTranscriptionJob
+              Resource: !Sub "arn:${AWS::Partition}:transcribe:${AWS::Region}:${AWS::AccountId}:transcription-job/panthiya-*"
+      Events:
+        UploadUrl:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: POST
+            Path: /voice/upload-url
+
+  # redteam — teacher-only runner. Writes its own results table, reads the
+  # roster so cases can reference real demo students.
+  RedteamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/redteam/
+      Timeout: 29
+      Environment:
+        Variables:
+          BEDROCK_AGENT_ID: !Ref BedrockAgentId
+          BEDROCK_AGENT_ALIAS_ID: !Ref BedrockAgentAliasId
+          GUARDRAIL_ID: !Ref GuardrailId
+          GUARDRAIL_VERSION: !Ref GuardrailVersion
+      # NOTE for the maintainer: the IAM table in design §3.3 gives this role no
+      # bedrock:InvokeAgent and no lambda:InvokeFunction, so a live run must go
+      # through POST /chat with the teacher's own token, not from here. Add the
+      # permission here only if you decide the runner should call the agent itself.
+      Policies:
+        - Statement:
+            - Sid: RedteamRunsReadWrite
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:BatchWriteItem
+              Resource:
+                - !GetAtt RedteamRunsTable.Arn
+                - !Sub "${RedteamRunsTable.Arn}/index/byTeacher"
+            - Sid: RosterReadOnly
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                - !GetAtt StudentsTable.Arn
+                - !Sub "${StudentsTable.Arn}/index/byClass"
+      Events:
+        RunRedteam:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: POST
+            Path: /redteam/run
+        ListRuns:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: GET
+            Path: /redteam/runs
+
+  # =========================================================================
+  # 6. Lets the hand-made Bedrock agent (task 1.11) invoke the three action
+  #    group Lambdas — and only that agent.
+  # =========================================================================
+  BedrockInvokeActionsTeacher:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ActionsTeacherFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent/${BedrockAgentId}"
+
+  BedrockInvokeActionsParent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ActionsParentFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent/${BedrockAgentId}"
+
+  BedrockInvokeActionsStudent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ActionsStudentFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent/${BedrockAgentId}"
+
+Outputs:
+  ApiEndpoint:
+    Description: Base URL for every route. Put this in the front-end config and in the CSP connect-src.
+    Value: !Sub "https://${PanthiyaApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  UserPoolId:
+    Description: Cognito user pool id.
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Description: Cognito app client id (also the JWT audience).
+    Value: !Ref UserPoolClient
+
+  VoiceBucketName:
+    Description: S3 bucket for voice notes; objects expire after 1 day.
+    Value: !Ref VoiceBucket
+
+  ClassesTableName:
+    Value: !Ref ClassesTable
+
+  StudentsTableName:
+    Value: !Ref StudentsTable
+
+  AttendanceTableName:
+    Value: !Ref AttendanceTable
+
+  FeesTableName:
+    Value: !Ref FeesTable
+
+  MarksTableName:
+    Value: !Ref MarksTable
+
+  MessagesTableName:
+    Value: !Ref MessagesTable
+
+  AuditLogTableName:
+    Value: !Ref AuditLogTable
+
+  RedteamRunsTableName:
+    Value: !Ref RedteamRunsTable
