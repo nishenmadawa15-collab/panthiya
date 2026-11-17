@@ -6,41 +6,86 @@ below are shaped the way they are.
 
 ---
 
-## 0. Tonight's run sheet
+## 0. Tomorrow — start here
 
-The aim of this session is the one thing 455 passing tests cannot tell us: **whether any of it
-works against a real Bedrock agent.** Everything else can wait, and nothing below is worth doing
-out of order.
+**Read this section before anything else. The plan changed on the evening of 2026-11-17, and the
+old run sheet would send you down a path that no longer exists.**
 
-The commands are in §1. This is the order, who has to be at the keyboard, and where to stop.
+### What changed: the agent cannot be created
+
+Driving the AWS console found what no amount of reading the code could: **Bedrock Agents Classic is
+in maintenance mode, and this account cannot create an agent.** `CreateAgent` returns
+`AccessDeniedException` — *"New agent creation is not available for accounts without prior service
+usage"* — in `ap-south-1` and in `us-east-1`, because the allowlist is per-account and automatic.
+AWS's own page is explicit that **there is no exception process**, so there is no ticket to file.
+
+What survives, and it is most of it:
+
+| | |
+|---|---|
+| **Guardrails** | Unaffected, and still apply when the model is invoked through AgentCore — layer 2 lives |
+| **Model inference** | Fully supported; the Sinhala gate is unchanged |
+| **`ap-south-1`** | AgentCore is fully available in Mumbai — harness, Runtime, Gateway, Memory, Identity, Policy. The region decision stays settled |
+| **The three action Lambdas** | AWS's recommended path turns an action group into an MCP tool through the AgentCore gateway, *"wrapping REST APIs and Lambda functions"* — the shape this project already has |
+| **The whole security story** | The role gate, the IAM separation, policyCheck and the 36 cases do not care which orchestrator calls the Lambdas |
+
+### The first decision tomorrow
+
+| | Path | What it costs |
+|---|---|---|
+| **A** | **AgentCore harness** — AWS's named successor. Action groups become gateway MCP tools over the existing Lambdas; guardrails attach through gateway policy | A CLI and a service nobody here has used, with two weeks left. Consumption pricing across runtime, memory and gateway, so the $15 budget needs re-checking |
+| **B** | **Our own loop** — `Converse` with `toolConfig`, dispatching to the same three Lambdas from `orchestrate.mjs` | Two files change in a codebase that already has everything else. The role never leaves our Lambda, which makes design §3.1 *simpler and stronger*. But it is not "an agent service", which may matter to the judges |
+| ~~C~~ | ~~Ask AWS to unblock the account~~ | **Ruled out in writing.** There is no exception process |
+
+**Decide it the way everything else here got decided: by checking rather than guessing.** Give
+option A a bounded spike — a hello-world AgentCore harness in `ap-south-1` calling one existing
+Lambda through the gateway, time-boxed to about two hours. If it runs, take A. If it fights back,
+B is a known quantity that can be built and tested offline. Do not spend the evening theorising
+about which is better.
+
+**One thing is still missing and only Nishen has it:** the rules for the challenge this is being
+built for. A search found no event called *"Agents, your rules"*, so whether Bedrock Agents Classic
+specifically is required — and whether a parallel Kiroween submission is allowed — is **unverified**.
+A URL or the invitation email settles both in five minutes.
+
+### The run sheet, corrected
 
 | # | Step | Who | Time | Cost |
 |---|---|---|---|---|
-| 1 | `aws configure` (IAM user `panthiya-dev`), SAM CLI, Bedrock **model access**, and confirm Managed Agents exist in `ap-south-1` | Nishen | ~20 min | $0 |
+| 1 | `aws configure` (IAM user `panthiya-dev`) and the SAM CLI. **The CLI has neither right now.** Model access no longer needs enabling — that console page has been retired and models auto-enable on first invoke | Nishen | ~20 min | $0 |
 | 2 | 🚦 **The Sinhala gate** — `node scripts/test-sinhala.mjs --yes`, and read the Sinhala replies by eye | Nishen runs, agent reads | ~5 min | under 5¢ |
-| 3 | Bedrock agent + the three action groups + the Guardrail, in the console | Nishen, agent guides | ~25 min | $0 |
-| 4 | 💰 `sam deploy --guided` | **Nishen approves before it runs** | ~10 min | ~$0 |
-| 5 | `demo-users.mjs --apply`, then `seed --apply` — in that order, for the reason in §1 | Agent; Nishen sets the password | ~5 min | ~$0 |
-| 6 | Take and verify the four SWAP POINTs | Agent | ~10 min | $0 |
-| 7 | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page for the version a judge sees. Fix every leak | Agent | 30–40 min | ~$1–2 |
+| 3 | **The orchestration decision** — the A/B spike above | Agent, Nishen decides | ~2 h | a few cents |
+| 4 | Create the **Guardrail** from `backend/agent/guardrail.json` (3.1) — unaffected by any of this | Nishen, agent guides | ~10 min | $0 |
+| 5 | 💰 `sam deploy --guided` | **Nishen approves before it runs** | ~10 min | ~$0 |
+| 6 | `demo-users.mjs --apply`, then `seed --apply` — in that order, for the reason in §1 | Agent; Nishen sets the password | ~5 min | ~$0 |
+| 7 | Take and verify the four SWAP POINTs | Agent | ~10 min | $0 |
+| 8 | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page for the version a judge sees. Fix every leak | Agent | 30–40 min | ~$1–2 |
 
-Nishen is needed for steps 1–4, roughly an hour in total. Steps 5–7 are the agent's.
+**Step 2 is still early for the same reason.** Five milestones rest on the cheapest model being able
+to read Sinhala. If it cannot, the fix is a parameter rather than a rewrite — but every
+prompt-sensitive behaviour has to be re-measured against the new model, which means step 8. It is
+also worth doing before step 3, since the spike should use the model the project will actually ship.
 
-**Step 2 is first for a reason.** Five milestones of code rest on the assumption that the cheapest
-model can read Sinhala. If it cannot, the fix is a **parameter**, not a rewrite — switch to the
-Haiku-class model, re-run the gate — but every prompt-sensitive behaviour has to be re-measured
-against the new model, which means the 36 cases in step 7 and possibly some wording in
-`backend/agent/instructions.md`. Doing step 2 after step 4 would mean paying for a deploy and then
-discovering the score it produced was about the wrong model.
-
-**Two decisions are needed before step 4**, both in §4: whether `feat/m4-student-tutor` merges into
+**Two decisions are needed before step 5**, both in §4: whether `feat/m4-student-tutor` merges into
 `main` (Amplify watches `main`, so there is no live URL until it does), and whether
 `chat/orchestrate.mjs` should echo the verified role.
 
-**Where to stop.** Each step is a gate. If one fails, write what happened in `docs/BUILD-LOG.md`
-and stop there — do not start debugging a failed deploy at one in the morning. The first live run
-of anything finds things, and they are worth finding with a clear head. Nothing in this session is
-on tonight's critical path except step 2, which is cheap enough to repeat.
+### Lanes that need no AWS and can run beside all of it
+
+| Lane | Deliverable | Tasks |
+|---|---|---|
+| **Q1** | Complete the three packs: add the three `voice.*` keys (their English is in `voice.mjs`'s `FALLBACK` table), and assert no missing key. Only one lane at a time may hold the packs | 6.5 |
+| **Q2** | Self-hosted Noto Sinhala and Tamil subsets, CSP-compatible — then the full accessibility pass: keyboard, focus rings, contrast, screen-reader labels, reduced motion. After Q1, so the strings it tests are final | 6.6, 6.7 |
+| **Q3** | `README.md` final (7.1) — but only the parts that do not need the live URL or the demo video | 7.1 (part) |
+
+**The Sinhala and Tamil backlog is now the largest single thing nobody has checked.** Every string
+written today — `auth.*` (23), `audit.*` (22), `mic.*` (10), `redteam.*` (69), `student.*` (22),
+plus the seven corrected notes — was written by someone who does not speak either language. The
+priority list is in §3.
+
+**Where to stop.** Each step is a gate. If one fails, write what happened in `docs/BUILD-LOG.md` and
+stop there rather than debugging a failed deploy at one in the morning. The first live run of
+anything finds things, and they are worth finding with a clear head.
 
 ### The sign-in needs two deploys, not one
 
@@ -115,21 +160,21 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**60 of 79 tasks done. 469 tests pass, nothing skipped. Nothing has been deployed and nothing has
+**62 of 79 tasks done. 487 tests pass, nothing skipped. Nothing has been deployed and nothing has
 been spent.**
 
 | Milestone | State |
 |---|---|
 | M0 hello page | Code complete |
 | M1 data model + teacher chat | Code complete |
-| M2 roles + parent view | Code complete except hosted-UI sign-in (2.3) |
-| M3 defence layers | policyCheck done and audited. Guardrail defined but not created in AWS (3.1). Audit screen (3.6) not built |
+| M2 roles + parent view | Code complete, sign-in included |
+| M3 defence layers | policyCheck done and audited, audit screen done. Guardrail defined but not created in AWS (3.1) |
 | M4 student tutor | **Done** — action group, tutor page, C1–C10 proved offline |
 | M5 red-team | Runner, scoreboard page and CLI done. The live run (5.7) needs AWS **and two demo logins** |
-| M6 voice + polish | Backend done (6.1–6.3). Mic UI, i18n completeness, fonts and the a11y pass remain |
-| M7 docs + submissions | Not started |
+| M6 voice + polish | Backend and mic UI done (6.1–6.4). i18n completeness, fonts and the a11y pass remain |
+| M7 docs + submissions | Kiro write-up and demo script done (7.2, 7.3). The rest needs the live run |
 
-Eleven commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
+Sixteen commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
 offline, and not one line of it has met a real Bedrock agent — still the single largest unknown.
 
 ---
@@ -252,7 +297,7 @@ a change in one of those reports the exact change instead of making it.
 | Step | Task | Who | Gate |
 |---|---|---|---|
 | A1 | Day-1 Sinhala gate | Nishen runs, agent reads the output | **Blocks everything below** |
-| A2 | Create the Bedrock agent + the three action groups from `backend/agent/schemas/` | Nishen in console, agent guides | Record IDs as SAM parameters (1.11) |
+| A2 | ~~Create the Bedrock agent + the three action groups~~ — **not possible on this account**; see §0. Replaced by the A/B orchestration decision and its spike | Agent, Nishen decides | Task 1.11 is blocked until that is settled |
 | A3 | Create the Guardrail from `backend/agent/guardrail.json` | Nishen in console | Record ID + version (3.1) |
 | A4 | `sam deploy --guided` | **Ask Nishen before running — costs money** | 1.15 |
 | A5 | `node scripts/demo-users.mjs --apply` — the three logins, grouped, with a permanent password | Nishen sets `PANTHIYA_DEMO_PASSWORD`, agent runs it | **Before A6, not after.** The seed writes the subs these accounts own |
@@ -311,7 +356,7 @@ is the whole change.
 Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ටෝකනය` (token), `නිර්ණය`
 (verdict), `කාන්දු විය` (leaked); ta `அடுக்கு`, `டோக்கன்`, `தீர்ப்பு`, `கசிந்தது`.
 
-**The branch.** `feat/m4-student-tutor` — eleven commits, green, unmerged. Decide whether M4–M6 go to
+**The branch.** `feat/m4-student-tutor` — sixteen commits, green, unmerged. Decide whether M4–M6 go to
 `main` before the deploy; `amplify.yml` watches `main`, so Amplify will show nothing until they do.
 
 ---
