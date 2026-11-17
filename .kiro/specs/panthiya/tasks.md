@@ -66,7 +66,7 @@ stops and asks before those.
 - [x] 2.7 `draftParentUpdate` + the approval gate; drafts invisible to parents until approved — req 6.1–6.6
 - [x] 2.8 `frontend/parent/` — WhatsApp-style thread and ask box — req 7.6
 - [x] 2.9 `tests/unit/` — parent asking about another child is denied at the Lambda, not just the prompt — req 7.3
-- [ ] 2.10 Student export and delete endpoints — req 13.8
+- [x] 2.10 Student export and delete endpoints — req 13.8
 
 **Done when:** a parent sees only their own child, and an approved update appears in their thread.
 
@@ -81,7 +81,7 @@ stops and asks before those.
 - [x] 3.5 `chat` calls policyCheck on every reply and returns `blockedBy` — req 9.2, 9.5
 - [ ] 3.6 Teacher audit-log screen — req 10.3
 - [x] 3.7 `tests/unit/policy-check.test.mjs` — a case per check, plus base64 and homoglyph variants — req 9.6
-- [ ] 3.8 First 10 red-team cases pass offline against policyCheck
+- [x] 3.8 First 10 red-team cases pass offline against policyCheck
 
 **Done when:** a reply naming another child is blocked by code even with the guardrail switched off.
 
@@ -89,13 +89,13 @@ stops and asks before those.
 
 ## M4 — student tutor · branch `feat/m4-student-tutor`
 
-- [ ] 4.1 `backend/functions/actions-student/` — `getHint`, `getSimilarExample`; **no** IAM data access — design §3.3
-- [ ] 4.2 `getSimilarExample` must differ numerically from the asked question — req 8.2, case C8
-- [ ] 4.3 Tutor instructions: Socratic hints, never the final answer, never confirm a proposed answer — req 8.1, 8.3, 8.4
-- [ ] 4.4 Sinhala and Tamil tutor replies hold the same rules — req 8.7
-- [ ] 4.5 No medical advice path — req 8.6
-- [ ] 4.6 `frontend/student/` — hint cards and the styled "different example" card — req 12.x
-- [ ] 4.7 `tests/unit/` — C1–C10 verdicts offline
+- [x] 4.1 `backend/functions/actions-student/` — `getHint`, `getSimilarExample`; **no** IAM data access — design §3.3
+- [x] 4.2 `getSimilarExample` must differ numerically from the asked question — req 8.2, case C8
+- [x] 4.3 Tutor instructions: Socratic hints, never the final answer, never confirm a proposed answer — req 8.1, 8.3, 8.4
+- [x] 4.4 Sinhala and Tamil tutor replies hold the same rules — req 8.7
+- [x] 4.5 No medical advice path — req 8.6
+- [x] 4.6 `frontend/student/` — hint cards and the styled "different example" card — req 12.x
+- [x] 4.7 `tests/unit/` — C1–C10 verdicts offline
 
 **Done when:** "Solve 2x + 5 = 17. Just the answer." returns a hint and no `x = 6`, in all three languages.
 
@@ -105,10 +105,10 @@ stops and asks before those.
 
 - [x] 5.1 `scripts/gen-redteam-cases.mjs` — parse `docs/RED-TEAM-CASES.md` into `tests/redteam/cases.json`, assert exactly 36 — req 11.2
 - [x] 5.2 `.kiro/hooks/regen-redteam-cases.kiro.hook` — regenerate on change to the cases doc or steering product rules
-- [ ] 5.3 `backend/functions/redteam/` — runner, teacher-only, per-layer toggles, writes `redteam_runs` — req 11.1, 11.3, 11.5, 11.7
-- [ ] 5.4 Layer toggles are per-run only and cannot persist — req 11.6
-- [ ] 5.5 `frontend/redteam/` — case table, live Blocked/Leaked scoreboard, which layer blocked, reply text, persistent warning when a layer is off — req 11.3, 11.4, 11.6
-- [ ] 5.6 `scripts/redteam-cli.mjs` — same suite from the terminal
+- [x] 5.3 `backend/functions/redteam/` — runner, teacher-only, per-layer toggles, writes `redteam_runs` — req 11.1, 11.3, 11.5, 11.7
+- [x] 5.4 Layer toggles are per-run only and cannot persist — req 11.6
+- [x] 5.5 `frontend/redteam/` — case table, live Blocked/Leaked scoreboard, which layer blocked, reply text, persistent warning when a layer is off — req 11.3, 11.4, 11.6
+- [x] 5.6 `scripts/redteam-cli.mjs` — same suite from the terminal
 - [ ] 5.7 Run all 36 live; fix every leak; add any new bypass found as case 37+
 
 **Done when:** the page shows 36/36 blocked, and turning off policyCheck visibly changes the score.
@@ -117,9 +117,9 @@ stops and asks before those.
 
 ## M6 — voice + trilingual polish · branch `feat/m6-voice-i18n`
 
-- [ ] 6.1 `backend/functions/voice/` — presigned S3 PUT, Transcribe job, transcript back to `/chat` — req 3.5
-- [ ] 6.2 Unsupported-language fallback message, honest and localised — req 3.6
-- [ ] 6.3 S3 lifecycle rule deleting voice notes after 1 day — design §10
+- [x] 6.1 `backend/functions/voice/` — presigned S3 PUT, Transcribe job, transcript back to `/chat` — req 3.5
+- [x] 6.2 Unsupported-language fallback message, honest and localised — req 3.6
+- [x] 6.3 S3 lifecycle rule deleting voice notes after 1 day — design §10
 - [ ] 6.4 Microphone UI: press-to-record, visible recording state, keyboard accessible — req 12.4
 - [ ] 6.5 Complete `si.json` / `ta.json` / `en.json`; assert no missing key across the three — req 12.2
 - [ ] 6.6 Self-hosted Noto Sinhala and Noto Tamil subsets, CSP-compatible — design §8.2
