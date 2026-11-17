@@ -45,6 +45,28 @@
     <p class="hero__body" data-i18n="hero.body"></p>
   </section>
 
+  <!-- ---------- sign-in entry ----------
+       Three links rather than a sign-in button, and the reason is requirement 1.1: the ID token
+       lives in the page's memory, so it does not survive a navigation. Signing in here would
+       have to be done again on arrival, so each role page signs in for itself and this page
+       holds no token at all. The second sign-in is silent — Cognito's own session answers it. -->
+  <section class="auth-entry block" aria-labelledby="auth-entry-heading">
+    <h2 class="block__heading" id="auth-entry-heading" data-i18n="auth.heading"></h2>
+    <p class="auth-entry__note" data-i18n="auth.entry.note"></p>
+    <ul class="auth-entry__list">
+      <li class="auth-entry__item">
+        <a class="footer__link auth-entry__link" href="/teacher/" data-i18n="roles.teacher.title"></a>
+      </li>
+      <li class="auth-entry__item">
+        <a class="footer__link auth-entry__link" href="/parent/" data-i18n="roles.parent.title"></a>
+      </li>
+      <li class="auth-entry__item">
+        <a class="footer__link auth-entry__link" href="/student/" data-i18n="roles.student.title"></a>
+      </li>
+    </ul>
+    <p class="auth-entry__small" data-i18n="auth.memory_note"></p>
+  </section>
+
   <section class="block" aria-labelledby="roles-heading">
     <h2 class="block__heading" id="roles-heading" data-i18n="roles.heading"></h2>
     <ul class="cards">

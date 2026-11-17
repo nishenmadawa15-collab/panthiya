@@ -20,6 +20,16 @@ Parameters:
     AllowedValues: [dev, prod]
     Description: Stage name and suffix used in resource names.
 
+  SiteOrigin:
+    Type: String
+    Default: http://localhost:8080
+    Description: >-
+      Origin the front-end is served from, with no trailing slash. Every hosted-UI callback and
+      logout URL is built from it, and Cognito matches them byte for byte. The default is a local
+      static server, because the Amplify origin does not exist until Amplify is connected — which
+      happens AFTER the first deploy. So the live sign-in needs a second deploy with this set, e.g.
+      sam deploy --parameter-overrides SiteOrigin=https://main.d1234abcd.amplifyapp.com
+
   BedrockAgentId:
     Type: String
     Default: REPLACEME00
@@ -395,6 +405,27 @@ Resources:
         # credentials and cannot be reached from a browser — so the public client is
         # not weakened by it. Remove it and the terminal half of task 5.7 stops working.
         - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      # The hosted UI, for task 2.3. `GenerateSecret` stays false above: PKCE needs a public
+      # client, and the authorization-code flow with PKCE is the only one enabled — never implicit,
+      # which would put a token in a URL fragment and from there into history and logs.
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email]
+      SupportedIdentityProviders: [COGNITO]
+      # An exact-match allowlist, one entry per page, because the ID token lives in that page's
+      # memory and does not survive a navigation — so each page completes its own sign-in. The
+      # trailing slash is load-bearing, and the `index.html` form is deliberately NOT listed:
+      # `auth.js` strips it so there is exactly one URI per page to match.
+      CallbackURLs:
+        - !Sub "${SiteOrigin}/teacher/"
+        - !Sub "${SiteOrigin}/parent/"
+        - !Sub "${SiteOrigin}/student/"
+        - !Sub "${SiteOrigin}/redteam/"
+      LogoutURLs:
+        - !Sub "${SiteOrigin}/teacher/"
+        - !Sub "${SiteOrigin}/parent/"
+        - !Sub "${SiteOrigin}/student/"
+        - !Sub "${SiteOrigin}/redteam/"
       IdTokenValidity: 60
       AccessTokenValidity: 60
       RefreshTokenValidity: 1
@@ -420,6 +451,14 @@ Resources:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
       GroupName: student
+      UserPoolId: !Ref UserPool
+
+  # The hosted UI has to be hosted somewhere. The prefix is globally unique across the whole of
+  # Cognito, so the account id is in it, and it may not contain "aws", "amazon" or "cognito".
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "panthiya-${AWS::AccountId}"
       UserPoolId: !Ref UserPool
 
   # =========================================================================
@@ -788,6 +827,10 @@ Outputs:
   UserPoolClientId:
     Description: Cognito app client id (also the JWT audience).
     Value: !Ref UserPoolClient
+
+  HostedUiDomain:
+    Description: Cognito hosted-UI domain. Paste into CONFIG.domain in frontend/assets/auth.js.
+    Value: !Sub "${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
 
   VoiceBucketName:
     Description: S3 bucket for voice notes; objects expire after 1 day.

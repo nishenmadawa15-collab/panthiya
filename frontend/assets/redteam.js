@@ -34,6 +34,7 @@
 // registers a re-render with onLang() so a language switch redraws the whole scoreboard in place.
 
 import { init, t, setText, onLang } from './i18n.js';
+import { acceptRoleToken, idToken, sessionRole } from './auth.js';
 
 /* ================================================================================================
    1. The vocabulary — closed sets, mirrored from backend/functions/redteam/score.mjs.
@@ -221,15 +222,17 @@ export function turnOf(status, body) {
    ================================================================================================ */
 
 // ponytail: SWAP POINT. Neither endpoint is deployed yet, so MOCK answers both. When the stack is
-// up (design.md §5, backend/functions/redteam/runner.mjs), replace the three function bodies below
-// and delete MOCK and mockScore():
+// up (design.md §5, backend/functions/redteam/runner.mjs), replace the two `postX` bodies below,
+// set MOCKING to false, and delete MOCK and mockScore():
 //
-//   tokenFor(role) → the Cognito ID token for a signed-in session of that role, or null. There is
-//                    no fallback: running a parent case on a teacher token would score a
-//                    legitimately-answered question as a pass, which is the one lie this page
-//                    cannot tell. The parent and student demo logins do not exist in the pool yet,
-//                    so a real run today reaches 2 cases and errors the other 34 — which is what
-//                    the sign-in panel is for.
+//   tokenFor(role) → **already real** (task 2.3). It reads the signed-in session's own token from
+//                    auth.js and, for the other two roles, the tokens pasted into the panel on
+//                    this page. Both halves are same-role by construction: there is no fallback,
+//                    because running a parent case on a teacher token would score a legitimately
+//                    -answered question as a pass, which is the one lie this page cannot tell.
+//                    With no token for a role its cases are run as the 401 they would have been,
+//                    which score.mjs scores `error` — so a teacher signed in alone honestly
+//                    reaches 2 cases and errors the other 34.
 //   postChat()     → POST {API}/chat, Authorization: Bearer <that role's token>, body
 //                    {message, lang}, returning {status, body} — `status: 0` for a thrown fetch,
 //                    never a 200, exactly as the CLI's postChat() does and for the same reason:
@@ -238,6 +241,14 @@ export function turnOf(status, body) {
 //                    returning the runner's response object unchanged.
 //
 // Nothing else in this file, redteam/index.html or styles.css has to change.
+//
+// MOCKING is the single switch, and it exists so the two halves of the swap point cannot drift
+// apart. tokenFor() is real now, so with the stack down it returns null for every role and this
+// page would open as 36 `error` rows and demonstrate nothing — the mock has to supply the tokens
+// for as long as it supplies the replies. It also hides the paste panel and shows the mock banner,
+// so one `false` here tells the truth in all four places. Delete it with MOCK.
+const MOCKING = true;
+
 const MOCK = {
   latencyMs: 110,
   // Every role answers in mock mode, or 34 of the 36 rows would read `error` and the table would
@@ -257,9 +268,22 @@ const MOCK = {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The ID token for a role's session, or null when that role is not signed in. */
+/**
+ * The ID token for a role, or `null`. Never another role's token.
+ *
+ * Three roles, one browser — see the panel comment in §4a. One of the three is this browser's own
+ * hosted-UI session; the other two are tokens pasted for this run. Both branches can only ever
+ * return a token whose own `cognito:groups` claim says that role: the session's role comes from
+ * its own ID token, and a pasted one is only stored after `acceptRoleToken()` has checked it.
+ */
 function tokenFor(role) {
-  return MOCK.tokens[role] ?? null;
+  if (MOCKING) return MOCK.tokens[role] ?? null;
+
+  if (role === sessionRole()) {
+    const own = idToken();
+    if (own) return own;      // expired or signed out falls through to a pasted token of the SAME role
+  }
+  return extraTokens.get(role) ?? null;
 }
 
 /**
@@ -424,6 +448,111 @@ function renderTokens() {
       : t('redteam.tokens.missing', { role: t(ROLE_KEY[role]), count }));
     dom.tokens.append(item);
   }
+  renderRoleTokens();
+}
+
+/* ---------- 4a. three roles, one browser: the role-token panel ----------
+
+   A run needs a token per role AT THE SAME TIME, and a browser holds one sign-in. That is not a
+   bug to route around, it is what requirement 1.1 costs: the ID token lives in auth.js's memory,
+   so the redirect that signs in the second role wipes the first — and Cognito's own session cookie
+   would hand back the same account anyway. Three concurrent hosted-UI sessions in one browser is
+   not a thing a real user does, and building a popup + callback page + hosted-UI logout dance to
+   fake it would mean a second authentication path, with its own window-messaging surface, for the
+   sake of one demo tool.
+
+   So: the teacher signs in normally with the panel at the top of this page, and the other two
+   roles are pasted here, from the very tokens `node scripts/demo-users.mjs --tokens` already
+   prints for the terminal run. That is the point — the page and the CLI then run the same suite
+   from the same three credentials, and the two tools cannot report different numbers for one run.
+
+   What it means for the ordinary pages: nothing. This panel is markup on /redteam alone, and
+   `extraTokens` lives in this file. The teacher, parent and student pages have exactly one token
+   slot — their own session — and no field, store or function that could hold someone else's.
+
+   ponytail: a pasted bearer credential is an operator affordance, not a product feature. Ceiling:
+   it trusts whoever is at the keyboard, and the token is briefly in a form field (type=password,
+   autocomplete off, emptied the moment it is read). Acceptable for three 60-minute demo accounts
+   under a CSP with no third-party script. Upgrade path, if this ever has real users: a popup
+   sign-in with a /callback page posting the code back — then delete this panel entirely. */
+
+/** Memory only, exactly like the session token: never any storage, gone on reload. */
+const extraTokens = new Map();
+const roleTokenInputs = new Map();
+const roleTokenNote = { accepted: [], rejected: [] };
+
+function renderRoleTokens() {
+  if (!dom.authRoles) return;
+  for (const [role, { label }] of roleTokenInputs) {
+    setText(label, t('auth.roles.label', { role: t(ROLE_KEY[role]) }));
+  }
+  const names = (roles) => roles.map((role) => t(ROLE_KEY[role])).join(', ');
+  const parts = [];
+  if (roleTokenNote.accepted.length) parts.push(t('auth.roles.accepted', { roles: names(roleTokenNote.accepted) }));
+  if (roleTokenNote.rejected.length) parts.push(t('auth.roles.rejected', { roles: names(roleTokenNote.rejected) }));
+  setText(dom.authRolesStatus, parts.join(' '));
+}
+
+/** Read every non-empty box once, then empty it. A credential does not sit in a field after use. */
+function takeRoleTokens() {
+  roleTokenNote.accepted = [];
+  roleTokenNote.rejected = [];
+
+  for (const [role, { input }] of roleTokenInputs) {
+    const raw = input.value;
+    input.value = '';
+    if (!raw.trim()) continue;
+
+    // The no-fallback rule, enforced at the only door into `extraTokens`: a token is kept for the
+    // role its own claims carry, or it is not kept. A rejected box is cleared too, so a refused
+    // token never sits there looking accepted.
+    const result = acceptRoleToken(raw, role);
+    if (result.ok) {
+      extraTokens.set(role, result.token);
+      roleTokenNote.accepted.push(role);
+    } else {
+      extraTokens.delete(role);
+      roleTokenNote.rejected.push(role);
+    }
+  }
+  render();
+}
+
+function forgetRoleTokens() {
+  extraTokens.clear();
+  roleTokenNote.accepted = [];
+  roleTokenNote.rejected = [];
+  for (const { input } of roleTokenInputs.values()) input.value = '';
+  render();
+}
+
+/** Built in JS so one `auth.roles.label` with a {role} slot covers all three rows. */
+function buildRoleTokenPanel() {
+  dom.authRoles.hidden = MOCKING;
+  if (MOCKING) return;
+
+  for (const role of ROLES) {
+    const item = el('li', 'auth-roles__item');
+    const id = `auth-token-${role}`;
+
+    const label = el('label', 'auth-roles__label');
+    label.setAttribute('for', id);
+
+    const input = document.createElement('input');
+    input.type = 'password';           // a token is a credential; do not paint it on the screen
+    input.id = id;
+    input.className = 'composer__input auth-roles__input';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('data-i18n-placeholder', 'auth.roles.placeholder');
+
+    item.append(label, input);
+    dom.authRolesList.append(item);
+    roleTokenInputs.set(role, { label, input });
+  }
+
+  dom.authRolesAdd.addEventListener('click', takeRoleTokens);
+  dom.authRolesClear.addEventListener('click', forgetRoleTokens);
 }
 
 // ---------- the case table ----------
@@ -706,6 +835,11 @@ async function start() {
     layerBoxes: [...document.querySelectorAll('#redteam-layers input[data-layer]')],
     layersLocked: byId('redteam-layers-locked'),
     tokens: byId('redteam-tokens'),
+    authRoles: byId('auth-roles'),
+    authRolesList: byId('auth-roles-list'),
+    authRolesAdd: byId('auth-roles-add'),
+    authRolesClear: byId('auth-roles-clear'),
+    authRolesStatus: byId('auth-roles-status'),
     run: byId('redteam-run'),
     status: byId('redteam-status'),
     score: byId('redteam-score'),
@@ -713,7 +847,10 @@ async function start() {
     table: document.querySelector('.redteam-table'),
   };
 
-  dom.mock.hidden = false;   // delete this line with MOCK at the SWAP POINT
+  dom.mock.hidden = !MOCKING;   // delete this line with MOCK at the SWAP POINT
+
+  // Before init(), so the placeholder attribute on each box is filled by the first i18n pass.
+  buildRoleTokenPanel();
 
   for (const box of dom.layerBoxes) {
     box.addEventListener('change', () => {

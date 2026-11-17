@@ -42,6 +42,37 @@ and stop there — do not start debugging a failed deploy at one in the morning.
 of anything finds things, and they are worth finding with a clear head. Nothing in this session is
 on tonight's critical path except step 2, which is cheap enough to repeat.
 
+### The sign-in needs two deploys, not one
+
+Task 2.3 landed before this session, and applying what it needed to `template.yaml` turned up a
+sequencing wrinkle worth knowing before step 4 rather than during it.
+
+Every hosted-UI callback URL is built from a new `SiteOrigin` parameter, and Cognito matches those
+URLs **byte for byte** — but the Amplify origin does not exist until Amplify is connected, which is
+step A7, *after* the first deploy. So:
+
+```bash
+sam deploy --guided                                    # step 4; SiteOrigin defaults to localhost
+# connect Amplify (A7), note the origin, then:
+sam deploy --parameter-overrides SiteOrigin=https://main.d1234abcd.amplifyapp.com
+```
+
+Until that second deploy, the hosted UI works from a local static server and not from the live
+site. It costs nothing and takes a minute; it just has to be known in advance.
+
+Then paste four values into `CONFIG` in `frontend/assets/auth.js` — `domain`, `clientId`,
+`userPoolId`, `apiBase`, all four from stack outputs (`HostedUiDomain`, `UserPoolClientId`,
+`UserPoolId`, `ApiEndpoint`). Until all four are real the panel says so rather than offering a dead
+button, and `connect-src` in `customHttp.yml` needs the API origin **and** the Cognito domain,
+because the PKCE token exchange is a `fetch` to `/oauth2/token`.
+
+**The most likely live failure**, in order: `redirect_mismatch` (a callback URL differs by a
+trailing slash, or the browser is on `/teacher/index.html` rather than `/teacher/`); sign-in
+succeeding but the panel saying it did not finish (one of the five callback checks failed, or the
+account is in no group or two — confirm step 5 grouped them); and a CORS failure on the token
+exchange, which looks identical to being offline in the UI, so watch the network tab. Do **not**
+test by opening the HTML from disk: `crypto.subtle` is undefined on `file://`.
+
 ### Five things to settle before the demo is recorded
 
 Found by the lane that wrote `docs/KIRO-WRITEUP.md` and `docs/DEMO-SCRIPT.md` (tasks 7.2, 7.3, both
@@ -82,7 +113,7 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**57 of 79 tasks done. 455 tests pass, nothing skipped. Nothing has been deployed and nothing has
+**60 of 79 tasks done. 469 tests pass, nothing skipped. Nothing has been deployed and nothing has
 been spent.**
 
 | Milestone | State |
@@ -96,7 +127,7 @@ been spent.**
 | M6 voice + polish | Backend done (6.1–6.3). Mic UI, i18n completeness, fonts and the a11y pass remain |
 | M7 docs + submissions | Not started |
 
-Six commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
+Eleven commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
 offline, and not one line of it has met a real Bedrock agent — still the single largest unknown.
 
 ---
@@ -278,7 +309,7 @@ is the whole change.
 Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ටෝකනය` (token), `නිර්ණය`
 (verdict), `කාන්දු විය` (leaked); ta `அடுக்கு`, `டோக்கன்`, `தீர்ப்பு`, `கசிந்தது`.
 
-**The branch.** `feat/m4-student-tutor` — six commits, green, unmerged. Decide whether M4–M6 go to
+**The branch.** `feat/m4-student-tutor` — eleven commits, green, unmerged. Decide whether M4–M6 go to
 `main` before the deploy; `amplify.yml` watches `main`, so Amplify will show nothing until they do.
 
 ---

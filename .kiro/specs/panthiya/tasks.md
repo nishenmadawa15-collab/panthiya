@@ -59,7 +59,7 @@ stops and asks before those.
 
 - [x] 2.1 Cognito user pool, groups `teacher` / `parent` / `student`, in `template.yaml` — req 1.1
 - [x] 2.2 HTTP API JWT authorizer wired to the pool; every route behind it — req 1.2
-- [ ] 2.3 Hosted-UI sign-in in the front-end; token stored in memory, not `localStorage` — req 1.1
+- [x] 2.3 Hosted-UI sign-in in the front-end; token stored in memory, not `localStorage` — req 1.1
 - [x] 2.4 `students.byParent` linkage; `resolveScope('parent')` returns only linked children — req 1.6
 - [x] 2.5 `backend/functions/actions-parent/getMyChildSummary` — denies any child not in scope — req 7.2, 7.3
 - [x] 2.6 `backend/functions/read/` — `/parent/inbox`, `/teacher/drafts`, `/teacher/audit` — req 7.1, 10.3

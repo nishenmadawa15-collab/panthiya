@@ -3,9 +3,18 @@
 # The CSP starts from `default-src 'none'` and opens only what the app actually uses. There is no
 # 'unsafe-inline' anywhere, which is why index.html carries no inline <style> or <script>.
 #
-# M1 TODO: add the API Gateway origin to connect-src, e.g.
-#   connect-src 'self' https://<api-id>.execute-api.<region>.amazonaws.com
-# and the Cognito hosted-UI origin to form-action. Do not widen anything else.
+# TODO after the first deploy — `connect-src` needs TWO origins, and nothing else changes:
+#   connect-src 'self'
+#     https://<api-id>.execute-api.<region>.amazonaws.com
+#     https://panthiya-<account-id>.auth.<region>.amazoncognito.com;
+# Both come out of the stack: `ApiEndpoint` and `HostedUiDomain`. The second one is there because
+# the PKCE token exchange is a `fetch` to the hosted UI's `/oauth2/token` — miss it and sign-in
+# fails in a way that looks identical to being offline, so watch the network tab rather than the
+# page.
+#
+# `form-action` stays 'none', corrected from an earlier note that said otherwise: there is no
+# <form> anywhere, and the trip to the hosted UI is `location.assign`, a top-level navigation,
+# which this policy does not restrict. Do not widen anything else.
 
 customHeaders:
   - pattern: '**'
