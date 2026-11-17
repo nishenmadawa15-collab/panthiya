@@ -42,6 +42,36 @@ and stop there — do not start debugging a failed deploy at one in the morning.
 of anything finds things, and they are worth finding with a clear head. Nothing in this session is
 on tonight's critical path except step 2, which is cheap enough to repeat.
 
+### Five things to settle before the demo is recorded
+
+Found by the lane that wrote `docs/KIRO-WRITEUP.md` and `docs/DEMO-SCRIPT.md` (tasks 7.2, 7.3, both
+done), and all five confirmed by hand. None of them blocks tonight's steps 1–7; all five are
+visible to a judge.
+
+1. **The parent inbox is empty after a real seed.** `demo-class.json` has no `messages` block and
+   `seed.mjs` writes none — the only thread content anywhere is the `MOCK` in `parent.js`. So the
+   beat "a fee is recorded and the parent gets an approved update" has no data behind it unless a
+   draft is created and approved by hand first. **Decision:** seed a `messages` block — with
+   `approved` true on some and false on at least one, so the approval filter is still doing real
+   work — or accept the manual pass. Recommended: seed it, because it is the one beat whose setup
+   is currently undocumented.
+2. **Four on-screen notes are no longer true**, and all four are visible in beats 2–5:
+   `teacher.note` ("the backend lands in M1"), `parent.note` ("connects to a real class in M4"),
+   `student.note` ("not connected to a model yet"), `chat.mic_note` ("Voice notes arrive in M6").
+   Belongs to lane **D4**, which owns the packs — and only one lane at a time may touch them.
+3. **`README.md`'s status row is stale**: "M0–M3 code complete, 270 tests passing · 41/79 tasks".
+   It is 455 tests and 59 of 79 now, and the repo URL and Amplify URL are still placeholders. Part
+   of task 7.1.
+4. **Two documents disagree about the expected by-layer split.** §3 of this file carried "20 held
+   by role scoping, 9 by the guardrail, 7 by policyCheck", and `backend/agent/README.md` §7's tally
+   maps to a different one. Both are pre-live guesses, and tonight's step 7 replaces them with the
+   only number that matters — which is why the demo script prints neither and reads them off the
+   screen.
+5. **The `run-unit-tests` hook does not fire for `scripts/**`, `frontend/assets/**`,
+   `backend/seed/**` or `tests/redteam/**`** — its globs cover `backend/functions`, `backend/lib`
+   and `tests/unit` only. Three of today's lanes wrote code it would never have run. Two more globs
+   close it; it is a decision about hook noise rather than a defect.
+
 **Launched before this session, and running while step 1 happens:** lane **N1** (task 2.3 —
 hosted-UI sign-in, the token held in memory, and the real `tokenFor(role)` that `/redteam` mocks)
 and lane **N2** (tasks 7.2 and 7.3 — the Kiro write-up and the demo script). N1 is what step 6
@@ -217,7 +247,9 @@ demo claims not to have. Say it that way on stage.
 **Never show a bare "36 blocked".** A case held by the agent's own refusal scores `blocked` with
 `needsEye: true`, because no code read that reply. The page already renders it as "Needs a human
 eye" with the reply open, and `error` as its own tile; the true headline comes from
-`totals.byLayer` — "20 held by role scoping, 9 by the guardrail, 7 by policyCheck".
+`totals.byLayer`, read off the screen after the live run. Two pre-live estimates of that split exist
+in this repo and they disagree with each other (§0, item 4), which is exactly why neither the demo
+script nor this file quotes one.
 
 **policyCheck is still honest about its gaps** — the list in `backend/agent/README.md` and the
 `ponytail:` comments in `policy-check/checks.mjs`. An answer spelled as a word in prose, one-step

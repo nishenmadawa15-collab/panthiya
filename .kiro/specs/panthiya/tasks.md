@@ -132,8 +132,8 @@ stops and asks before those.
 ## M7 — docs, demo, submissions · branch `feat/m7-docs`
 
 - [ ] 7.1 `README.md` final: diagram, setup, costs, security and privacy, screenshots
-- [ ] 7.2 `docs/KIRO-WRITEUP.md` — how steering, specs and hooks were actually used, with screenshots
-- [ ] 7.3 `docs/DEMO-SCRIPT.md` — the 2:45 beat sheet from `PANTHIYA_SETUP.md` §7
+- [x] 7.2 `docs/KIRO-WRITEUP.md` — how steering, specs and hooks were actually used, with screenshots
+- [x] 7.3 `docs/DEMO-SCRIPT.md` — the 2:45 beat sheet from `PANTHIYA_SETUP.md` §7
 - [ ] 7.4 `docs/SUBMISSION-BEDROCK.md`
 - [ ] 7.5 `docs/SUBMISSION-KIROWEEN.md` — Frankenstein framing: agent + voice + inbox + ledger + tutor
 - [ ] 7.6 `docs/BUILD-LOG.md` complete, including every bypass found and fixed
