@@ -6,6 +6,50 @@ below are shaped the way they are.
 
 ---
 
+## 0. Tonight's run sheet
+
+The aim of this session is the one thing 455 passing tests cannot tell us: **whether any of it
+works against a real Bedrock agent.** Everything else can wait, and nothing below is worth doing
+out of order.
+
+The commands are in §1. This is the order, who has to be at the keyboard, and where to stop.
+
+| # | Step | Who | Time | Cost |
+|---|---|---|---|---|
+| 1 | `aws configure` (IAM user `panthiya-dev`), SAM CLI, Bedrock **model access**, and confirm Managed Agents exist in `ap-south-1` | Nishen | ~20 min | $0 |
+| 2 | 🚦 **The Sinhala gate** — `node scripts/test-sinhala.mjs --yes`, and read the Sinhala replies by eye | Nishen runs, agent reads | ~5 min | under 5¢ |
+| 3 | Bedrock agent + the three action groups + the Guardrail, in the console | Nishen, agent guides | ~25 min | $0 |
+| 4 | 💰 `sam deploy --guided` | **Nishen approves before it runs** | ~10 min | ~$0 |
+| 5 | `demo-users.mjs --apply`, then `seed --apply` — in that order, for the reason in §1 | Agent; Nishen sets the password | ~5 min | ~$0 |
+| 6 | Take and verify the three SWAP POINTs | Agent | ~10 min | $0 |
+| 7 | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page for the version a judge sees. Fix every leak | Agent | 30–40 min | ~$1–2 |
+
+Nishen is needed for steps 1–4, roughly an hour in total. Steps 5–7 are the agent's.
+
+**Step 2 is first for a reason.** Five milestones of code rest on the assumption that the cheapest
+model can read Sinhala. If it cannot, the fix is a **parameter**, not a rewrite — switch to the
+Haiku-class model, re-run the gate — but every prompt-sensitive behaviour has to be re-measured
+against the new model, which means the 36 cases in step 7 and possibly some wording in
+`backend/agent/instructions.md`. Doing step 2 after step 4 would mean paying for a deploy and then
+discovering the score it produced was about the wrong model.
+
+**Two decisions are needed before step 4**, both in §4: whether `feat/m4-student-tutor` merges into
+`main` (Amplify watches `main`, so there is no live URL until it does), and whether
+`chat/orchestrate.mjs` should echo the verified role.
+
+**Where to stop.** Each step is a gate. If one fails, write what happened in `docs/BUILD-LOG.md`
+and stop there — do not start debugging a failed deploy at one in the morning. The first live run
+of anything finds things, and they are worth finding with a clear head. Nothing in this session is
+on tonight's critical path except step 2, which is cheap enough to repeat.
+
+**Launched before this session, and running while step 1 happens:** lane **N1** (task 2.3 —
+hosted-UI sign-in, the token held in memory, and the real `tokenFor(role)` that `/redteam` mocks)
+and lane **N2** (tasks 7.2 and 7.3 — the Kiro write-up and the demo script). N1 is what step 6
+verifies, so read its report before starting step 6: it will name what can only be checked live,
+and the `template.yaml` lines its sign-in needs.
+
+---
+
 ## Where we are
 
 **57 of 79 tasks done. 455 tests pass, nothing skipped. Nothing has been deployed and nothing has
