@@ -21,7 +21,7 @@ The commands are in §1. This is the order, who has to be at the keyboard, and w
 | 3 | Bedrock agent + the three action groups + the Guardrail, in the console | Nishen, agent guides | ~25 min | $0 |
 | 4 | 💰 `sam deploy --guided` | **Nishen approves before it runs** | ~10 min | ~$0 |
 | 5 | `demo-users.mjs --apply`, then `seed --apply` — in that order, for the reason in §1 | Agent; Nishen sets the password | ~5 min | ~$0 |
-| 6 | Take and verify the three SWAP POINTs | Agent | ~10 min | $0 |
+| 6 | Take and verify the four SWAP POINTs | Agent | ~10 min | $0 |
 | 7 | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page for the version a judge sees. Fix every leak | Agent | 30–40 min | ~$1–2 |
 
 Nishen is needed for steps 1–4, roughly an hour in total. Steps 5–7 are the agent's.
@@ -89,7 +89,9 @@ visible to a judge.
 2. **Four on-screen notes are no longer true**, and all four are visible in beats 2–5:
    `teacher.note` ("the backend lands in M1"), `parent.note` ("connects to a real class in M4"),
    `student.note` ("not connected to a model yet"), `chat.mic_note` ("Voice notes arrive in M6").
-   Belongs to lane **D4**, which owns the packs — and only one lane at a time may touch them.
+   **Done.** Rewritten to say what is true now — built and tested, nothing deployed — along with
+   `chat.mock_reply`, `status.now` and `status.next`, which were stale in the same way. All of the
+   new Sinhala and Tamil is unreviewed.
 3. **`README.md`'s status row is stale**: "M0–M3 code complete, 270 tests passing · 41/79 tasks".
    It is 455 tests and 59 of 79 now, and the repo URL and Amplify URL are still placeholders. Part
    of task 7.1.
@@ -98,8 +100,8 @@ visible to a judge.
    maps to a different one. Both are pre-live guesses, and tonight's step 7 replaces them with the
    only number that matters — which is why the demo script prints neither and reads them off the
    screen.
-5. **The `run-unit-tests` hook does not fire for `scripts/**`, `frontend/assets/**`,
-   `backend/seed/**` or `tests/redteam/**`** — its globs cover `backend/functions`, `backend/lib`
+5. **Done** — the `run-unit-tests` hook now also fires for `scripts/**`, `frontend/assets/**` and
+   `backend/seed/**`. It previously covered — its globs cover `backend/functions`, `backend/lib`
    and `tests/unit` only. Three of today's lanes wrote code it would never have run. Two more globs
    close it; it is a decision about hook noise rather than a defect.
 
@@ -256,7 +258,7 @@ a change in one of those reports the exact change instead of making it.
 | A5 | `node scripts/demo-users.mjs --apply` — the three logins, grouped, with a permanent password | Nishen sets `PANTHIYA_DEMO_PASSWORD`, agent runs it | **Before A6, not after.** The seed writes the subs these accounts own |
 | A6 | `node backend/seed/seed.mjs --stack panthiya --apply` | Agent, after A5 | Writes 99 fictional items, with the real subs read back out of the pool. Refuses to run if A5 was skipped |
 | A7 | Amplify connect + confirm the live URL on a phone | Nishen | 0.15 |
-| A8 | **Take the three SWAP POINTs**: `frontend/assets/redteam.js` (`tokenFor`, `postChat`, `postRun`, delete `MOCK`/`mockScore`) and `frontend/assets/student.js` (`askTutor`) | Agent, after A6 and D1 | The pages run on mocks until this |
+| A8 | **Take the four SWAP POINTs**: `frontend/assets/redteam.js` (`tokenFor` is already real — `postChat`, `postRun`, and delete `MOCK`/`mockScore`/`MOCKING`), `frontend/assets/student.js` (`askTutor`) and `frontend/assets/teacher.js` (six calls behind one comment: chat, ledger, audit, and the three voice calls) | Agent, after A6 and D1 | The pages run on mocks until this |
 | A9 | Run all 36 live from `/redteam`, and from `scripts/redteam-cli.mjs` for a diffable record. Fix every leak; add any new bypass as case 37+ | Agent | 5.7 — the first real score |
 | A10 | `README.md` final, `SUBMISSION-*.md`, and the build log's last entry | Agent | 7.1, 7.4, 7.5, 7.6 |
 

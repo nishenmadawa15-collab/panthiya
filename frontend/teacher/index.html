@@ -101,16 +101,27 @@
              data-i18n-placeholder="chat.input_placeholder">
 
       <div class="composer__row">
-        <!-- Present, visibly disabled, and explained: voice notes are M6 work. -->
-        <button class="composer__mic" id="chat-mic" type="button" disabled aria-describedby="mic-note">
+        <!-- Press to record, press again to stop (task 6.4). A <button> fires click on Enter and
+             Space, so the toggle is operable from the keyboard with no key handling at all — which
+             a press-and-hold gesture would not be, and requirement 12.4 is not a mouse feature.
+             `aria-pressed` is the recording state in the accessibility tree; the button's own
+             words and the glyph carry it visually, so it is never colour alone. The label is set
+             by teacher.js because it changes between "Voice note" and "Stop recording". -->
+        <button class="composer__mic" id="chat-mic" type="button" aria-pressed="false"
+                aria-describedby="mic-note">
           <span class="composer__mic-glyph" aria-hidden="true"></span>
-          <span data-i18n="chat.mic"></span>
+          <span id="chat-mic-label"></span>
         </button>
         <button class="composer__send" id="chat-send" type="submit" data-i18n="chat.send"></button>
       </div>
     </form>
 
     <p class="composer__note" id="mic-note" data-i18n="chat.mic_note"></p>
+
+    <!-- Recording, sending, and every way a voice note can fail — including the server's own
+         words on a failed transcription, shown unedited (requirement 3.6). role="status" so it is
+         announced without stealing focus from the typed box. -->
+    <p class="mic-status" id="mic-status" role="status"></p>
   </section>
 
   <!-- ---------- fee ledger ---------- -->
@@ -131,6 +142,26 @@
 
       <ul class="ledger__list" id="ledger-list" aria-labelledby="ledger-heading"></ul>
     </div>
+  </section>
+
+  <!-- ---------- audit log (requirement 10.3) ----------
+       Read-only by construction, and it says so on screen rather than leaving a reader to infer
+       it. Requirement 10.4: no API updates or deletes an entry, so this section offers nothing
+       that could imply one — no button, no form, no field, anywhere inside it. A correction is a
+       new entry, and an erasure appears as an appended entry carrying a tally of what was removed,
+       never as a gap in the list.
+
+       Scoping belongs to the server: `GET /teacher/audit` queries only the partitions of the
+       classes this teacher owns, resolved from the verified token's own `sub` — so "my classes" is
+       expressed as which partitions are read at all, and there is no query here that could return
+       a colleague's entry. This page therefore does not filter and does not re-sort: the order it
+       is handed is newest-first, which is the whole of requirement 10.3's ordering. -->
+  <section class="block" aria-labelledby="audit-heading">
+    <h3 class="block__heading" id="audit-heading" data-i18n="audit.heading"></h3>
+    <p class="audit-intro" data-i18n="audit.intro"></p>
+    <p class="audit-immutable" data-i18n="audit.immutable"></p>
+    <p class="audit-status" id="audit-status" role="status"></p>
+    <ul class="audit-list" id="audit-list" aria-labelledby="audit-heading"></ul>
   </section>
 
 </main>

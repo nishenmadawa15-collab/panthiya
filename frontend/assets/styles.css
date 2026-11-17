@@ -1598,3 +1598,170 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
 @media print {
   .auth-roles, .auth-panel__actions { display: none; }
 }
+
+/* ================================================================================================
+   TEACHER AUDIT LOG + MICROPHONE (/teacher/) — appended section. Nothing above this line changes.
+
+   Two things on this screen have to be legible without colour, and both are legible without CSS
+   at all, because that is the only guarantee that survives forced-colours mode and a printout:
+
+     1. The audit log's append-only promise is a sentence, not a styling choice. The frame below
+        gives it emphasis; the words carry it. Likewise a deletion entry: it gets its own left edge
+        AND its own labelled tally line, so a reader in greyscale is told in words.
+     2. The recording state changes the button's own text to "Stop recording" and sets
+        aria-pressed; the solid frame and the filled square below are the third and fourth cue, not
+        the first.
+
+   Mobile-first, so the before/after pair stacks by default and only goes side by side when there
+   is room. Touch targets stay 2.75rem = 44px. The prefers-reduced-motion block far above already
+   covers everything here, because it matches on *.
+   ================================================================================================ */
+
+/* ---------- the audit log ---------- */
+
+.audit-intro,
+.audit-status {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.audit-status { min-height: var(--rule-h); }
+
+/* Requirement 10.4 on screen. Framed like a standing condition rather than like body copy,
+   because it is one: there is no control anywhere in this section that could change an entry. */
+.audit-immutable {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--paper-edge);
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+.audit-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-entry {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.8rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-left: 4px solid var(--ink-soft);
+  border-radius: var(--radius);
+}
+
+/* A deletion is an event in the log, never a gap in it. */
+.audit-entry--erased { border-left-color: var(--stamp-absent); }
+
+.audit-entry__action { margin: 0; font-weight: 600; }
+
+.audit-entry__when,
+.audit-entry__meta {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;          /* a Cognito sub is one long unbreakable token */
+}
+
+.audit-entry__when { font-variant-numeric: tabular-nums; }
+
+.audit-entry__tombstone {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--stamp-absent);
+}
+
+.audit-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-tally__item { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+.audit-pair { display: grid; gap: 0.5rem; margin-top: 0.4rem; }
+
+.audit-value {
+  padding: 0.4rem 0.55rem;
+  background: var(--paper);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+}
+
+.audit-value__label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.audit-value__list {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-value__item,
+.audit-value__none {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.audit-value__none { color: var(--ink-soft); }
+
+@media (min-width: 34rem) {
+  .audit-pair { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* ---------- the microphone, while it is recording ---------- */
+
+/* One class selector, appearing after `.composer__mic` in this file, so it wins on order without
+   !important. The mic button's dashed outline becomes a solid frame while recording. */
+.mic-live {
+  color: var(--ink);
+  border: 2px solid var(--stamp-absent);
+  font-weight: 600;
+}
+
+/* The mic glyph becomes a filled stop square — a shape change, not a colour change. */
+.mic-live .composer__mic-glyph {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1.5px solid currentColor;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.mic-status {
+  margin: 0.3rem 0 0;
+  min-height: var(--rule-h);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* A status line about a recording, and the recording button, are both meaningless on paper. */
+@media print {
+  .mic-status { display: none; }
+}

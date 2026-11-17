@@ -79,7 +79,7 @@ stops and asks before those.
 - [x] 3.3 Final-answer detection and the `[[EXAMPLE]]` contract — design §7.2
 - [x] 3.4 Distress pre-check ahead of the agent call, with the localised 1926 response — design §7.3, req 8.5
 - [x] 3.5 `chat` calls policyCheck on every reply and returns `blockedBy` — req 9.2, 9.5
-- [ ] 3.6 Teacher audit-log screen — req 10.3
+- [x] 3.6 Teacher audit-log screen — req 10.3
 - [x] 3.7 `tests/unit/policy-check.test.mjs` — a case per check, plus base64 and homoglyph variants — req 9.6
 - [x] 3.8 First 10 red-team cases pass offline against policyCheck
 
@@ -120,7 +120,7 @@ stops and asks before those.
 - [x] 6.1 `backend/functions/voice/` — presigned S3 PUT, Transcribe job, transcript back to `/chat` — req 3.5
 - [x] 6.2 Unsupported-language fallback message, honest and localised — req 3.6
 - [x] 6.3 S3 lifecycle rule deleting voice notes after 1 day — design §10
-- [ ] 6.4 Microphone UI: press-to-record, visible recording state, keyboard accessible — req 12.4
+- [x] 6.4 Microphone UI: press-to-record, visible recording state, keyboard accessible — req 12.4
 - [ ] 6.5 Complete `si.json` / `ta.json` / `en.json`; assert no missing key across the three — req 12.2
 - [ ] 6.6 Self-hosted Noto Sinhala and Noto Tamil subsets, CSP-compatible — design §8.2
 - [ ] 6.7 Accessibility pass: keyboard, focus rings, contrast test, screen-reader labels, reduced motion — req 12.4–12.6
