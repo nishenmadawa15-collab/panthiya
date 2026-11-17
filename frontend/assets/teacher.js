@@ -8,7 +8,7 @@
 // pass, the title, document.lang, the language buttons and the textContent-only rule; this file
 // registers a re-render with onLang() so a language switch redraws dynamic content in place.
 
-import { init, t, setText, onLang } from './i18n.js';
+import { init, t, setText, onLang, currentLang } from './i18n.js';
 
 /* ================================================================================================
    1. Data access — the only part of this screen that knows where data comes from.
@@ -114,7 +114,11 @@ function formatMonth(iso) {
 /** 2500 → "2,500", grouped the way the current language groups digits. */
 function formatNumber(amount) {
   try {
-    return new Intl.NumberFormat(state.pack['meta.lang'] ?? state.lang).format(amount);
+    // `currentLang()`, not `state.pack['meta.lang']`: that pack lives in i18n.js's private state,
+    // and this module's own `state` has no `pack` or `lang` — so the property access threw inside
+    // this try and every amount silently rendered ungrouped ("2500", never "2,500"). A silent
+    // fallback is why it survived: nothing was logged and nothing looked broken.
+    return new Intl.NumberFormat(currentLang()).format(amount);
   } catch {
     return String(amount);
   }

@@ -901,3 +901,595 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
   .crumbs, .ask, .thread__status { display: none; }
   .thread { max-height: none; overflow: visible; }
 }
+
+/* ================================================================================================
+   STUDENT TUTOR (/student/) — appended section. Nothing above this line is changed.
+
+   This screen has one job the other two do not: a worked example must never be mistaken for the
+   answer to the student's own question (requirement 8.3). So a hint card and an example card are
+   told apart four ways at once, not one:
+     1. container  — a hint is an open card with a left rule only; an example is fully framed, the
+                     only fully framed thing in the log;
+     2. border     — solid grey-blue ink on a hint, dashed green on an example;
+     3. background — white for a hint, --paper-edge for an example;
+     4. words      — every example card opens with the "a different problem" label and closes with
+                     a line saying the numbers are different on purpose. Text, not colour, so the
+                     difference survives greyscale, high-contrast mode and a screen reader.
+   The last one is the one that matters: it is the only one a student reading aloud still gets.
+
+   No new colour is introduced. --ink is 13.1:1 on white, 12.6:1 on --paper-edge and 12.5:1 on the
+   #FFF4D6 caution wash already used by .noscript and .ask__caution; --ink-soft is 7.0:1 on paper
+   and 6.3:1 on --paper-edge; --stamp-paid is 5.3:1 on --paper-edge; --stamp-draft is 4.6:1 on
+   #FFF4D6. Touch targets are 2.75rem = 44px, inherited from .composer. The
+   prefers-reduced-motion block above already disables the arrive animations, because it matches
+   on *.
+   ================================================================================================ */
+
+/* ---------- the promise ----------
+   The contract of the whole screen, and the input's aria-describedby: a screen reader reads it
+   before the student types. Drawn as the caution wash rather than body text so it is not skimmed
+   past on a phone. */
+
+.student-promise {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  background: #FFF4D6;
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* ---------- the log ---------- */
+
+.student-log {
+  display: block;
+  max-height: 24rem;          /* about a phone screen of history, then it scrolls */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+}
+
+.student-messages { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.student-empty { margin: 0; }
+
+.student-status {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: var(--rule-h);
+  color: var(--ink-soft);
+}
+.student-status:empty { margin: 0; line-height: 0; }
+
+/* ---------- the student's own question ----------
+   On the right, where their own messages sit in every chat app they already use. */
+
+.student-ask {
+  align-self: flex-end;
+  max-width: 92%;
+  padding: 0.35rem 0.7rem;
+  background: var(--paper-edge);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  animation: msg-in 160ms ease-out;
+}
+
+.student-ask__who {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.student-ask__text { margin: 0; line-height: var(--rule-h); }
+
+/* ---------- the reply: a stack of cards, not a bubble ----------
+   One reply can be four hint cards and an example, so the reply itself is a column and the cards
+   inside it are what the student actually reads. */
+
+.student-reply {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: msg-in 160ms ease-out;
+}
+
+.student-reply__who {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+/* A hint: open on three sides, so it reads as a note pencilled in rather than a boxed result. */
+.student-hint {
+  padding: 0.35rem 0.7rem;
+  background: #fff;
+  border-left: 4px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.student-hint__text { margin: 0; line-height: var(--rule-h); }
+.student-hint__text + .student-hint__text { margin-top: 0.35rem; }
+
+/* A worked example: the only fully framed card in the log, and the only dashed one. */
+.student-example {
+  padding: 0.5rem 0.7rem 0.6rem;
+  background: var(--paper-edge);
+  border: 2px dashed var(--stamp-paid);
+  border-radius: var(--radius);
+}
+
+/* Stamped, like the rest of the house: rotated, ruled, upper case. */
+.student-example__label {
+  display: inline-block;
+  margin: 0 0 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border: 1.5px solid var(--stamp-paid);
+  border-radius: var(--radius);
+  transform: rotate(-1.5deg);
+  font-family: var(--font-stamp);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--stamp-paid);
+}
+
+.student-example__text { margin: 0; line-height: var(--rule-h); }
+.student-example__text + .student-example__text { margin-top: 0.35rem; }
+
+.student-example__note {
+  margin: 0.45rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--stamp-paid);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+/* ---------- a refusal, or a wellbeing reply ----------
+   Not a hint, so not drawn as one: the caution wash, which on this site always means "read this
+   properly". */
+
+.student-notice {
+  padding: 0.5rem 0.7rem;
+  background: #FFF4D6;
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+.student-notice__text { margin: 0; line-height: var(--rule-h); }
+
+/* ---------- student tutor, wider screens ---------- */
+
+@media (min-width: 40rem) {
+  .student-log { max-height: 30rem; padding: 0.9rem; }
+  .student-ask { max-width: 80%; }
+  .student-reply { max-width: 92%; }
+}
+
+/* ---------- student tutor, print ----------
+   A student may want a hint and its example on paper next to the question. The composer and the
+   status line are not part of that, so they do not print. */
+
+@media print {
+  .crumbs, .composer, .student-status, .student-empty { display: none; }
+  .student-log { max-height: none; overflow: visible; }
+}
+
+/* ================================================================================================
+   RED-TEAM PAGE (/redteam/) — appended section. Nothing above this line is changed.
+
+   A 36-row scoreboard, read over somebody's shoulder on a projector and scrolled through on a
+   phone. It introduces no new colour: every ink here is --ink (13.1:1 on --paper), --ink-soft
+   (7.0:1), --stamp-paid (5.0:1), --stamp-absent (5.9:1) or --stamp-draft (4.8:1), and #FFF4D6 is
+   the warning paper already used by .noscript. Touch targets are 2.75rem = 44px. The
+   prefers-reduced-motion block above already covers everything here, because it matches on *.
+   ================================================================================================ */
+
+/* ---------- the mock banner ---------- */
+
+.redteam-mock {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  background: #FFF4D6;
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+/* ---------- the persistent warning (requirement 11.6) ----------
+   Sticky, so it cannot be scrolled away, and there is no dismiss control to give it. z-index sits
+   above the table's sticky header row below. */
+
+.redteam-warning {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: 1rem 0 0;
+  padding: 0.75rem 0.9rem;
+  background: #FFF4D6;
+  border: 2px solid var(--stamp-absent);
+  border-radius: var(--radius);
+}
+
+.redteam-warning__heading {
+  margin: 0;
+  font-family: var(--font-stamp);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--stamp-absent);
+}
+
+.redteam-warning__layers { margin: 0.2rem 0 0; font-weight: 600; }
+
+.redteam-warning__body,
+.redteam-warning__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.redteam-warning__note { color: var(--ink-soft); }
+
+.redteam-warning__alone { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+.redteam-warning__alone:empty { display: none; }
+.redteam-warning__item { line-height: 1.5; }
+
+/* ---------- layer toggles ---------- */
+
+.redteam-layers {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 0.9rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-left: 4px solid var(--margin-line);
+  border-radius: var(--radius);
+}
+
+.redteam-layers__legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.redteam-layers__help,
+.redteam-layers__locked {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.redteam-layers__locked { margin: 0.5rem 0 0; color: var(--stamp-draft); font-weight: 600; }
+
+/* The whole label is the target, so a 44px row is the hit area. */
+.redteam-layer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.redteam-layer input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  accent-color: var(--focus);
+}
+
+.redteam-layer input:disabled { cursor: not-allowed; }
+.redteam-layer input:disabled + span { color: var(--ink-soft); }
+
+/* ---------- which roles are signed in ---------- */
+
+.redteam-tokens { margin: 0 0 1.25rem; }
+
+.redteam-tokens__heading {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.redteam-tokens__help {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.redteam-tokens__list { margin: 0; padding: 0; list-style: none; }
+
+.redteam-token {
+  padding: 0.35rem 0 0.35rem 0.8rem;
+  line-height: 1.5;
+  border-left: 4px solid currentColor;
+}
+
+.redteam-token--present { color: var(--stamp-paid); }
+.redteam-token--missing { color: var(--stamp-absent); font-weight: 600; }
+
+/* ---------- run button row and status ---------- */
+
+.redteam-run { margin: 0 0 0.5rem; }
+
+.redteam-status {
+  margin: 0;
+  min-height: var(--rule-h);
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.redteam-status:empty { min-height: 0; }
+
+/* ---------- the scoreboard ----------
+   Five separate tiles. Blocked and Error are drawn in different colours on purpose: an error read
+   as a pass is the failure requirement 11.4 exists to prevent. */
+
+.redteam-score {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.redteam-score__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-top: 4px solid currentColor;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+}
+
+.redteam-score__value {
+  font-family: var(--font-stamp);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.redteam-score__label {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.redteam-score__tile--blocked { color: var(--stamp-paid); }
+.redteam-score__tile--leaked  { color: var(--stamp-absent); }
+.redteam-score__tile--error   { color: var(--stamp-draft); }
+.redteam-score__tile--eye     { color: var(--stamp-draft); }
+
+.redteam-score__tile--blocked .redteam-score__value { color: var(--stamp-paid); }
+.redteam-score__tile--leaked  .redteam-score__value { color: var(--stamp-absent); }
+.redteam-score__tile--error   .redteam-score__value { color: var(--stamp-draft); }
+
+.redteam-score__by-layer {
+  margin: 0 0 0.35rem;
+  line-height: var(--rule-h);
+  font-weight: 600;
+}
+
+.redteam-score__note,
+.redteam-memory-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* ---------- the case table ----------
+   Six columns do not fit a phone, so the table scrolls sideways inside a focusable region. */
+
+.redteam-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.redteam-table {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.redteam-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  background: var(--paper-edge);
+  border-bottom: 2px solid var(--margin-line);
+}
+
+.redteam-section__title {
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  font-size: 0.9rem;
+  background: var(--paper);
+  border-top: 1px solid var(--paper-edge);
+  border-bottom: 1px solid var(--rule);
+}
+
+.redteam-row > th,
+.redteam-row > td {
+  padding: 0.5rem 0.6rem;
+  vertical-align: top;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--rule);
+}
+
+.redteam-row__id {
+  text-align: left;
+  font-family: var(--font-stamp);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.redteam-row__role { white-space: nowrap; color: var(--ink-soft); }
+
+.redteam-row__attack {
+  min-width: 12rem;
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+}
+
+.redteam-row__why {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.redteam-row__layer { color: var(--ink-soft); }
+
+/* The verdict stamp. No rotation: 36 tilted stamps in a dense table is noise, and this column is
+   the one a judge reads. */
+.redteam-verdict {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-family: var(--font-stamp);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border: 2px solid currentColor;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+}
+
+.redteam-verdict--blocked { color: var(--stamp-paid); }
+.redteam-verdict--leaked  { color: var(--stamp-absent); }
+.redteam-verdict--error   { color: var(--stamp-draft); }
+.redteam-verdict--pending { color: var(--ink-soft); }
+
+/* A left edge per verdict, so the shape of a run is readable before any text is. */
+.redteam-row--blocked > th { border-left: 4px solid var(--stamp-paid); }
+.redteam-row--leaked  > th { border-left: 4px solid var(--stamp-absent); }
+.redteam-row--error   > th { border-left: 4px solid var(--stamp-draft); }
+.redteam-row--pending > th { border-left: 4px solid var(--rule); }
+
+/* Needs a human eye: said in words, not only in colour, and next to the verdict rather than
+   somewhere a reader has to go looking for it. */
+.redteam-eye {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--stamp-draft);
+  background: #FFF4D6;
+  border: 1px dashed var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+.redteam-reply-toggle {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--focus);
+  background: var(--paper);
+  border: 1.5px solid var(--focus);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.redteam-reply-toggle:hover { background: #fff; }
+
+/* ---------- the detail row: the attack, the layer, and the reply ---------- */
+
+.redteam-detail__cell {
+  padding: 0.6rem 0.8rem 0.8rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.redteam-detail__eye {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.6rem;
+  line-height: 1.5;
+  background: #FFF4D6;
+  border-left: 4px solid var(--stamp-draft);
+  border-radius: var(--radius);
+}
+
+.redteam-detail__label {
+  margin: 0.5rem 0 0.15rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.redteam-detail__attack,
+.redteam-detail__relied,
+.redteam-detail__reply {
+  margin: 0;
+  line-height: var(--rule-h);
+  overflow-wrap: anywhere;
+}
+
+.redteam-detail__attack + .redteam-detail__attack { margin-top: 0.3rem; }
+
+.redteam-detail__note {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.redteam-detail__reply {
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+  border: 1px solid var(--paper-edge);
+  border-left: 4px solid var(--rule);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+}
+
+/* ---------- red-team page, wider screens ---------- */
+
+@media (min-width: 40rem) {
+  .redteam-score { grid-template-columns: repeat(5, 1fr); }
+  .redteam-table { font-size: 0.95rem; }
+}
+
+/* ---------- red-team page, print ----------
+   The scoreboard and the verdicts are the record of a run; the controls are not. */
+
+@media print {
+  .redteam-layers, .redteam-run, .redteam-status, .redteam-reply-toggle { display: none; }
+  .redteam-scroll { overflow: visible; }
+  .redteam-table { min-width: 0; }
+  .redteam-warning { position: static; }
+}

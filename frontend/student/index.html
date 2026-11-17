@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Panthiya — the student tutor: the concept, the next step, and a worked example of a different problem. Never the answer.">
+<meta name="theme-color" content="#FBF7EE">
+<title>Panthiya · පන්තිය</title>
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<script type="module" src="/assets/student.js"></script>
+</head>
+<body>
+
+<a class="skip" href="#main" data-i18n="skip.link"></a>
+
+<noscript>
+  <p class="noscript">Panthiya needs JavaScript to switch languages and to show your hints. An AI
+  tutor for Sri Lankan tuition classes: students get the next step and a worked example of a
+  different problem, never the answer to their own question.</p>
+</noscript>
+
+<header class="masthead">
+  <div class="brand">
+    <span class="brand__mark" aria-hidden="true">ප</span>
+    <div class="brand__text">
+      <h1 class="brand__name" data-i18n="app.name"></h1>
+      <p class="brand__tagline" data-i18n="app.tagline"></p>
+    </div>
+  </div>
+
+  <nav class="langs">
+    <span class="langs__label" id="lang-label" data-i18n="lang.label"></span>
+    <div class="langs__group" role="group" aria-labelledby="lang-label">
+      <button type="button" class="lang" data-lang="si" lang="si" data-i18n="lang.si"></button>
+      <button type="button" class="lang" data-lang="ta" lang="ta" data-i18n="lang.ta"></button>
+      <button type="button" class="lang" data-lang="en" lang="en" data-i18n="lang.en"></button>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+
+  <p class="crumbs">
+    <a class="footer__link crumbs__link" href="/" data-i18n="nav.home"></a>
+  </p>
+
+  <section class="sheet" aria-labelledby="student-heading">
+    <h2 class="hero__greeting" id="student-heading" data-i18n="student.heading"></h2>
+    <p class="hero__body" data-i18n="student.note"></p>
+  </section>
+
+  <!-- ---------- the tutor ----------
+       One region, two kinds of card inside it. The promise below is the whole contract of this
+       screen (requirement 8.3) and it is the input's description, so a screen reader reads it
+       before the student types their first question. -->
+  <section class="block" aria-labelledby="tutor-heading">
+    <h3 class="block__heading" id="tutor-heading" data-i18n="student.tutor.heading"></h3>
+
+    <p class="student-promise" id="student-promise" data-i18n="student.promise"></p>
+
+    <!-- role="log" + aria-live: a new hint is announced without stealing focus.
+         tabindex="0" so the history can be scrolled from the keyboard (requirement 12.4). -->
+    <div class="student-log" id="student-log" role="log" aria-live="polite"
+         aria-labelledby="tutor-heading" tabindex="0">
+
+      <div class="student-empty" id="student-empty">
+        <p class="chat__empty-heading" data-i18n="student.empty_heading"></p>
+        <ul class="chat__examples">
+          <li class="chat__example" data-i18n="student.prompt.maths"></li>
+          <li class="chat__example" data-i18n="student.prompt.science"></li>
+          <li class="chat__example" data-i18n="student.prompt.ict"></li>
+        </ul>
+      </div>
+
+      <!-- Questions, hint cards and example cards are appended here by student.js, through
+           textContent only. -->
+      <div class="student-messages" id="student-messages"></div>
+    </div>
+
+    <p class="student-status" id="student-status" role="status"></p>
+
+    <form class="composer" id="student-form">
+      <label class="vh" for="student-input" data-i18n="student.input_label"></label>
+      <!-- maxlength matches the API input limit in design.md §5 (message <= 2000 characters). -->
+      <input class="composer__input" id="student-input" name="question" type="text"
+             maxlength="2000" autocomplete="off" enterkeyhint="send"
+             aria-describedby="student-promise"
+             data-i18n-placeholder="student.input_placeholder">
+
+      <div class="composer__row">
+        <button class="composer__send" id="student-send" type="submit" data-i18n="student.send"></button>
+      </div>
+    </form>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p class="footer__line footer__small" data-i18n="footer.demo_data"></p>
+</footer>
+
+</body>
+</html>

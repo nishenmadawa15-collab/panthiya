@@ -127,3 +127,23 @@ test('front-end scripts are .js, never .mjs', () => {
     assert.ok(!/src="[^"]*\.mjs"/.test(html), `${file} loads a .mjs script`);
   }
 });
+
+test('no page reads i18n.js\'s private state through its own `state` object', () => {
+  // The bug this pins down was invisible twice over. `parent.js` and `teacher.js` both formatted
+  // money as `new Intl.NumberFormat(state.pack['meta.lang'] ?? state.lang)` — but `pack` and
+  // `lang` live in `i18n.js`'s own private state, and each page's local `state` has neither. So
+  // the property access threw *inside* the surrounding try, every amount rendered ungrouped
+  // ("2500", never "2,500") and every time fell back to a raw ISO slice. Nothing was logged and
+  // nothing looked broken, which is why it survived into a demo path.
+  //
+  // `i18n.js` owns `state.pack`, so it is the one file exempt. The fix everywhere else is the
+  // `currentLang()` that module already exports.
+  for (const name of readdirSync(new URL('frontend/assets/', ROOT))) {
+    if (!name.endsWith('.js') || name === 'i18n.js') continue;
+
+    // Comments are stripped first: the two fixes explain themselves by naming the old expression.
+    const code = read(`frontend/assets/${name}`).replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.ok(!/\bstate\s*\.\s*(pack|lang)\b/.test(code),
+      `frontend/assets/${name} reads i18n's private state; use currentLang() or t() instead`);
+  }
+});

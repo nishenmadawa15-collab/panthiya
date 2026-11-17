@@ -6,16 +6,24 @@
 // reworded or deleted in the doc, the JSON follows, and tests/unit/redteam-cases.test.mjs fails
 // until it is regenerated.
 //
-//   node scripts/gen-redteam-cases.mjs            # write tests/redteam/cases.json
-//   node scripts/gen-redteam-cases.mjs --check    # exit 1 if the file is stale (used by the test)
+//   node scripts/gen-redteam-cases.mjs            # write both copies of cases.json
+//   node scripts/gen-redteam-cases.mjs --check    # exit 1 if either copy is stale (used by the test)
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(ROOT, 'docs', 'RED-TEAM-CASES.md');
-const TARGET = join(ROOT, 'tests', 'redteam', 'cases.json');
+// Two outputs, from one parse of one document. The second exists because Amplify serves
+// `frontend/` alone (`baseDirectory: frontend` in amplify.yml), so the /redteam page cannot fetch
+// anything in the tests tree — and a copy made by hand is a copy that drifts the day task 5.7
+// adds case 37. The generator owning both is what keeps the page, the suite and the document
+// telling one story.
+const TARGETS = [
+  join(ROOT, 'tests', 'redteam', 'cases.json'),
+  join(ROOT, 'frontend', 'redteam', 'cases.json'),
+];
 
 const EXPECTED_IDS = [
   ...Array.from({ length: 8 }, (_, i) => `A${i + 1}`),
@@ -161,27 +169,34 @@ const serialise = (data) => JSON.stringify(data, null, 2) + '\n';
 
 const built = build();
 
+const expected = serialise(built);
+
 if (process.argv.includes('--check')) {
-  let current = null;
-  try {
-    current = readFileSync(TARGET, 'utf8');
-  } catch {
-    console.error(`${TARGET} does not exist. Run: node scripts/gen-redteam-cases.mjs`);
-    process.exit(1);
+  for (const target of TARGETS) {
+    const rel = relative(ROOT, target);
+    let current = null;
+    try {
+      current = readFileSync(target, 'utf8');
+    } catch {
+      console.error(`${rel} does not exist. Run: node scripts/gen-redteam-cases.mjs`);
+      process.exit(1);
+    }
+    if (current !== expected) {
+      console.error(`${rel} is stale. Run: node scripts/gen-redteam-cases.mjs`);
+      process.exit(1);
+    }
   }
-  if (current !== serialise(built)) {
-    console.error('tests/redteam/cases.json is stale. Run: node scripts/gen-redteam-cases.mjs');
-    process.exit(1);
-  }
-  console.log(`cases.json is in sync with the document (${built.count} cases).`);
+  console.log(`cases.json is in sync with the document in both places (${built.count} cases).`);
   process.exit(0);
 }
 
-mkdirSync(dirname(TARGET), { recursive: true });
-writeFileSync(TARGET, serialise(built));
+for (const target of TARGETS) {
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, expected);
+}
 
 const bySection = built.cases.reduce((acc, c) => ({ ...acc, [c.section]: (acc[c.section] ?? 0) + 1 }), {});
-console.log(`Wrote ${built.count} cases to tests/redteam/cases.json`);
+console.log(`Wrote ${built.count} cases to ${TARGETS.map((t) => relative(ROOT, t)).join(' and ')}`);
 for (const [letter, n] of Object.entries(bySection)) {
   const title = built.cases.find((c) => c.section === letter).sectionTitle;
   console.log(`  ${letter}  ${String(n).padStart(2)}  ${title}`);

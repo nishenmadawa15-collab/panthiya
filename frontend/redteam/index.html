@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Panthiya — the red-team scoreboard: 36 documented attacks run against the live agent, scored on screen, with the layer that held each one.">
+<meta name="theme-color" content="#FBF7EE">
+<title>Panthiya · පන්තිය</title>
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<script type="module" src="/assets/redteam.js"></script>
+</head>
+<body>
+
+<a class="skip" href="#main" data-i18n="skip.link"></a>
+
+<noscript>
+  <p class="noscript">Panthiya needs JavaScript to run the attack suite and to switch languages.
+  This page runs 36 documented attacks against the live agent under each attack's own role and
+  scores them on screen.</p>
+</noscript>
+
+<header class="masthead">
+  <div class="brand">
+    <span class="brand__mark" aria-hidden="true">ප</span>
+    <div class="brand__text">
+      <h1 class="brand__name" data-i18n="app.name"></h1>
+      <p class="brand__tagline" data-i18n="app.tagline"></p>
+    </div>
+  </div>
+
+  <nav class="langs">
+    <span class="langs__label" id="lang-label" data-i18n="lang.label"></span>
+    <div class="langs__group" role="group" aria-labelledby="lang-label">
+      <button type="button" class="lang" data-lang="si" lang="si" data-i18n="lang.si"></button>
+      <button type="button" class="lang" data-lang="ta" lang="ta" data-i18n="lang.ta"></button>
+      <button type="button" class="lang" data-lang="en" lang="en" data-i18n="lang.en"></button>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+
+  <p class="crumbs">
+    <a class="footer__link crumbs__link" href="/" data-i18n="nav.home"></a>
+  </p>
+
+  <!-- ---------- the persistent warning (requirement 11.6) ----------
+       First in the document and sticky, so it cannot be scrolled away, and it carries no dismiss
+       control, so it cannot be closed. It is hidden only while all three layers are on. role=status
+       rather than alert: it must be announced, but it must not interrupt a run in progress. -->
+  <div class="redteam-warning" id="redteam-warning" role="status" aria-live="polite" hidden>
+    <p class="redteam-warning__heading" data-i18n="redteam.warning.heading"></p>
+    <p class="redteam-warning__layers" id="redteam-warning-layers"></p>
+    <p class="redteam-warning__body" data-i18n="redteam.warning.body"></p>
+    <ul class="redteam-warning__alone" id="redteam-warning-alone"></ul>
+    <p class="redteam-warning__note" data-i18n="redteam.warning.not_persisted"></p>
+  </div>
+
+  <section class="sheet" aria-labelledby="redteam-heading">
+    <h2 class="hero__greeting" id="redteam-heading" data-i18n="redteam.heading"></h2>
+    <p class="hero__body" data-i18n="redteam.note"></p>
+  </section>
+
+  <!-- Shown only while the page is answering itself instead of the deployed agent. redteam.js
+       unhides it from the MOCK flag, so deleting the mock removes the banner with it. -->
+  <p class="redteam-mock" id="redteam-mock" data-i18n="redteam.mock.notice" hidden></p>
+
+  <!-- ---------- layers, roles, and the run button ---------- -->
+  <section class="block" aria-labelledby="controls-heading">
+    <h3 class="block__heading" id="controls-heading" data-i18n="redteam.controls.heading"></h3>
+
+    <fieldset class="redteam-layers" id="redteam-layers">
+      <legend class="redteam-layers__legend" data-i18n="redteam.layers.legend"></legend>
+
+      <!-- The sentence that stops this page lying about what a toggle does. It is the fieldset's
+           description, so a screen reader reads it before the first checkbox. -->
+      <p class="redteam-layers__help" id="layers-help" data-i18n="redteam.layers.help"></p>
+
+      <!-- Checked in the markup and never written to storage: a run starts with all three layers
+           on, every time, however the last run ended (requirement 11.6). `wellbeing` has no
+           checkbox on purpose — the 1926 helpline reply is not a defence to switch off. -->
+      <label class="redteam-layer" for="layer-instructions">
+        <input type="checkbox" id="layer-instructions" data-layer="instructions"
+               aria-describedby="layers-help" checked>
+        <span data-i18n="redteam.layer.instructions"></span>
+      </label>
+      <label class="redteam-layer" for="layer-guardrail">
+        <input type="checkbox" id="layer-guardrail" data-layer="guardrail"
+               aria-describedby="layers-help" checked>
+        <span data-i18n="redteam.layer.guardrail"></span>
+      </label>
+      <label class="redteam-layer" for="layer-policyCheck">
+        <input type="checkbox" id="layer-policyCheck" data-layer="policyCheck"
+               aria-describedby="layers-help" checked>
+        <span data-i18n="redteam.layer.policyCheck"></span>
+      </label>
+
+      <p class="redteam-layers__locked" id="redteam-layers-locked"
+         data-i18n="redteam.layers.locked" hidden></p>
+    </fieldset>
+
+    <!-- Which roles this teacher can honestly run. POST /chat reads the role from the verified
+         token (requirement 1.3), so a parent case needs a parent token; there is no fallback. -->
+    <div class="redteam-tokens" aria-labelledby="tokens-heading">
+      <h4 class="redteam-tokens__heading" id="tokens-heading" data-i18n="redteam.tokens.heading"></h4>
+      <p class="redteam-tokens__help" data-i18n="redteam.tokens.help"></p>
+      <ul class="redteam-tokens__list" id="redteam-tokens"></ul>
+    </div>
+
+    <p class="redteam-run">
+      <button class="composer__send" id="redteam-run" type="button" data-i18n="redteam.run"></button>
+    </p>
+
+    <p class="redteam-status" id="redteam-status" role="status"></p>
+  </section>
+
+  <!-- ---------- the scoreboard ----------
+       Five separate numbers. `error` has its own tile and is never added into Blocked: a case that
+       could not run is not a case that was held (requirement 11.4). -->
+  <section class="block" aria-labelledby="score-heading">
+    <h3 class="block__heading" id="score-heading" data-i18n="redteam.score.heading"></h3>
+
+    <ul class="redteam-score" id="redteam-score"></ul>
+
+    <!-- The headline sentence: per-layer counts, not one percentage. -->
+    <p class="redteam-score__by-layer" id="redteam-by-layer"></p>
+    <p class="redteam-score__note" data-i18n="redteam.score.error_note"></p>
+  </section>
+
+  <!-- ---------- the case table ---------- -->
+  <section class="block" aria-labelledby="table-heading">
+    <h3 class="block__heading" id="table-heading" data-i18n="redteam.table.heading"></h3>
+
+    <p class="redteam-memory-note" data-i18n="redteam.reply.memory_note"></p>
+
+    <!-- 36 rows × 6 columns does not fit a phone, so the table scrolls sideways inside a labelled
+         region with tabindex="0" — the keyboard can reach the scroll container (requirement 12.4). -->
+    <div class="redteam-scroll" id="redteam-scroll" role="region"
+         aria-labelledby="table-heading" tabindex="0">
+      <table class="redteam-table">
+        <caption class="vh" data-i18n="redteam.table.caption"></caption>
+        <thead>
+          <tr>
+            <th scope="col" data-i18n="redteam.col.case"></th>
+            <th scope="col" data-i18n="redteam.col.role"></th>
+            <th scope="col" data-i18n="redteam.col.attack"></th>
+            <th scope="col" data-i18n="redteam.col.verdict"></th>
+            <th scope="col" data-i18n="redteam.col.layer"></th>
+            <th scope="col" data-i18n="redteam.col.reply"></th>
+          </tr>
+        </thead>
+        <!-- One <tbody> per section of docs/RED-TEAM-CASES.md, appended by redteam.js. -->
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p class="footer__line footer__small" data-i18n="footer.demo_data"></p>
+</footer>
+
+</body>
+</html>
