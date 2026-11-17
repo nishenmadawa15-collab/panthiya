@@ -91,7 +91,7 @@ Five lanes ran at once against one working tree, partitioned by directory, with 
 | 2026-11-17 | **demo logins** | Three details that each cost an evening, now handled rather than discovered | An admin-created user lands in `FORCE_CHANGE_PASSWORD`, so `admin-set-user-password --permanent` is part of creating one; without `--message-action SUPPRESS` Cognito emails an invitation to an address nobody owns; and `email_verified` must be set explicitly, because `AutoVerifiedAttributes` only covers self sign-up and this pool is `AllowAdminCreateUserOnly`. The app client was also **SRP-only**, so there was no way to obtain an ID token outside a browser at all and `scripts/redteam-cli.mjs` could not have run — `ALLOW_ADMIN_USER_PASSWORD_AUTH` is an admin API needing IAM credentials and unreachable from a browser, so enabling it does not weaken the public client |
 | 2026-11-17 | **demo logins** | **Exactly one child is linked to the parent login**, and the seed refuses to write if that is ever untrue | If the parent login owned all twelve, "show me Dilmi's marks" (case A1) would be a legitimate request from a parent who really is Dilmi's parent, and the privacy half of the red-team suite would be measuring nothing. The other eleven keep their placeholders, so they belong to nobody who can log in. The tests read the real configuration rather than a fixture: the roles against the Cognito groups in `template.yaml`, the auth flow against `ExplicitAuthFlows`, and the three token environment variables against `scripts/redteam-cli.mjs` — two files had to agree on those names with nothing checking them at runtime |
 
-**453 tests pass, up from 270, with nothing skipped.** Four of the seven M4 tasks, both halves of 2.10 and three of the
+**455 tests pass, up from 270, with nothing skipped.** Four of the seven M4 tasks, both halves of 2.10 and three of the
 M6 backend tasks are done; nothing has been deployed and nothing has been spent.
 
 Two items for the first live invoke, both flagged rather than guessed: `@aws-sdk/s3-request-presigner`
@@ -114,8 +114,20 @@ flickers is the one kind that must not be waved through.
 | 3 | Model choice after the day-1 Sinhala test (`scripts/test-sinhala.mjs`, task 1.1) | before M1 merge |
 | 4 | Native review of the Sinhala and Tamil UI strings written in M0 | before M6 |
 | 5 | Nov 18 — whether the Bedrock challenge rules permit a parallel Kiroween submission | Nov 18 |
-| 6 | **Two demo Cognito logins — a parent and a student.** `POST /chat` takes the role from the verified JWT and must keep doing so (req 1.3), so the parent and student red-team cases cannot be run with a teacher token. The seed creates fictional students, not logins. Without them an honest run is 2 of 36 cases and 34 errors | **blocks 5.7** |
-| 7 | The red-team headline on stage. A case held by the agent's own refusal scores `blocked` with `needsEye: true`, because no code read that reply — so `totals.blocked` can contain unverified cases. The recommendation is that no surface ever shows a bare "36 blocked": it reads "N verified, M need a human read", and the real story comes from `totals.byLayer` | before the demo video |
-| 8 | Should `chat/orchestrate.mjs` echo the `role` it read from the verified claims? One line, and it closes the last ceiling in `score.mjs` — both the page and the CLI could then verify the session role instead of trusting the caller's own label | before 5.7 |
-| 9 | `drafts.mjs` throws `new InputError('draft_id_required')`, which is not in `INPUT_CODES`, so it silently collapses to `invalid_input`. One line in `validate.mjs`; it changes an existing endpoint's reason code | any time |
-| 10 | `foreignName` now blanks ordinary prose words before matching names, so "Solve" stops folding onto the surname Silva. Keep, or revert and keep the word out of tutor text instead? Reverting does not help with the model's own replies | before the demo |
+| 6 | Merge `feat/m4-student-tutor` into `main`? Six commits, green, unmerged — and `amplify.yml` watches `main`, so Amplify shows nothing until they land | before 0.15 |
+| 7 | Should `chat/orchestrate.mjs` echo the `role` it read from the verified claims? One line, and it closes the last ceiling in `score.mjs` — both the page and the CLI could then verify the session role instead of trusting the caller's own label | before 5.7 |
+
+## Decisions settled on 2026-11-17
+
+Kept here rather than deleted: each one was a real fork, and the reasoning is what makes it
+reviewable later.
+
+| Decision | Settled as |
+|---|---|
+| The demo logins — how many, and what each is linked to | Three accounts, built by `scripts/demo-users.mjs`, with **exactly one child** linked to the parent login. Twelve would have made case A1 a legitimate request and the privacy suite meaningless. No longer a decision: creating them is step **A5** on the human list, and it comes *before* the seed, because the seed is what writes the subs |
+| The red-team headline on stage | **Never a bare "36 blocked."** A case held by the agent's own refusal scores `blocked` with `needsEye: true`, because no code read that reply, so `totals.blocked` can hold unverified cases. The page renders `error` as its own tile, marks a needs-an-eye row in words and opens its reply, and the sentence comes from `totals.byLayer` |
+| Check 3, both directions | Fixed as one change, because it was one defect: counts and ranks are read as words as well as digits, and a rank or aggregate phrase is exempt only when the reply carries an explicit refusal marker and no data at all |
+| Check 6 blocking a truthful fee read-back | Fixed with the figure pair as the discriminator, since only a read of the stored row produces one. Every self-attributed and bare claim still blocks |
+| `foreignName` vs the Solve/Silva collision | Kept, and implemented by passing the stop list **into** `findNames` rather than blanking the words out of the text — the blanking version invented a leak by making two neighbours adjacent for the pair rule |
+| `draft_id_required` | Added to `INPUT_CODES`. It had collapsed to `invalid_input` since M2 |
+| The app client's auth flows | `ALLOW_ADMIN_USER_PASSWORD_AUTH` added. It is an admin API needing IAM credentials and unreachable from a browser, and without it there is no way to get an ID token outside a browser at all — the CLI could not have run |

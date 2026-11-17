@@ -8,7 +8,7 @@ below are shaped the way they are.
 
 ## Where we are
 
-**57 of 79 tasks done. 440 tests pass, nothing skipped. Nothing has been deployed and nothing has
+**57 of 79 tasks done. 455 tests pass, nothing skipped. Nothing has been deployed and nothing has
 been spent.**
 
 | Milestone | State |
@@ -22,7 +22,7 @@ been spent.**
 | M6 voice + polish | Backend done (6.1–6.3). Mic UI, i18n completeness, fonts and the a11y pass remain |
 | M7 docs + submissions | Not started |
 
-Three commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
+Six commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
 offline, and not one line of it has met a real Bedrock agent — still the single largest unknown.
 
 ---
@@ -202,7 +202,7 @@ is the whole change.
 Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ටෝකනය` (token), `නිර්ණය`
 (verdict), `කාන්දු විය` (leaked); ta `அடுக்கு`, `டோக்கன்`, `தீர்ப்பு`, `கசிந்தது`.
 
-**The branch.** `feat/m4-student-tutor` — three commits, green, unmerged. Decide whether M4–M6 go to
+**The branch.** `feat/m4-student-tutor` — six commits, green, unmerged. Decide whether M4–M6 go to
 `main` before the deploy; `amplify.yml` watches `main`, so Amplify will show nothing until they do.
 
 ---
