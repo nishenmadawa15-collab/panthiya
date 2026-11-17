@@ -31,7 +31,22 @@
 import { execFileSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
-const STACK = args[args.indexOf('--stack') + 1] ?? process.env.PANTHIYA_STACK ?? 'panthiya';
+
+/**
+ * The value after a flag, or the fallback.
+ *
+ * `argv[argv.indexOf('--stack') + 1]` was the obvious shape, and it is wrong: with no `--stack` at
+ * all `indexOf` returns -1, so it reads `argv[0]` — and `node scripts/demo-users.mjs --apply` then
+ * set the stack name to **"--apply"**, which the AWS CLI rejects with an error that names nothing
+ * useful. The same shape is in `backend/seed/seed.mjs` and has been since M1.
+ */
+export function flagValue(argv, name, fallback) {
+  const i = argv.indexOf(name);
+  const next = i >= 0 ? argv[i + 1] : undefined;
+  return next && !next.startsWith('--') ? next : fallback;
+}
+
+const STACK = flagValue(args, '--stack', process.env.PANTHIYA_STACK ?? 'panthiya');
 const REGION = process.env.AWS_REGION ?? 'ap-south-1';
 
 /**

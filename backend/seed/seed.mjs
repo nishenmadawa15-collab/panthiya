@@ -22,7 +22,21 @@ const OUT = join(HERE, 'out');
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
-const STACK = args[args.indexOf('--stack') + 1] ?? process.env.PANTHIYA_STACK ?? 'panthiya';
+/**
+ * The value after a flag, or the fallback. Four lines rather than `args[indexOf(...) + 1]`, which
+ * is what was here: with no `--stack` at all `indexOf` returns -1, so it read `args[0]`, and
+ * `node backend/seed/seed.mjs --apply` therefore set the stack name to **"--apply"** and the AWS
+ * CLI failed with a parse error that named nothing useful. Duplicated in `scripts/demo-users.mjs`
+ * rather than shared: four lines of argument plumbing in two standalone scripts is cheaper than a
+ * `scripts/lib` for them to import.
+ */
+function flagValue(name, fallback) {
+  const i = args.indexOf(name);
+  const next = i >= 0 ? args[i + 1] : undefined;
+  return next && !next.startsWith('--') ? next : fallback;
+}
+
+const STACK = flagValue('--stack', process.env.PANTHIYA_STACK ?? 'panthiya');
 const REGION = process.env.AWS_REGION ?? 'ap-south-1';
 
 // --- DynamoDB JSON marshalling (only the types this seed data actually uses) --------------------

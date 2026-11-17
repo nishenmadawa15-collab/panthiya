@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   DEMO_ACCOUNTS, passwordProblems, exportLines, parseArgs, stackIds, subOf, createAccount,
-  idTokenFor,
+  idTokenFor, flagValue,
 } from '../../scripts/demo-users.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -222,4 +222,28 @@ test('the flags are the three documented modes and nothing else', () => {
   assert.deepEqual(parseArgs(['--apply']), { apply: true, tokens: false });
   assert.deepEqual(parseArgs(['--tokens']), { apply: false, tokens: true });
   assert.deepEqual(parseArgs(['--apply', '--tokens']), { apply: true, tokens: true });
+});
+
+test('a flag value is read from after its own flag, not from argv[0]', () => {
+  // `argv[argv.indexOf('--stack') + 1]` reads argv[0] when the flag is absent, because indexOf
+  // returns -1. So `node … --apply` set the stack name to "--apply" and the AWS CLI failed with a
+  // parse error that named nothing useful. It was in seed.mjs from M1 and was copied into this
+  // script before anyone ran it with a flag and no --stack.
+  assert.equal(flagValue(['--apply'], '--stack', 'panthiya'), 'panthiya');
+  assert.equal(flagValue(['--tokens'], '--stack', 'panthiya'), 'panthiya');
+  assert.equal(flagValue([], '--stack', 'panthiya'), 'panthiya');
+  assert.equal(flagValue(['--stack', 'other', '--apply'], '--stack', 'panthiya'), 'other');
+  assert.equal(flagValue(['--apply', '--stack', 'other'], '--stack', 'panthiya'), 'other');
+  // A flag given with no value after it falls back rather than swallowing the next flag.
+  assert.equal(flagValue(['--stack'], '--stack', 'panthiya'), 'panthiya');
+  assert.equal(flagValue(['--stack', '--apply'], '--stack', 'panthiya'), 'panthiya');
+});
+
+test('neither script still reads an argument by unguarded index', () => {
+  // The guard, not just the fix: this shape is easy to retype and silently wrong only in the case
+  // nobody tests by hand.
+  for (const file of ['scripts/demo-users.mjs', 'backend/seed/seed.mjs']) {
+    assert.ok(!/args\[\s*args\.indexOf\([^)]*\)\s*\+\s*1\s*\]/.test(read(file)),
+      `${file} reads an argument by unguarded index; use flagValue()`);
+  }
 });
