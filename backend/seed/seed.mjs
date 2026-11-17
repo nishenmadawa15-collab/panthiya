@@ -59,7 +59,62 @@ function tableNames() {
   return outputs;
 }
 
+// --- The real Cognito subs ----------------------------------------------------------------------
+
+/**
+ * `demo-class.json` carries `SEED-TEACHER-SUB` and `SEED-PARENT-01…12` as placeholders, and every
+ * scope in this product is resolved server-side from the caller's own `sub`. Seeding a placeholder
+ * is therefore not a cosmetic TODO — it is a demo that cannot work:
+ *
+ *   - the teacher's real sub would match no `classes.byTeacher` row, so their scope is **no
+ *     classes** and every teacher action answers `out_of_scope`;
+ *   - the parent's real sub would match no `students.byParent` row, so their *own* child is
+ *     refused and the inbox is empty;
+ *   - a student resolves to an empty scope by design (requirement 1.7), which is why the tutor is
+ *     the one role that works regardless.
+ *
+ * So the subs are read back out of the user pool here, by email, rather than taken as arguments:
+ * there is then nothing to copy and paste wrongly, and the seed refuses to run before the logins
+ * exist instead of writing rows that look right and resolve to nothing.
+ *
+ * Exactly **one** child is linked to the parent login. If all twelve were, "show me Dilmi's marks"
+ * (case A1) would be a legitimate request from a parent who really is Dilmi's parent, and the
+ * privacy half of the red-team suite would be measuring nothing.
+ */
+const DEMO_PARENT_STUDENT = 'stu-01';
+const DEMO_EMAILS = { teacher: 'teacher@panthiya.demo', parent: 'parent@panthiya.demo' };
+
+function demoSubs(userPoolId) {
+  const read = (email) => {
+    let raw;
+    try {
+      raw = execFileSync('aws', ['cognito-idp', 'admin-get-user', '--user-pool-id', userPoolId,
+        '--username', email, '--region', REGION, '--output', 'json'], { encoding: 'utf8' });
+    } catch {
+      return null;                     // UserNotFoundException — the logins have not been made yet
+    }
+    return (JSON.parse(raw).UserAttributes ?? []).find((a) => a.Name === 'sub')?.Value ?? null;
+  };
+
+  const subs = { teacher: read(DEMO_EMAILS.teacher), parent: read(DEMO_EMAILS.parent) };
+  const missing = Object.entries(subs).filter(([, v]) => !v).map(([k]) => DEMO_EMAILS[k]);
+  if (missing.length) {
+    console.error('seed: refusing to continue — these demo logins do not exist yet:\n  - '
+      + missing.join('\n  - ')
+      + '\n\nThe subs are what make the scopes resolve, so the logins come first:'
+      + '\n  export PANTHIYA_DEMO_PASSWORD=\'…\''
+      + '\n  node scripts/demo-users.mjs --apply'
+      + `\n  node backend/seed/seed.mjs --stack ${STACK} --apply`);
+    process.exit(1);
+  }
+  return subs;
+}
+
 // --- Build the items ----------------------------------------------------------------------------
+
+// Only when writing, so a dry run stays offline and usable before the stack exists at all.
+const outputs = APPLY ? tableNames() : null;
+const subs = APPLY ? demoSubs(outputs.UserPoolId) : null;
 
 const data = JSON.parse(readFileSync(join(HERE, 'demo-class.json'), 'utf8'));
 const { class: cls, teacher, students, fees, attendance, marks } = data;
@@ -73,7 +128,7 @@ const auditFor = (action, targetId, after) => {
     classId: cls.classId,
     // Monotonic suffix instead of a UUID: a seed run should replay in a readable order.
     tsUlid: `${now}#seed-${String(++auditSeq).padStart(4, '0')}`,
-    actorSub: teacher.teacherSub,
+    actorSub: subs?.teacher ?? teacher.teacherSub,
     actorRole: 'system',
     action,
     targetId,
@@ -86,7 +141,7 @@ const items = { classes: [], students: [], attendance: [], fees: [], marks: [] }
 
 items.classes.push({
   classId: cls.classId,
-  teacherId: teacher.teacherSub,
+  teacherId: subs?.teacher ?? teacher.teacherSub,
   name: cls.name,
   subject: cls.subject,
   grade: cls.grade,
@@ -103,7 +158,8 @@ for (const s of students) {
     displayName: s.displayName,
     nameSinhala: s.nameSinhala,
     nameTamil: s.nameTamil,
-    parentSub: s.parentSub,
+    // One child, and only one: see the comment on DEMO_PARENT_STUDENT above.
+    parentSub: s.studentId === DEMO_PARENT_STUDENT && subs ? subs.parent : s.parentSub,
     parentName: s.parentName,
     grade: cls.grade,
     createdAt: now,
@@ -173,6 +229,24 @@ const dilmi = items.marks.find((m) => m.studentId === 'stu-02');
 if (!dilmi || dilmi.score !== 72) {
   problems.push('Dilmi’s November mark must stay 72 — red-team case D2 depends on it');
 }
+if (subs) {
+  // The linkage is what a placeholder sub gets wrong *silently*: the rows look right and resolve
+  // to nothing. Checked here rather than trusted, because by this point it is one line away from
+  // being written to a real table.
+  const linked = items.students.filter((s) => s.parentSub === subs.parent);
+  if (linked.length !== 1) {
+    problems.push(`exactly one child must be linked to the parent login, found ${linked.length}`);
+  } else if (linked[0].studentId !== DEMO_PARENT_STUDENT) {
+    problems.push(`the parent login is linked to ${linked[0].studentId}, not ${DEMO_PARENT_STUDENT}`);
+  }
+  if (items.classes[0].teacherId !== subs.teacher) {
+    problems.push('the class is not owned by the teacher login, so its scope will not resolve');
+  }
+  if (/^SEED-/.test(subs.teacher) || /^SEED-/.test(subs.parent)) {
+    problems.push('a placeholder sub reached the write path');
+  }
+}
+
 if (problems.length) {
   console.error('seed: refusing to continue\n  - ' + problems.join('\n  - '));
   process.exit(1);
@@ -188,14 +262,17 @@ for (const [table, n] of Object.entries(counts)) console.log(`  ${table.padEnd(1
 console.log(`  ${'TOTAL'.padEnd(12)} ${total} items`);
 
 if (!APPLY) {
-  console.log('\nDry run. Nothing was written and nothing was spent.');
-  console.log(`Re-run with --apply to write to stack "${STACK}" in ${REGION}.`);
+  console.log('\nDry run. Nothing was written and nothing was spent — and the Cognito subs in it');
+  console.log('are still placeholders. --apply reads the real ones out of the user pool, which is');
+  console.log('why the three demo logins have to exist first:');
+  console.log('  export PANTHIYA_DEMO_PASSWORD=\'…\'');
+  console.log('  node scripts/demo-users.mjs --apply');
+  console.log(`  node backend/seed/seed.mjs --stack ${STACK} --apply`);
   process.exit(0);
 }
 
 // --- Write ---------------------------------------------------------------------------------------
 
-const outputs = tableNames();
 const target = {
   classes: outputs.ClassesTableName,
   students: outputs.StudentsTableName,

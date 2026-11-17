@@ -387,6 +387,14 @@ Resources:
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+        # ADMIN_USER_PASSWORD_AUTH is how `scripts/demo-users.mjs --tokens` gets an ID
+        # token for the red-team CLI. Without it there is no way to get one outside a
+        # browser at all: SRP is the only browser flow, USER_PASSWORD_AUTH is
+        # deliberately absent, and hand-rolling SRP would be ~200 lines of crypto in a
+        # repo with no dependencies. This flow is an *admin* API — it needs IAM
+        # credentials and cannot be reached from a browser — so the public client is
+        # not weakened by it. Remove it and the terminal half of task 5.7 stops working.
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
       IdTokenValidity: 60
       AccessTokenValidity: 60
       RefreshTokenValidity: 1

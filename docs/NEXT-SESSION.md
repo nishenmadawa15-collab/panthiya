@@ -54,12 +54,55 @@ node scripts/test-sinhala.mjs --yes
 > model can read Sinhala. Read the Sinhala replies by eye — the automatic check cannot tell fluent
 > Sinhala from Sinhala-shaped nonsense.
 
-**5. New, and it blocks the demo: two more Cognito logins — a demo parent and a demo student.**
-`POST /chat` takes the role from the verified JWT and must keep doing so (requirement 1.3), so the
-parent and student red-team cases cannot be run with a teacher token. The seed creates fictional
-students, not logins. Without them an honest run of the suite is **2 of 36 cases and 34 errors** —
-which is what both the page and the CLI will correctly report, rather than quietly scoring a
+**5. The demo logins — and the part of this that was not obvious.** `POST /chat` takes the role
+from the verified JWT and must keep doing so (requirement 1.3), so the parent and student red-team
+cases cannot be run with a teacher token: without those accounts an honest run is **2 of 36 cases
+and 34 errors**, which is what both the page and the CLI correctly report rather than scoring a
 teacher-answered privacy question as a pass.
+
+But creating the accounts is not the hard part. **Linking them is, and getting the order wrong
+produces a demo that looks deployed and answers nothing.** `demo-class.json` carries
+`SEED-TEACHER-SUB` and `SEED-PARENT-01…12` as placeholders, and every scope here is resolved
+server-side from the caller's own Cognito `sub`:
+
+| Role | With a placeholder sub in the data |
+|---|---|
+| teacher | `classes.byTeacher` matches nothing → **no classes in scope** → every teacher action answers `out_of_scope`. The teacher chat refuses everything |
+| parent | `students.byParent` matches nothing → their **own** child is refused and the inbox is empty |
+| student | works — a student session resolves to an empty scope by design (requirement 1.7) |
+
+So the users come **before** the seed, because the seed is what writes the subs. It reads them back
+out of the pool by email, so there is nothing to copy and paste wrongly, and it refuses to write
+if the logins are missing rather than writing rows that look right and resolve to nothing.
+
+Two more things that each cost an evening if missed, both now handled in
+`scripts/demo-users.mjs`: an admin-created user lands in `FORCE_CHANGE_PASSWORD` and needs
+`admin-set-user-password --permanent` before any scripted sign-in works, and the app client was
+SRP-only, so there was **no way at all** to get an ID token outside a browser — `template.yaml` now
+enables `ALLOW_ADMIN_USER_PASSWORD_AUTH`, which is an admin API needing IAM credentials and
+unreachable from a browser, so the public client is not weakened.
+
+**Exactly one child is linked to the parent login** (Kasun, `stu-01`). If all twelve were, "show me
+Dilmi's marks" would be a legitimate request from a parent who really is Dilmi's parent, and the
+privacy half of the suite would be measuring nothing. The seed refuses to write if that is ever
+not true.
+
+### Tonight, in order, once `aws configure` is done
+
+```bash
+# a free look at what each step will do — neither of these touches AWS
+node scripts/demo-users.mjs
+node backend/seed/seed.mjs --stack panthiya
+
+# after `sam deploy` has created the stack:
+export PANTHIYA_DEMO_PASSWORD='<12+ chars, mixed case, a digit>'
+node scripts/demo-users.mjs --apply            # three accounts, grouped, password set permanent
+node backend/seed/seed.mjs --stack panthiya --apply   # 99 rows, with the real subs in them
+
+# a token per role for the terminal run of the suite (they last 60 minutes)
+node scripts/demo-users.mjs --tokens           # prints the export block, then:
+node scripts/redteam-cli.mjs --yes
+```
 
 **6.** Amplify Hosting → connect `nishenmadawa15-collab/panthiya`, branch `main`. `amplify.yml` has
 no build step, so it should go green first try (0.15).
@@ -105,11 +148,12 @@ a change in one of those reports the exact change instead of making it.
 | A2 | Create the Bedrock agent + the three action groups from `backend/agent/schemas/` | Nishen in console, agent guides | Record IDs as SAM parameters (1.11) |
 | A3 | Create the Guardrail from `backend/agent/guardrail.json` | Nishen in console | Record ID + version (3.1) |
 | A4 | `sam deploy --guided` | **Ask Nishen before running — costs money** | 1.15 |
-| A5 | `node backend/seed/seed.mjs --stack panthiya --apply` | Agent, after A4 | Writes 99 fictional items |
-| A6 | Amplify connect + confirm the live URL on a phone | Nishen | 0.15 |
-| A7 | **Take the three SWAP POINTs**: `frontend/assets/redteam.js` (`tokenFor`, `postChat`, `postRun`, delete `MOCK`/`mockScore`) and `frontend/assets/student.js` (`askTutor`) | Agent, after A4 and D1 | The pages run on mocks until this |
-| A8 | Run all 36 live from `/redteam`, and from `scripts/redteam-cli.mjs` for a diffable record. Fix every leak; add any new bypass as case 37+ | Agent | 5.7 — the first real score |
-| A9 | `README.md` final, `SUBMISSION-*.md`, and the build log's last entry | Agent | 7.1, 7.4, 7.5, 7.6 |
+| A5 | `node scripts/demo-users.mjs --apply` — the three logins, grouped, with a permanent password | Nishen sets `PANTHIYA_DEMO_PASSWORD`, agent runs it | **Before A6, not after.** The seed writes the subs these accounts own |
+| A6 | `node backend/seed/seed.mjs --stack panthiya --apply` | Agent, after A5 | Writes 99 fictional items, with the real subs read back out of the pool. Refuses to run if A5 was skipped |
+| A7 | Amplify connect + confirm the live URL on a phone | Nishen | 0.15 |
+| A8 | **Take the three SWAP POINTs**: `frontend/assets/redteam.js` (`tokenFor`, `postChat`, `postRun`, delete `MOCK`/`mockScore`) and `frontend/assets/student.js` (`askTutor`) | Agent, after A6 and D1 | The pages run on mocks until this |
+| A9 | Run all 36 live from `/redteam`, and from `scripts/redteam-cli.mjs` for a diffable record. Fix every leak; add any new bypass as case 37+ | Agent | 5.7 — the first real score |
+| A10 | `README.md` final, `SUBMISSION-*.md`, and the build log's last entry | Agent | 7.1, 7.4, 7.5, 7.6 |
 
 ---
 
