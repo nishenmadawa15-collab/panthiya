@@ -674,6 +674,15 @@ Resources:
             ApiId: !Ref PanthiyaApi
             Method: POST
             Path: /voice/upload-url
+        # Starts the Transcribe job, and polls it. One route for both because a
+        # batch job outlives an API Gateway request: a handler that waited would
+        # turn a slow success into a timeout the teacher reads as a failure.
+        Transcript:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PanthiyaApi
+            Method: POST
+            Path: /voice/transcript
 
   # redteam — teacher-only runner. Writes its own results table, reads the
   # roster so cases can reference real demo students.

@@ -56,8 +56,8 @@ test('the template declares a handler for every function', () => {
   assert.equal(fns.length, 8, `expected 8 functions, found ${fns.length}`);
   for (const { codeUri, handler } of fns) {
     assert.ok(handler.endsWith('.handler'), `${handler} does not end in .handler`);
-    assert.ok(existsSync(handlerFile(codeUri, handler)) || handler.includes('actions-student')
-      || handler.includes('voice') || handler.includes('redteam'),
+    // Every one of the eight functions is written now, so there is no exemption left to make.
+    assert.ok(existsSync(handlerFile(codeUri, handler)),
       `${handler} does not resolve to a file under ${codeUri}`);
   }
 });

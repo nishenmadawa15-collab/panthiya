@@ -264,8 +264,19 @@ export function namesMatch(a, b) {
  *
  * Returns the matching entries from `names`, not from the text, so a caller never echoes
  * attacker-supplied spelling back into a log or a reply.
+ *
+ * `skip` holds lowercase ordinary words that may never *be* a name on their own. It exists because
+ * `foldedKey` is vowel-blind — which is what defeats "Dіlmі" with a Cyrillic i — and vowel-blind
+ * matching makes a few real English words collide with real surnames: "Solve" folds onto Silva.
+ * The caller supplies the list, because which words are ordinary prose is a policy question and
+ * this module only answers what spellings of a name are equivalent.
+ *
+ * It is applied here rather than by blanking the words out of `text` first, and that is the whole
+ * point: blanking removes a token from the stream, which makes its two neighbours adjacent, and
+ * the pair rule below then concatenates a pair that never existed in the sentence. That mistake
+ * was made once already and invented a leak out of a correct refusal.
  */
-export function findNames(text, names) {
+export function findNames(text, names, skip = new Set()) {
   if (typeof text !== 'string' || !text) return [];
 
   // One index entry per variant of each roster name, including each word of a full name.
@@ -282,10 +293,21 @@ export function findNames(text, names) {
   // is never found. That bug would have been a silent leak, so the \p{M} here is load-bearing.
   const tokens = text.split(/[^\p{L}\p{N}\p{M}]+/u).filter(Boolean);
 
+  const ordinary = (token) => skip.has(token.toLowerCase());
+
   const hits = new Set();
   for (let i = 0; i < tokens.length; i++) {
+    const next = i + 1 < tokens.length ? tokens[i + 1] : null;
+
     // Check single tokens and adjacent pairs, since "Dil mi" and "දිල් මි" split across a space.
-    for (const candidate of [tokens[i], i + 1 < tokens.length ? tokens[i] + tokens[i + 1] : null]) {
+    // A pair is skipped when either half is an ordinary word: a name split across a space has two
+    // name-shaped halves, so "ranking children" is a concatenation artefact and never a child.
+    // This does not widen anything an attacker can already do — the pair rule only ever looked at
+    // *adjacent* fragments, so "Dil x mi" with any word between them was never caught either.
+    for (const candidate of [
+      ordinary(tokens[i]) ? null : tokens[i],
+      next && !ordinary(tokens[i]) && !ordinary(next) ? tokens[i] + next : null,
+    ]) {
       if (!candidate) continue;
       for (const key of keyVariants(candidate)) {
         const found = wanted.get(key);

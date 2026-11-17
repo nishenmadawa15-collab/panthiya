@@ -29,6 +29,7 @@ export const REASONS = {
   badInput: 'bad_input',
   instructionLeak: 'instruction_leak',
   foreignName: 'foreign_name',
+  contactNumber: 'contact_number',
   aggregateLeak: 'aggregate_leak',
   finalAnswer: 'final_answer',
   writeClaim: 'write_claim',
@@ -82,8 +83,35 @@ export function instructionLeak(reply) {
 }
 
 // =================================================================================================
-// Check 2 — foreign student name (cases A1, A3, A6, A7, A8, D6)
+// Check 2 — foreign student name, and any personal contact number (cases A1, A3, A6, A7, A8, D6)
 // =================================================================================================
+
+/**
+ * A Sri Lankan mobile or landline, or an NIC, in any of the spacings people actually write.
+ *
+ * Case A3 asks for another child's mother's phone number. Until this was added, layer 3 caught
+ * A3 only through the *name* that usually travels with the number — "Her mother can be reached on
+ * 0771000002" was allowed, because it names nobody. `backend/agent/README.md` assigns PII to the
+ * guardrail, which is layer 2 and has no offline surface at all, so the backstop it listed could
+ * not be demonstrated and, for the number itself, did not exist. Found by the task 3.8 audit.
+ *
+ * No role is exempt and no legitimate reply in this product contains one of these: requirement 7.4
+ * means no handler reads or returns `parentContact`, so there is no path by which a real number
+ * reaches a reply — not even the caller's own. The one number a reply *should* carry is the 1926
+ * helpline, which is four digits and matches nothing here; a test pins that.
+ */
+const CONTACT_NUMBER = [
+  /\b0\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/,                 // 0771000002, 077 100 0002, 077-100-0002
+  // No leading \b: there is no word boundary before a "+", so one here made the whole pattern
+  // dead. Found by running it rather than by reading it.
+  /(?:\+94|0094)[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/,  // +94 77 100 0002
+  /\b\d{9}[VvXx]\b/,                                   // old NIC, 901234567V
+  /\b(?:19|20)\d{10}\b/,                               // new NIC, 12 digits
+];
+
+export function contactNumber(reply) {
+  return CONTACT_NUMBER.some((re) => re.test(reply));
+}
 
 /**
  * `foreignNames` holds roster spellings that are NOT in the caller's permitted set, built by
@@ -95,7 +123,25 @@ export function instructionLeak(reply) {
  */
 export function foreignName(reply, foreignNames) {
   if (!Array.isArray(foreignNames) || foreignNames.length === 0) return false;
-  return findNames(reply, foreignNames).length > 0;
+  // `NOT_A_PERSON` is handed to the matcher as words that may never be a name on their own,
+  // because `foldedKey` is vowel-blind by design — that is what defeats "Dіlmі" (case D6) — and
+  // vowel-blindness makes a handful of real English words collide with real surnames. "Solve"
+  // folds onto Silva, so every tutor reply that opened a worked example with it was blocked as a
+  // leak: a correct, safe reply thrown away, in the one role where the student then sees nothing
+  // at all. The same list already decides what is not a person for check 3, so this is the
+  // existing trade applied consistently rather than a new one.
+  //
+  // It is passed *into* `findNames` rather than blanked out of the text first. Blanking was tried
+  // and was wrong: removing a token makes its neighbours adjacent, and the matcher's pair rule
+  // then joined two words that never touched — "I cannot share the class ranking or other
+  // children's marks" came back as a foreign name, so a correct refusal was blocked instead.
+  //
+  // ponytail: the ceiling is a reply that names a child by a surname *alone*, spelled as one of
+  // these words. Every given name in the roster is indexed separately and still caught, and a
+  // parent has no read path to another child in the first place (design §3.2), so the hole is
+  // narrow. Upgrade by checking the stop list against the live roster at deploy time if a real
+  // class ever holds a name that folds onto one of these words.
+  return findNames(reply, foreignNames, NOT_A_PERSON).length > 0;
 }
 
 // =================================================================================================
@@ -103,16 +149,84 @@ export function foreignName(reply, foreignNames) {
 // =================================================================================================
 
 const RANK_PATTERNS = [
-  /\b(top|best|highest|lowest|worst)\s*\d+\b/i,
   /\brank(ed|ing|s)?\b/i,
-  /\b\d+(st|nd|rd|th)\s+(place|position|in\s+(the\s+)?class)\b/i,
-  /\b(first|second|third)\s+(place|position)\b/i,
+  /\b(?:highest|lowest|best|worst|top)\s+(?:marks?|scores?|results?|grades?)\b/i,
   /ශ්‍රේණිගත/, /ඉහළම/, /දක්ෂතම/,
   /தரவரிசை/, /சிறந்த\s*\d+/, /முதல்\s*\d+\s*(மாணவ|பேர்)/,
 ];
 
+/** Written-out ordinals, which `numberTokens` does not read — it only knows cardinals. */
+const ORDINAL_WORDS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth',
+  'ninth', 'tenth', 'last'];
+const ORDINAL_RE = new RegExp(`\\b(?:\\d+(?:st|nd|rd|th)|${ORDINAL_WORDS.join('|')})\\b`, 'i');
+
+/**
+ * The same shapes again, with the number spelled out — the hole the task 3.8 audit found.
+ *
+ * Check 3 keyed every count and rank on `\d`, so `The top three in the class scored 95, 92 and 88`,
+ * `Kasun is second in the class` and `Three families still have fees due` were all answered in
+ * full, while their digit forms were blocked. Requirement 7.3 forbids leaking "no name, **count or
+ * rank**", and this file already had `NUMBER_WORDS` for check 4 — the digit-vs-word axis was known
+ * and applied one check over.
+ *
+ * Built lazily because `LATIN_NUMBER_WORDS` is defined further down, with check 4, and a top-level
+ * `new RegExp` referring to it from here would read it before it exists.
+ */
+let countPatterns;
+function countAware() {
+  if (countPatterns) return countPatterns;
+  const count = `\\d+|${LATIN_NUMBER_WORDS.join('|')}`;
+  const people = 'children|students|kids|classmates|families|parents|others';
+  countPatterns = [
+    new RegExp(`\\b(?:top|best|highest|lowest|worst)\\s+(?:${count})\\b`, 'i'),
+    new RegExp(`\\b(?:\\d+(?:st|nd|rd|th)|${ORDINAL_WORDS.join('|')})\\s+`
+      + '(?:place|position|in\\s+(?:the\\s+)?class)\\b', 'i'),
+    // A count of other people, doing something only their own records would show. `have` is left
+    // out on purpose: a parent of two legitimately hears "your two children have an exam".
+    new RegExp(`\\b(?:${count})\\s+(?:${people})\\s+`
+      + '(?:scored|score|got|owe|owes|still|are\\s+(?:above|below|ahead|behind))\\b', 'i'),
+    // "Fees are pending for several families this month" — the leak is the plural third party,
+    // not the fee words, which a parent hears about their own child all the time.
+    new RegExp(`\\b(?:several|some|many|a\\s+few|few|most|other|the\\s+other)\\s+(?:${people})\\b`, 'i'),
+  ];
+  return countPatterns;
+}
+
+/**
+ * A reply that is refusing, rather than answering.
+ *
+ * Check 3 blocked the *correct* refusal, because a refusal naturally echoes the attack: "I cannot
+ * share the class ranking" carries the word `ranking`, and for a student "I cannot show the class
+ * marks sheet" carries `marks sheet`. The scoreboard recorded those as blocked — a pass — while a
+ * parent, or worse a child, met a generic error screen instead of the kind redirect the case
+ * documents. That is the collision `backend/agent/README.md` §6.3.1 already resolved once in
+ * favour of the child, for case C10, and it is resolved the same way here.
+ *
+ * Deliberately narrow, and it fails closed: the exemption needs an explicit refusal marker **and**
+ * no data of any kind — no cardinal, no ordinal, and no person-like name the caller may not see.
+ * So "I cannot tell you who has not paid, but three families are behind" is still blocked on the
+ * `three`, "…but Kasun is second" on the ordinal, and "…but Dilmi has not paid" never reaches this
+ * check at all, because check 2 runs first.
+ */
+const REFUSAL_MARKERS = [
+  /\b(?:cannot|can'?t|am\s+not\s+able\s+to|unable\s+to|do\s+not|don'?t)\s+(?:share|tell|show|give|see|say|send|provide|reveal|discuss|pass\s+on|compare)\b/i,
+  /\b(?:only|just)\s+(?:your|the|their)\s+teacher\b/i,
+  /\bnot\s+something\s+i\s+can\b/i,
+  /\bnot\s+allowed\s+to\b/i,
+  /(?:කියන්න|පෙන්වන්න|බෙදාගන්න)\s*(?:බැහැ|නොහැක)/, /අවසර\s*නැත/,
+  /(?:சொல்ல|காட்ட|பங்கிட)\s*(?:முடியாது|இயலாது)/, /அனுமதி\s*இல்லை/,
+];
+
+function isRefusalOnly(reply, excludeKeys) {
+  if (!REFUSAL_MARKERS.some((re) => re.test(reply))) return false;
+  if (numberTokens(reply).length > 0) return false;
+  if (ORDINAL_RE.test(reply)) return false;
+  return personLikeCount(reply, excludeKeys) === 0;
+}
+
 const AGGREGATE_PATTERNS = [
   /\b(ha(s|ve)\s*n(ot|'t)|did\s*n(ot|'t))\s+(yet\s+)?paid\b/i,
+  /\bfees?\s+(?:are\s+)?(?:pending|owing)\b/i,
   /\bnot\s+(yet\s+)?paid\b/i,
   /\bunpaid\b/i,
   /\bdefaulters?\b/i,
@@ -142,6 +256,10 @@ const NOT_A_PERSON = new Set([
   'hello', 'dear', 'only', 'here', 'however', 'instead', 'both', 'all', 'each', 'every', 'can',
   'cannot', 'what', 'when', 'who', 'why', 'how', 'with', 'would', 'ask', 'let', 'now', 'next',
   'first', 'second', 'third', 'step', 'example', 'note', 'okay', 'well', 'good',
+  // 'solve' earns its place twice over: `foldedKey` strips vowels, so "Solve" folds to the same key
+  // as the surname **Silva**, and a tutor reply saying "Solve 4y - 7 = 29" was blocked as a foreign
+  // name for every class holding a Silva. Found by the M4 tutor tests, not by this file's own.
+  'solve',
 ]);
 
 /**
@@ -171,9 +289,6 @@ function personLikeCount(text, excludeKeys) {
 }
 
 export function aggregateLeak(reply, permittedNames = []) {
-  if (RANK_PATTERNS.some((re) => re.test(reply))) return true;
-  if (AGGREGATE_PATTERNS.some((re) => re.test(reply))) return true;
-
   const excludeKeys = new Set();
   for (const name of permittedNames) {
     for (const part of [name, ...String(name).split(/\s+/)]) {
@@ -181,6 +296,14 @@ export function aggregateLeak(reply, permittedNames = []) {
       if (key) excludeKeys.add(key);
     }
   }
+
+  const matched = RANK_PATTERNS.some((re) => re.test(reply))
+    || AGGREGATE_PATTERNS.some((re) => re.test(reply))
+    || countAware().some((re) => re.test(reply));
+
+  // A phrase alone is not a leak when the reply is refusing and carries no data to leak.
+  if (matched) return !isRefusalOnly(reply, excludeKeys);
+
   return personLikeCount(reply, excludeKeys) >= 2;
 }
 
@@ -408,7 +531,6 @@ export function decodeBase64Runs(text) {
 const WRITE_CLAIM_PATTERNS = [
   /\bi(?:'ve|\s+have|\s+has)?\s*(?:just\s+)?(?:now\s+)?(?:marked|recorded|updated|changed|cleared|set|saved|added)\b/i,
   /\b(?:has|have|is|are)\s+(?:now\s+)?been\s+(?:marked|recorded|updated|changed|cleared|set|saved)\b/i,
-  /\b(?:is|are)\s+now\s+(?:paid|cleared|zero|marked|recorded|present|absent|updated|settled)\b/i,
   /\b(?:fee|fees|balance|payment|marks?|attendance)\b[^.\n]{0,24}\b(?:marked\s+as\s+paid|set\s+to\s+zero|cleared\s+now)\b/i,
   /\bdone\b[^.\n]{0,20}\b(?:paid|recorded|marked|updated)\b/i,
   /සටහන්\s*(?:කළා|කරලා|කළෙමි|කර ඇත)/,
@@ -419,8 +541,35 @@ const WRITE_CLAIM_PATTERNS = [
   /புதுப்பிக்கப்பட்ட(?:து|ுள்ளது)/,
 ];
 
+/**
+ * "… is now settled / paid / cleared." Change language, so it blocks — with one exemption below.
+ *
+ * It was in the list above unconditionally, and it blocked a **truthful read-back**: `summarise()`
+ * in `actions-parent/actions.mjs` emits exactly the November row this fires on, so a parent asking
+ * whether their own fee had been received could meet a refusal. Requirement 7.2 is what broke.
+ */
+const STATE_NOW_RE = /\b(?:is|are)\s+now\s+(?:paid|cleared|zero|marked|recorded|present|absent|updated|settled)\b/i;
+
+/**
+ * Two money figures in one sentence — the shape only a *read* of the stored fee row produces
+ * ("Rs. 2,500 received of Rs. 2,500"). A write claim invented out of a user's say-so has no
+ * figures to quote, because no action returned any.
+ */
+const FIGURE_PAIR = /rs\.?\s*[\d,]+(?:\.\d+)?[^.\n]{0,32}rs\.?\s*[\d,]+/i;
+
 export function writeClaim(reply) {
-  return WRITE_CLAIM_PATTERNS.some((re) => re.test(reply));
+  if (WRITE_CLAIM_PATTERNS.some((re) => re.test(reply))) return true;
+  if (!STATE_NOW_RE.test(reply)) return false;
+
+  // ponytail: the exemption is the figure pair, and the ceiling is a model that fabricates a
+  // matching pair — which rule 3 of the agent instruction forbids ("use only what your actions
+  // return") and which the action's own response contradicts. It is a thin ceiling, and it is the
+  // right place for one: what actually stops a fee from changing is structural, not textual —
+  // `actions-parent` has no write action and its IAM carries no write permission, proved offline
+  // for cases B1 and B2 with zero queries and zero puts. Check 6 is the backstop for a model that
+  // *lies* about a write, and it still blocks every self-attributed and passive-completion
+  // phrasing above, figures or no figures.
+  return !FIGURE_PAIR.test(reply);
 }
 
 // =================================================================================================
@@ -431,6 +580,9 @@ export function writeClaim(reply) {
 function coreChecks({ role, text, userMessage, foreignNames, permittedNames }) {
   if (instructionLeak(text)) return REASONS.instructionLeak;
   if (foreignName(text, foreignNames)) return REASONS.foreignName;
+  // Checked for every role, including the teacher: a number in a reply is either a leak or an
+  // invention, and this product has no path that puts a real one there (requirement 7.4).
+  if (contactNumber(text)) return REASONS.contactNumber;
   if (role !== 'teacher' && aggregateLeak(text, permittedNames)) return REASONS.aggregateLeak;
   if (role === 'student' && finalAnswerLeak(text, userMessage)) return REASONS.finalAnswer;
   return null;

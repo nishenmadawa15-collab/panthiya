@@ -17,6 +17,11 @@
 const INPUT_CODES = new Set([
   'invalid_input',
   'name_required',
+  'student_id_required',      // DELETE /teacher/students/{id} with no id in the path (req 13.8)
+  // `drafts.mjs` has thrown this since M2, but it was never listed here, so the closed set below
+  // quietly collapsed it to `invalid_input` and the approve route answered a missing draft id with
+  // the vaguest code it has. Found by the 2.10 lane while adding the line above.
+  'draft_id_required',
   'class_name_required',
   'amount_invalid',
   'amount_out_of_range',

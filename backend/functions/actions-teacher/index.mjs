@@ -6,6 +6,15 @@
 // Bedrock expects. All authorisation and all business logic live in `actions.mjs`, which is why
 // that file is the one the unit tests drive directly.
 //
+// Two kinds of invocation arrive here, and the difference decides the response shape:
+//   - a Bedrock action-group event, which carries `function` → the envelope below;
+//   - an HTTP API event, which carries `routeKey` → `statusCode` / `headers` / `body`, exactly as
+//     `functions/read/index.mjs` builds it. The two teacher writes of design §5 that are buttons
+//     rather than sentences (approve a draft, delete a student) arrive this way, and `HTTP_ROUTES`
+//     is the whole list of them. An action absent from that table is unreachable over HTTP, and an
+//     action absent from `DISPATCH` is unreachable by the model — which is how `deleteStudent`
+//     stays a deliberate teacher action instead of something an agent can be argued into.
+//
 // Three return paths, and the difference between them matters:
 //   - `{ ok: true }`          → SUCCESS. A write happened and was audited in this invocation.
 //   - `{ ok: false, ask|confirm }` → REPROMPT. Nothing was written. The teacher is asked something.
@@ -18,10 +27,24 @@
 import { deny, DenyError } from '../../lib/auth.mjs';
 import { ACTIONS } from './actions.mjs';
 import { DRAFT_ACTIONS } from './drafts.mjs';
+import { HTTP_ONLY_ACTIONS } from './erase.mjs';
 import { InputError } from './validate.mjs';
 
 /** The action table of design §6.2, in full: the four writes plus the draft/approval pair. */
 const DISPATCH = { ...ACTIONS, ...DRAFT_ACTIONS };
+
+/**
+ * The teacher writes that arrive over HTTP, keyed by the HTTP API `routeKey` — which is the
+ * template's own route string, and therefore the safest thing to dispatch on.
+ *
+ * Both routes exist in `template.yaml` already. `deleteStudent` appears here and nowhere else;
+ * `approveParentUpdate` is reachable both ways on purpose, because a teacher approves a draft either
+ * by tapping the button in the drafts view or by saying so in the chat (requirement 6.3).
+ */
+const HTTP_ROUTES = {
+  'DELETE /teacher/students/{id}': HTTP_ONLY_ACTIONS.deleteStudent,
+  'POST /teacher/drafts/{id}/approve': DRAFT_ACTIONS.approveParentUpdate,
+};
 
 /** Keep Bedrock's routing fields to the shape of our own schema names before echoing them. */
 const safeName = (v) => (typeof v === 'string' ? v.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) : '') || 'unknown';
@@ -73,6 +96,51 @@ const PROMPTS = {
     + 'by `reason`, and do not substitute a value of your own.',
 };
 
+// --- the HTTP boundary (design §5) -------------------------------------------------------------
+
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
+const httpReply = (status, body) => ({ statusCode: status, headers: JSON_HEADERS, body: JSON.stringify(body) });
+
+/**
+ * The route this invocation is for, or `''` when it is not an HTTP one.
+ *
+ * Four lines duplicated from `functions/read/index.mjs` rather than shared: importing across
+ * function directories to save them would couple two Lambdas that otherwise have nothing in common,
+ * and `lib/` is for the security spine, not for request plumbing.
+ */
+export function routeKeyOf(event) {
+  if (typeof event?.routeKey === 'string' && event.routeKey) return event.routeKey;
+
+  const method = event?.requestContext?.http?.method;
+  const path = event?.requestContext?.http?.path ?? event?.rawPath;
+  return method && path ? `${method} ${path}` : '';
+}
+
+/**
+ * Serve one HTTP route. Status codes carry a closed-set code and never the client's own text, for
+ * the same reason `DenyError` does — an echoed path parameter is a reflected payload.
+ *
+ *   403 denied        wrong role, or an id outside the caller's scope. A student who does not exist
+ *                     returns `out_of_scope` too, so a probe learns nothing from the difference.
+ *   400 bad_request   a malformed request (no id in the path).
+ *   404 not_found     an HTTP route this function does not serve.
+ *   500               a genuine fault, including a deletion that stopped partway. Never reported
+ *                     as success: a half-erased child must be visible, and the retry is safe.
+ */
+async function serveHttp(event, routeKey, deps) {
+  const action = HTTP_ROUTES[routeKey];
+  if (!action) return httpReply(404, { error: 'not_found' });
+
+  try {
+    return httpReply(200, await action(event, deps, { today: todayInColombo(event) }));
+  } catch (e) {
+    if (e instanceof DenyError) return httpReply(403, { error: 'denied', reason: e.code });
+    if (e instanceof InputError) return httpReply(400, { error: 'bad_request', reason: e.code });
+    throw e;
+  }
+}
+
 /**
  * @param event the Bedrock action-group invocation
  * @param provided injected `{ query, put, tables }`. Omitted in Lambda, where `ddb.mjs` is loaded
@@ -80,6 +148,14 @@ const PROMPTS = {
  *   suite deliberately has no dependencies installed to pull it from.
  */
 export const handler = async (event, provided) => {
+  // An HTTP event carries a route and no `function`; a Bedrock one is the other way round. Checked
+  // in this order so a route can never be answered with a Bedrock envelope, which API Gateway would
+  // hand back to the browser as a 200.
+  const routeKey = routeKeyOf(event);
+  if (routeKey) {
+    return serveHttp(event, routeKey, provided ?? (await import('../../lib/ddb.mjs')).deps());
+  }
+
   const action = DISPATCH[event?.function];
 
   // An unknown or absent action name is a routing mistake or a probe, not a request. Fail closed
