@@ -45,6 +45,44 @@
     { "studentId": "stu-12", "displayName": "Keerthana Thevarajah",    "nameSinhala": "කීර්තනා තේවරාජා",    "nameTamil": "கீர்த்தனா தேவராஜா",  "parentSub": "SEED-PARENT-12", "parentName": "Mr. Thevarajah" }
   ],
 
+  "_messages_readme": "Three parent updates about Kasun (stu-01), the one child linked to the demo parent login. Two are approved and one is still a draft, so the approval gate of requirement 6.2 is doing real work in the demo rather than being asserted: the parent sees two, the teacher sees three. Every sentence is built only from rows this same file seeds, and `sourceFacts` names them in the shape drafts.mjs writes - `{table, key, value}` - so a seeded row and a real one are indistinguishable to the inbox.",
+
+  "messages": [
+    {
+      "messageId": "msg-seed-fee-nov",
+      "studentId": "stu-01",
+      "status": "approved",
+      "createdAt": "2026-11-05T11:20:00.000Z",
+      "approvedAt": "2026-11-05T11:35:00.000Z",
+      "body": "November fee received: Rs. 2,500 of Rs. 2,500, paid in cash on 5 November. Nothing is outstanding for this month.\nPlease contact the class teacher if you would like to discuss this.",
+      "sourceFacts": [
+        { "table": "fees", "key": "stu-01#2026-11", "value": "2500/2500 LKR" }
+      ]
+    },
+    {
+      "messageId": "msg-seed-mark-nov",
+      "studentId": "stu-01",
+      "status": "approved",
+      "createdAt": "2026-11-06T04:10:00.000Z",
+      "approvedAt": "2026-11-06T04:52:00.000Z",
+      "body": "November test, 5 November: 68 out of 100 in Mathematics.\nPlease contact the class teacher if you would like to discuss this.",
+      "sourceFacts": [
+        { "table": "marks", "key": "stu-01#2026-11-05#november-test", "value": "68/100" }
+      ]
+    },
+    {
+      "messageId": "msg-seed-summary-draft",
+      "studentId": "stu-01",
+      "status": "draft",
+      "createdAt": "2026-11-16T15:05:00.000Z",
+      "body": "November summary: the Rs. 2,500 fee was received on 5 November, and the November test on 5 November was 68 out of 100.\nPlease contact the class teacher if you would like to discuss this.",
+      "sourceFacts": [
+        { "table": "fees", "key": "stu-01#2026-11", "value": "2500/2500 LKR" },
+        { "table": "marks", "key": "stu-01#2026-11-05#november-test", "value": "68/100" }
+      ]
+    }
+  ],
+
   "fees": [
     { "studentId": "stu-01", "period": "2026-11", "amountDue": 2500, "amountPaid": 2500, "method": "cash", "paidOn": "2026-11-05" },
     { "studentId": "stu-02", "period": "2026-11", "amountDue": 2500, "amountPaid": 2500, "method": "cash", "paidOn": "2026-11-05" },

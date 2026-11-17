@@ -66,7 +66,7 @@ function tableNames() {
 
   const outputs = Object.fromEntries(JSON.parse(raw).map((o) => [o.OutputKey, o.OutputValue]));
   const need = ['ClassesTableName', 'StudentsTableName', 'AttendanceTableName',
-    'FeesTableName', 'MarksTableName', 'AuditLogTableName'];
+    'FeesTableName', 'MarksTableName', 'MessagesTableName', 'AuditLogTableName'];
 
   const missing = need.filter((k) => !outputs[k]);
   if (missing.length) throw new Error(`stack "${STACK}" is missing outputs: ${missing.join(', ')}`);
@@ -131,7 +131,7 @@ const outputs = APPLY ? tableNames() : null;
 const subs = APPLY ? demoSubs(outputs.UserPoolId) : null;
 
 const data = JSON.parse(readFileSync(join(HERE, 'demo-class.json'), 'utf8'));
-const { class: cls, teacher, students, fees, attendance, marks } = data;
+const { class: cls, teacher, students, fees, attendance, marks, messages } = data;
 const now = new Date().toISOString();
 
 /** One audit row per seeded write, so the demo audit log is not empty and requirement 10.1 holds. */
@@ -151,7 +151,7 @@ const auditFor = (action, targetId, after) => {
   });
 };
 
-const items = { classes: [], students: [], attendance: [], fees: [], marks: [] };
+const items = { classes: [], students: [], attendance: [], fees: [], marks: [], messages: [] };
 
 items.classes.push({
   classId: cls.classId,
@@ -232,6 +232,49 @@ for (const m of marks) {
   auditFor('seed.addMarks', `${m.studentId}#${assessmentId}`, m.score);
 }
 
+/**
+ * The parent updates, in the exact shape `actions-teacher/drafts.mjs` writes.
+ *
+ * Without these the parent inbox is empty after a real seed, and the demo beat "a fee is recorded
+ * and the parent gets an approved update" has no data behind it — found while writing the demo
+ * script, because the only thread content in the project was a mock in `parent.js`.
+ *
+ * Two are approved and one is still a draft, so requirement 6.2's approval gate is *doing* something
+ * in the demo rather than being asserted: the parent sees two, the teacher sees three. Every
+ * sentence is built only from rows this same file seeds, and `sourceFacts` names them, so a seeded
+ * row and one the agent drafted are indistinguishable to the inbox.
+ *
+ * `statusCreatedAt` is the composite of design §4.0 and is what both GSIs sort on — omit it and the
+ * row is invisible to the index, which is the failure that looks like "the inbox is just empty".
+ * The parent group reads `begins_with(statusCreatedAt, 'approved#')`, so the draft below cannot
+ * reach a parent even if every filter above it were wrong.
+ */
+for (const m of messages) {
+  const student = students.find((s) => s.studentId === m.studentId);
+  if (!student) throw new Error(`seed: message ${m.messageId} names an unknown student`);
+
+  items.messages.push({
+    messageId: m.messageId,
+    studentId: m.studentId,
+    classId: cls.classId,
+    teacherId: subs?.teacher ?? teacher.teacherSub,
+    status: m.status,
+    createdAt: m.createdAt,
+    statusCreatedAt: `${m.status}#${m.approvedAt ?? m.createdAt}`,
+    ...(m.approvedAt ? { approvedAt: m.approvedAt } : {}),
+    body: m.body,
+    sourceFacts: m.sourceFacts,
+    createdBy: subs?.teacher ?? teacher.teacherSub,
+    // Only when the child has a linked parent, exactly as drafts.mjs does: an empty GSI key is
+    // worse than an absent one. Of the twelve children only stu-01 is linked to the demo login.
+    ...(items.students.find((s) => s.studentId === m.studentId)?.parentSub
+      ? { parentSub: items.students.find((s) => s.studentId === m.studentId).parentSub }
+      : {}),
+  });
+  auditFor(`seed.${m.status === 'approved' ? 'approveParentUpdate' : 'draftParentUpdate'}`,
+    m.messageId, m.status);
+}
+
 // --- Sanity checks before anything is written ---------------------------------------------------
 
 const problems = [];
@@ -239,6 +282,18 @@ if (students.length !== 12) problems.push(`expected 12 students, found ${student
 for (const m of items.marks) {
   if (m.score < 0 || m.score > m.maxScore) problems.push(`mark out of range for ${m.studentId}`);
 }
+// The approval gate is the demo's whole point on that screen, so it is checked rather than assumed.
+const approved = items.messages.filter((m) => m.status === 'approved');
+const drafts = items.messages.filter((m) => m.status === 'draft');
+if (!approved.length) problems.push('no approved parent update — the inbox would be empty');
+if (!drafts.length) problems.push('no draft parent update — the approval gate would demo nothing');
+for (const m of items.messages) {
+  if (!m.statusCreatedAt.startsWith(`${m.status}#`)) {
+    problems.push(`${m.messageId}: statusCreatedAt does not match its status, so it is index-invisible`);
+  }
+  if (!m.sourceFacts?.length) problems.push(`${m.messageId}: no sourceFacts (requirement 6.1)`);
+}
+
 const dilmi = items.marks.find((m) => m.studentId === 'stu-02');
 if (!dilmi || dilmi.score !== 72) {
   problems.push('Dilmi’s November mark must stay 72 — red-team case D2 depends on it');
@@ -290,6 +345,7 @@ if (!APPLY) {
 const target = {
   classes: outputs.ClassesTableName,
   students: outputs.StudentsTableName,
+  messages: outputs.MessagesTableName,
   attendance: outputs.AttendanceTableName,
   fees: outputs.FeesTableName,
   marks: outputs.MarksTableName,

@@ -12,7 +12,7 @@ Built by **Nishen Madawa Abedeera**, cybersecurity undergraduate at SLTC, Sri La
 | | |
 |---|---|
 | Live app | _TODO: Amplify URL once M0 is deployed_ |
-| Build status | **M0–M3 code complete**, 270 tests passing · 41/79 tasks ([plan](.kiro/specs/panthiya/tasks.md) · [next session](docs/NEXT-SESSION.md)) |
+| Build status | **M0–M6 code complete**, 469 tests passing · 60/79 tasks ([plan](.kiro/specs/panthiya/tasks.md) · [next session](docs/NEXT-SESSION.md)) |
 | Licence | [MIT](LICENSE) |
 | Demo video | _TODO: M7_ |
 

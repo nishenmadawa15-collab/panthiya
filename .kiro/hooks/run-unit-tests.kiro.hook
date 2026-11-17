@@ -1,14 +1,17 @@
 {
   "enabled": true,
-  "name": "Run unit tests on backend save",
-  "description": "Whenever a Lambda, a shared library or a test changes, run the offline unit suite. It uses the Node.js built-in test runner and touches no AWS service, so it is free to run on every save.",
+  "name": "Run unit tests on save",
+  "description": "Whenever a Lambda, a shared library, a script, the seed, a front-end asset or a test changes, run the offline unit suite. The four patterns beyond backend/ were added after three lanes in one day wrote code this hook would never have run. It uses the Node.js built-in test runner and touches no AWS service, so it is free to run on every save.",
   "version": "1",
   "when": {
     "type": "fileEdited",
     "patterns": [
       "backend/functions/**/*.mjs",
       "backend/lib/**/*.mjs",
-      "tests/unit/**/*.mjs"
+      "tests/unit/**/*.mjs",
+      "backend/seed/**/*.mjs",
+      "scripts/**/*.mjs",
+      "frontend/assets/**/*.js"
     ]
   },
   "then": {
