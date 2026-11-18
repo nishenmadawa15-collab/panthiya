@@ -82,10 +82,18 @@ function invoke(modelId, text) {
   const inFile = join(dir, 'in.json');
   const outFile = join(dir, 'out.json');
 
-  // Nova and Claude take different request shapes.
+  // Nova, Claude and OpenAI each take a different request shape.
+  //
+  // ponytail: the OpenAI branch is the Chat Completions shape these models take on Bedrock, and
+  // it is the one thing here nobody has run. If it comes back 400 on the body rather than on the
+  // prompt, the fallback is `aws bedrock-runtime converse`, which is model-agnostic and would let
+  // all three branches collapse into one — worth doing then, not before, because converse would
+  // change the two shapes that are already known to work.
   const body = modelId.startsWith('anthropic.')
     ? { anthropic_version: 'bedrock-2023-05-31', max_tokens: 300, messages: [{ role: 'user', content: [{ type: 'text', text }] }] }
-    : { messages: [{ role: 'user', content: [{ text }] }], inferenceConfig: { maxTokens: 300, temperature: 0 } };
+    : modelId.startsWith('openai.')
+      ? { messages: [{ role: 'user', content: text }], max_completion_tokens: 300, temperature: 0 }
+      : { messages: [{ role: 'user', content: [{ text }] }], inferenceConfig: { maxTokens: 300, temperature: 0 } };
 
   writeFileSync(inFile, JSON.stringify(body));
   execFileSync('aws', ['bedrock-runtime', 'invoke-model',
@@ -96,13 +104,22 @@ function invoke(modelId, text) {
   const raw = JSON.parse(readFileSync(outFile, 'utf8'));
   rmSync(dir, { recursive: true, force: true });
 
-  return modelId.startsWith('anthropic.')
-    ? raw.content?.map((c) => c.text).join('') ?? ''
-    : raw.output?.message?.content?.map((c) => c.text).join('') ?? '';
+  if (modelId.startsWith('anthropic.')) return raw.content?.map((c) => c.text).join('') ?? '';
+  if (modelId.startsWith('openai.')) return raw.choices?.[0]?.message?.content ?? '';
+  return raw.output?.message?.content?.map((c) => c.text).join('') ?? '';
 }
 
 console.log(`Day-1 Sinhala gate — region ${REGION}`);
 console.log(`Candidates: ${CANDIDATES.join(', ')}`);
+
+if (CANDIDATES.some((m) => m.startsWith('openai.')) && !REGION.startsWith('us-')) {
+  console.log(`
+⚠  An OpenAI model is in the list but the region is ${REGION}. These models are served from the
+   US regions, and asking the wrong region fails with a message that reads as if the model does
+   not exist. Set AWS_REGION=us-east-1 (or us-west-2) for this run.
+   Why this matters: Bedrock Managed Agents runs OpenAI models, so if the challenge means BMA
+   (docs/NEXT-SESSION.md §0a) this gate has to pass on one of them, not on Nova.`);
+}
 console.log(`${CASES.length} prompts per model, ~300 output tokens each. Expected cost: well under US$0.05 total.\n`);
 
 if (!YES) {

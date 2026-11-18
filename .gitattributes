@@ -1,0 +1,17 @@
+# The repo has mixed line endings and no normalisation, which is how a one-line change arrives as a
+# whole-file diff and buries the real edit. Found by the accessibility lane on 2026-11-18.
+#
+# Text files are normalised to LF in the repository; Git still checks them out with the native
+# ending on Windows. The two woff2 subsets and any future image are marked binary so Git never
+# tries to "fix" their bytes.
+
+* text=auto eol=lf
+
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.mp4 binary
+*.zip binary
