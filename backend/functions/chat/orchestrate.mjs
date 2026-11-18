@@ -297,10 +297,19 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
     const content = response?.output?.message?.content;
     if (!Array.isArray(content)) throw new LoopError('model_response_unreadable');
 
-    if (response.stopReason !== 'tool_use') return textOf(content);
+    if (response.stopReason !== 'tool_use') {
+      // The mirror of the refusal below: a tool-use block whose stop reason says the turn is over.
+      // Returning the text would drop the tool use silently, invoke nothing, and pass off whatever
+      // the model wrote as the reply — an answer out of its own knowledge.
+      if (content.some((block) => block?.toolUse)) throw new LoopError('tool_use_without_stop_reason');
+      return textOf(content);
+    }
 
     const uses = content.filter((block) => block?.toolUse).map((block) => block.toolUse);
     if (uses.length === 0) throw new LoopError('tool_use_without_tool');   // malformed: do not guess
+    // A `toolResult` with no `toolUseId` is a ValidationException from Converse, which would come
+    // back as a raw AWS error and be reported as `agent_unavailable`. Refused under its own name.
+    if (uses.some((use) => !use.toolUseId)) throw new LoopError('tool_use_without_id');
 
     // The assistant turn goes back verbatim, tool-use blocks and all, or the toolResult ids it is
     // answering have nothing to attach to.

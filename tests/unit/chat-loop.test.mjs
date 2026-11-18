@@ -151,18 +151,29 @@ test('a REPROMPT from an action group is fed back as a result, not as a tool fai
 });
 
 test('the model is offered exactly its own role\'s tools, and the teacher tools are not among a student\'s', async () => {
-  for (const role of ['teacher', 'parent', 'student']) {
+  // Written out rather than read back from `toolNamesFor`: comparing the offered list against the
+  // same function that built it asserted `toolsFor(role) === toolsFor(role)`, which no change to
+  // any schema could ever fail.
+  const expected = {
+    teacher: ['addStudent', 'markAttendance', 'recordFee', 'addMarks', 'draftParentUpdate'],
+    parent: ['getMyChildSummary'],
+    student: ['getHint', 'getSimilarExample'],
+  };
+
+  for (const [role, names] of Object.entries(expected)) {
     const deps = fakeLoop({ script: [answers('ok')] });
     await runToolLoop({ inputText: 'hello', sessionAttributes: session(role), deps });
 
     const offered = deps.sent[0].toolConfig.tools.map((t) => t.toolSpec.name);
-    assert.deepEqual(new Set(offered), toolNamesFor(role), `${role} was offered the wrong tools`);
+    assert.deepEqual(offered, names, `${role} was offered the wrong tools`);
   }
 
   const student = fakeLoop({ script: [answers('ok')] });
   await runToolLoop({ inputText: 'hello', sessionAttributes: session('student'), deps: student });
   const names = student.sent[0].toolConfig.tools.map((t) => t.toolSpec.name);
-  for (const forbidden of ['recordFee', 'addMarks', 'getMyChildSummary', 'deleteStudent']) {
+  // Every name here is a real action of another role — `deleteStudent` used to sit in this list and
+  // exists in no schema, so that element proved nothing about role scoping.
+  for (const forbidden of ['recordFee', 'addMarks', 'getMyChildSummary', 'addStudent']) {
     assert.ok(!names.includes(forbidden), `a student session must never be shown ${forbidden}`);
   }
 });
@@ -320,18 +331,76 @@ test('a session with no role never reaches the model at all', async () => {
   assert.equal(deps.sent.length, 0);
 });
 
-test('a malformed model response is an error, not a guess', async () => {
-  for (const response of [
-    {},
-    { stopReason: 'end_turn' },
-    { stopReason: 'tool_use', output: { message: { role: 'assistant', content: [{ text: 'no tool here' }] } } },
+test('a malformed model response is an error, not a guess — and each shape by its own code', async () => {
+  // The code is the assertion: `instanceof LoopError` alone let the three codes stand in for each
+  // other, so a loop that reported every malformed shape as the same thing would have passed.
+  for (const [response, code] of [
+    [{}, 'model_response_unreadable'],
+    [{ stopReason: 'end_turn' }, 'model_response_unreadable'],
+    [{ stopReason: 'tool_use', output: { message: { role: 'assistant', content: [{ text: 'no tool here' }] } } }, 'tool_use_without_tool'],
   ]) {
     const deps = fakeLoop({ script: [response] });
     await assert.rejects(
       () => runToolLoop({ inputText: 'hi', sessionAttributes: session('teacher'), deps }),
-      (err) => err instanceof LoopError,
+      (err) => {
+        assert.ok(err instanceof LoopError);
+        assert.equal(err.code, code);
+        return true;
+      },
     );
   }
+});
+
+test('a tool use with no toolUseId is refused by name, not sent back as a toolResult with no id', async () => {
+  // Converse rejects a `toolResult` whose `toolUseId` key is absent with a ValidationException,
+  // which escapes as a raw AWS error and is reported as `agent_unavailable` — honest, but it names
+  // the wrong thing, and no offline fake can ever see it.
+  const deps = fakeLoop({
+    script: [{
+      stopReason: 'tool_use',
+      output: { message: { role: 'assistant', content: [{ toolUse: { name: 'recordFee', input: {} } }] } },
+    }],
+  });
+
+  await assert.rejects(
+    () => runToolLoop({ inputText: 'Kasun paid 2500', sessionAttributes: session('teacher'), deps }),
+    (err) => {
+      assert.ok(err instanceof LoopError);
+      assert.equal(err.code, 'tool_use_without_id');
+      return true;
+    },
+  );
+  assert.equal(deps.toolCalls.length, 0, 'nothing may be invoked for a tool use we cannot answer');
+});
+
+test('a tool use arriving with stopReason end_turn is refused, not silently dropped', async () => {
+  // The mirror of `tool_use_without_tool`. Returning the text would invoke no tool at all and pass
+  // off whatever the model wrote as a reply — an answer out of its own knowledge, which is exactly
+  // what rule 3 of the instruction forbids.
+  const deps = fakeLoop({
+    script: [{
+      stopReason: 'end_turn',
+      output: {
+        message: {
+          role: 'assistant',
+          content: [
+            { text: 'Recorded Rs. 2500 for Kasun, Sir.' },
+            { toolUse: { toolUseId: 'tu-1', name: 'recordFee', input: { studentName: 'Kasun', amount: '2500' } } },
+          ],
+        },
+      },
+    }],
+  });
+
+  await assert.rejects(
+    () => runToolLoop({ inputText: 'Kasun paid 2500', sessionAttributes: session('teacher'), deps }),
+    (err) => {
+      assert.ok(err instanceof LoopError);
+      assert.equal(err.code, 'tool_use_without_stop_reason');
+      return true;
+    },
+  );
+  assert.equal(deps.toolCalls.length, 0);
 });
 
 // --- layer 2 ----------------------------------------------------------------------------------
@@ -459,6 +528,9 @@ test('every tool spec is derived from backend/agent/schemas, not retyped', async
       // Identity, not similarity: the schema object itself is what the model is sent, so a rule
       // added to a parameter description in the JSON file is in front of the model with no edit here.
       assert.deepEqual(toolSpec.inputSchema.json, op.requestBody.content['application/json'].schema);
+      // The length guard first: `''.includes('')` is true, so an emptied schema description would
+      // pass the carry check while the rule it held had silently left the model's prompt.
+      assert.ok(op.description.length >= 100, `${toolSpec.name}: the schema description is ${op.description.length} characters — too short to hold a rule`);
       assert.ok(toolSpec.description.includes(op.description), `${toolSpec.name}: description must carry the schema's own`);
       assert.ok(toolSpec.description.length <= 1024, `${toolSpec.name}: description too long to rely on`);
       assert.match(toolSpec.name, /^[A-Za-z0-9_-]{1,64}$/);

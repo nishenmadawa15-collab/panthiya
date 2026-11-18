@@ -11,35 +11,66 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 const ROOT = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
 const template = read('backend/template.yaml');
 
-/** Env var names the SAM template actually sets, from any Environment/Variables block. */
-function envVarsSetByTemplate() {
+/**
+ * The `Environment: Variables:` names of one template block, found by indentation.
+ *
+ * Per block, not per file: "set somewhere in the template" was the weakness this replaced. Moving
+ * GUARDRAIL_ID from ChatFunction to any other function would have left defence layer 2 reading an
+ * undefined id with the whole suite still green.
+ */
+function envVarsIn(block) {
   const names = new Set();
-  // Matches "  SOME_NAME: !Ref Thing" / "  SOME_NAME: literal" inside the template.
-  for (const [, name] of template.matchAll(/^\s{4,}([A-Z][A-Z0-9_]*):\s*(?:!|'|"|\w)/gm)) {
-    names.add(name);
+  const head = /^([ ]*)Environment:[ ]*$/m.exec(block);
+  if (!head) return names;
+
+  for (const line of block.slice(head.index + head[0].length).split('\n')) {
+    if (line.trim() === '') continue;
+    if (line.search(/\S/) <= head[1].length) break;   // dedented: out of the Environment block
+    const name = /^\s*([A-Z][A-Z0-9_]*):/.exec(line);
+    if (name) names.add(name[1]);
   }
   return names;
 }
 
-/** Walk backend/ for .mjs files, skipping node_modules and generated output. */
-function backendSources(dir = 'backend') {
-  const out = [];
-  for (const entry of readdirSync(new URL(dir + '/', ROOT), { withFileTypes: true })) {
-    const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === 'out') continue;
-      out.push(...backendSources(path));
-    } else if (entry.name.endsWith('.mjs')) {
-      out.push(path);
+/** Every `AWS::Serverless::Function` in the template, with its handler and its own env vars. */
+function templateFunctions() {
+  const body = template.slice(template.indexOf('\nResources:'));
+  const heads = [...body.matchAll(/^ {2}([A-Za-z0-9]+):[ ]*$/gm)];
+
+  return heads.flatMap((head, i) => {
+    const block = body.slice(head.index, heads[i + 1]?.index ?? body.length);
+    if (!block.includes('Type: AWS::Serverless::Function')) return [];
+    const handler = /^\s*Handler:\s*(\S+)\s*$/m.exec(block);
+    assert.ok(handler, `${head[1]}: a function with no Handler`);
+    return [{ name: head[1], handler: handler[1], vars: envVarsIn(block) }];
+  });
+}
+
+/** Env vars the code behind one handler reads, following its transitive local imports. */
+function envVarsRead(entry) {
+  const names = new Set();
+  const seen = new Set();
+  const queue = [entry];
+
+  while (queue.length) {
+    const file = queue.shift();
+    if (seen.has(file)) continue;
+    seen.add(file);
+
+    const src = read(file);
+    for (const [, name] of src.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) names.add(name);
+    // Static, side-effect and dynamic imports alike; only relative ones, since the rest is the SDK.
+    for (const [, spec] of src.matchAll(/(?:from|import)\s*\(?\s*'(\.[^']+)'/g)) {
+      queue.push(new URL(spec, new URL(file, ROOT)).href.slice(ROOT.href.length));
     }
   }
-  return out;
+  return names;
 }
 
 /** Env vars the Lambda code reads at runtime, minus the ones AWS provides itself. */
@@ -50,15 +81,20 @@ const PROVIDED_BY_LAMBDA = new Set([
   'PANTHIYA_STACK',
 ]);
 
-test('every environment variable the backend reads is set by the SAM template', () => {
-  const set = envVarsSetByTemplate();
-  const missing = [];
+test('every environment variable a function reads is set on that function or in Globals', () => {
+  const globals = envVarsIn(template.slice(template.indexOf('\nGlobals:'), template.indexOf('\nResources:')));
+  assert.ok(globals.has('MODEL_ID'), 'MODEL_ID is set in Globals, and must stay allowed from there');
 
-  for (const file of backendSources()) {
-    const src = read(file);
-    for (const [, name] of src.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
+  const functions = templateFunctions();
+  assert.equal(functions.length, 8, 'the template defines 8 Lambdas — a selector that found none would pass');
+
+  const missing = [];
+  for (const fn of functions) {
+    const entry = `backend/${fn.handler.replace(/\.[^./]+$/, '')}.mjs`;
+    for (const name of envVarsRead(entry)) {
       if (PROVIDED_BY_LAMBDA.has(name)) continue;
-      if (!set.has(name)) missing.push(`${file} reads ${name}`);
+      if (fn.vars.has(name) || globals.has(name)) continue;
+      missing.push(`${fn.name} (${entry}) reads ${name}, set on neither it nor Globals`);
     }
   }
 
