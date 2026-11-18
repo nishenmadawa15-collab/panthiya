@@ -2,32 +2,89 @@
    Tokens are defined once here and referenced everywhere. See .kiro/specs/panthiya/design.md §8.1.
    Contrast ratios against --paper are noted so a change cannot quietly break requirement 12.5. */
 
+/* ================================================================================================
+   SELF-HOSTED INDIC FACES (task 6.6, design §8.2)
+
+   Provenance, because a binary in a repo with no note beside it is a liability:
+     Noto Sans Sinhala  — google/fonts ofl/notosanssinhala, the `sinhala` subset Google Fonts
+                          itself serves (v36), 129,932 bytes
+     Noto Sans Tamil    — google/fonts ofl/notosanstamil,  the `tamil` subset  (v31),  50,468 bytes
+   Both are SIL Open Font License 1.1; the licence travels with them in fonts/OFL.txt. These are
+   real subsets — one script per file, cut from the 1.2 MB and 341 KB variable originals — not the
+   whole font renamed. Variable `wght`, which is why one file covers 400 and the 600/700 the stamps
+   and headings ask for, with no second download and no synthetic bold.
+
+   Three things make this safe under the strict CSP in customHttp.yml:
+     - the files are served from this origin, so `font-src 'self'` already covers them; no header
+       change is needed, and no font CDN is involved;
+     - `font-display: swap` means the device face paints first and the webfont swaps in, so the
+       download never holds up first paint — §8.2's objection to self-hosting, answered rather
+       than argued with;
+     - `unicode-range` is the whole point: a page with no Sinhala character on it never downloads
+       the Sinhala file. The ranges are Google's own for these subsets, minus the codepoints the
+       two scripts share (U+0964-0965, U+25CC) and ZWJ/ZWNJ on the Tamil side, which would
+       otherwise pull the 130 KB Sinhala file onto a Tamil page for one invisible character.
+       U+200C-200D stays on the Sinhala side because si.json uses ZWJ for conjuncts (ක්‍ර), and
+       a joiner shaped by a different font than the letters around it breaks the ligature.
+   ================================================================================================ */
+
+@font-face {
+  font-family: "Noto Sans Sinhala";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/noto-sans-sinhala.woff2") format("woff2");
+  unicode-range: U+0964-0965, U+0D81-0DF4, U+1CF2, U+200C-200D, U+25CC, U+111E1-111F4;
+}
+
+@font-face {
+  font-family: "Noto Sans Tamil";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/noto-sans-tamil.woff2") format("woff2");
+  unicode-range: U+0B82-0BFA, U+20B9;
+}
+
 :root {
   --paper:        #FBF7EE;
   --paper-edge:   #F2EADA;
   --rule:         #C9D7E4;          /* decorative */
   --margin-line:  #C2443A;          /* decorative */
-  --ink:          #1E2733;          /* 13.1:1 on paper */
-  --ink-soft:     #4A5568;          /*  7.0:1 on paper */
-  --stamp-paid:   #2E6B4F;          /*  5.0:1 on paper */
-  --stamp-absent: #A3372C;          /*  5.9:1 on paper */
-  --stamp-draft:  #8A5A00;          /*  4.8:1 on paper */
-  --focus:        #1B4F9C;          /*  6.3:1 on paper */
+  /* Measured, not estimated — WCAG 2.x relative-luminance formula, recomputed in
+     tests/unit/a11y.test.mjs against this file so a token edit cannot quietly break 12.5.
+     Second number is against --paper-edge (the masthead), which is the darker of the two
+     backgrounds and therefore the one that decides the floor. */
+  --ink:          #1E2733;          /* 14.10:1 on paper · 12.60:1 on paper-edge */
+  --ink-soft:     #4A5568;          /*  7.04:1 on paper ·  6.29:1 on paper-edge */
+  --stamp-paid:   #2E6B4F;          /*  5.89:1 on paper ·  5.27:1 on paper-edge */
+  --stamp-absent: #A3372C;          /*  6.25:1 on paper ·  5.59:1 on paper-edge */
+  --stamp-draft:  #8A5A00;          /*  5.54:1 on paper ·  4.96:1 on paper-edge */
+  --focus:        #1B4F9C;          /*  7.43:1 on paper ·  6.64:1 on paper-edge */
 
   --rule-h: 1.75rem;                /* 28px — the ruled line pitch; also the body line-height */
   --margin-x: 14%;                  /* where the red margin sits */
   --page: 44rem;                    /* reading width */
   --radius: 3px;                    /* exercise books are not rounded */
 
-  /* Sinhala and Tamil come from the device stack until the M6 self-hosted Noto subset lands.
-     A font CDN is not an option: customHttp.yml forbids third-party origins.
+  /* "Noto Sans Sinhala" and "Noto Sans Tamil" now resolve to the @font-face rules above; the
+     device faces behind them stay as the fallback for the swap period and for a failed download.
      Order matters: font fallback is per character, so the Latin face must come FIRST or Latin
      text renders in Noto Sans Sinhala's Latin glyphs, which look wrongly tracked. Sinhala and
      Tamil code points miss the Latin faces and fall through to the Indic ones below. */
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto,
                "Noto Sans Sinhala", "Iskoola Pota", "Noto Sans Tamil", "Latha",
                "Nirmala UI", sans-serif;
-  --font-stamp: "Arial Narrow", system-ui, "Noto Sans Sinhala", "Nirmala UI", sans-serif;
+  --font-stamp: "Arial Narrow", system-ui, "Noto Sans Sinhala", "Noto Sans Tamil",
+                "Nirmala UI", sans-serif;
+
+  /* The two bits of Sinhala and Tamil that appear on EVERY page, English included: the "සිං" and
+     "தமிழ்" picker faces and the "ප" brand mark. Eight characters are not worth 180 KB on an
+     English page, so this stack names no webfont at all and lets the device answer — which every
+     target device does (Nirmala UI / Iskoola Pota on Windows, Sinhala Sangam MN on Apple, the
+     system Noto on Android), and a browser's last-resort fallback answers anyway. */
+  --font-ui-indic: system-ui, -apple-system, "Segoe UI", Roboto,
+                   "Iskoola Pota", "Latha", "Nirmala UI", sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -89,6 +146,7 @@ body {
   height: 2.75rem;
   border: 2px solid var(--ink);
   border-radius: var(--radius);
+  font-family: var(--font-ui-indic);
   font-size: 1.5rem;
   line-height: 1;
   background: var(--paper);
@@ -128,6 +186,7 @@ body {
   min-height: 2.75rem;            /* 44px touch target */
   padding: 0.35rem 0.7rem;
   font: inherit;
+  font-family: var(--font-ui-indic);
   font-size: 0.95rem;
   color: var(--ink);
   background: var(--paper);
@@ -365,8 +424,8 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
    TEACHER SCREEN (/teacher/) — appended section. Nothing above this line is changed.
 
    Chat + fee ledger. Reuses the tokens, .sheet, .stamp and :focus-visible rules defined above and
-   introduces no new colour: every ink here is --ink (12.6:1 on --paper-edge, 13.1:1 on --paper),
-   --ink-soft (6.3:1 on --paper-edge, 7.0:1 on --paper) or an existing stamp token.
+   introduces no new colour: every ink here is --ink (12.60:1 on --paper-edge, 14.10:1 on --paper),
+   --ink-soft (6.29:1 on --paper-edge, 7.04:1 on --paper) or an existing stamp token.
    Touch targets are 2.75rem = 44px. The prefers-reduced-motion block above already disables the
    message-arrive slide, because it matches on *.
    ================================================================================================ */
@@ -528,6 +587,18 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
   border: 1.5px dashed var(--ink-soft);
 }
 
+/* A busy phase is `aria-disabled`, never `disabled` (task 6.7, requirement 12.4): disabling the
+   button the user has just pressed hands focus back to <body>, so a keyboard user loses their
+   place for the whole upload and the next Tab restarts at the top of the page. `aria-disabled`
+   says the same thing to assistive tech, keeps the button focusable and its focus ring visible,
+   and the script ignores the click. The look is a border-style change, not a fade, so nothing
+   drops under the 4.5:1 floor. */
+.composer__mic[aria-disabled="true"],
+.composer__send[aria-disabled="true"] {
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 .composer__mic[disabled],
 .composer__send[disabled] { cursor: not-allowed; }
 .composer__send[disabled] { background: var(--ink-soft); border-color: var(--ink-soft); }
@@ -657,9 +728,9 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
      4. structure  — two separate <section>s with their own headings, and no composer in the
         thread at all: the parent cannot write into it and no answer can be appended to it.
 
-   No new colour is introduced: every ink here is --ink (13.1:1 on paper), --ink-soft (7.0:1),
-   --stamp-paid (5.0:1), --stamp-draft (4.8:1) or --focus. The one literal, #FFF4D6, is the caution
-   wash already used by .noscript above; --ink on it is 12.5:1 and --stamp-draft 4.6:1.
+   No new colour is introduced: every ink here is --ink (14.10:1 on paper), --ink-soft (7.04:1),
+   --stamp-paid (5.89:1), --stamp-draft (5.54:1) or --focus. The one literal, #FFF4D6, is the
+   caution wash already used by .noscript above; --ink on it is 13.75:1 and --stamp-draft 5.41:1.
    Touch targets are 2.75rem = 44px. The prefers-reduced-motion block above already disables the
    arrive animations, because it matches on *.
    ================================================================================================ */
@@ -917,10 +988,10 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
                      difference survives greyscale, high-contrast mode and a screen reader.
    The last one is the one that matters: it is the only one a student reading aloud still gets.
 
-   No new colour is introduced. --ink is 13.1:1 on white, 12.6:1 on --paper-edge and 12.5:1 on the
-   #FFF4D6 caution wash already used by .noscript and .ask__caution; --ink-soft is 7.0:1 on paper
-   and 6.3:1 on --paper-edge; --stamp-paid is 5.3:1 on --paper-edge; --stamp-draft is 4.6:1 on
-   #FFF4D6. Touch targets are 2.75rem = 44px, inherited from .composer. The
+   No new colour is introduced. --ink is 15.07:1 on white, 12.60:1 on --paper-edge and 13.75:1 on
+   the #FFF4D6 caution wash already used by .noscript and .ask__caution; --ink-soft is 7.04:1 on
+   paper and 6.29:1 on --paper-edge; --stamp-paid is 5.27:1 on --paper-edge; --stamp-draft is
+   5.41:1 on #FFF4D6. Touch targets are 2.75rem = 44px, inherited from .composer. The
    prefers-reduced-motion block above already disables the arrive animations, because it matches
    on *.
    ================================================================================================ */
@@ -1091,8 +1162,8 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 1rem; }
    RED-TEAM PAGE (/redteam/) — appended section. Nothing above this line is changed.
 
    A 36-row scoreboard, read over somebody's shoulder on a projector and scrolled through on a
-   phone. It introduces no new colour: every ink here is --ink (13.1:1 on --paper), --ink-soft
-   (7.0:1), --stamp-paid (5.0:1), --stamp-absent (5.9:1) or --stamp-draft (4.8:1), and #FFF4D6 is
+   phone. It introduces no new colour: every ink here is --ink (14.10:1 on --paper), --ink-soft
+   (7.04:1), --stamp-paid (5.89:1), --stamp-absent (6.25:1) or --stamp-draft (5.54:1), and #FFF4D6 is
    the warning paper already used by .noscript. Touch targets are 2.75rem = 44px. The
    prefers-reduced-motion block above already covers everything here, because it matches on *.
    ================================================================================================ */

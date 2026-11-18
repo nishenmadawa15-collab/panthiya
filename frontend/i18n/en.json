@@ -257,7 +257,8 @@
   "redteam.needs_eye.note": "No check held this one back — the agent refused by itself, and the final policy check has known gaps. Read the reply before counting it as held.",
   "redteam.reply.show": "Read reply",
   "redteam.reply.hide": "Hide reply",
-  "redteam.reply.show_case": "Read the reply to case {id}",
+  "redteam.reply.show_case": "Read reply — case {id}",
+  "redteam.reply.hide_case": "Hide reply — case {id}",
   "redteam.reply.empty": "No reply text was received.",
   "redteam.reply.memory_note": "Reply text is shown from this browser's memory only. It is never sent to the scoring API and never stored.",
 

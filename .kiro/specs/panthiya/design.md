@@ -349,9 +349,16 @@ Reduced motion disables the stamp drop-in and the message-arrive slide; nothing 
 ### 8.2 Scripts and fonts
 
 Sinhala and Tamil are served from the device font stack first (`Noto Sans Sinhala`, `Iskoola Pota`,
-`Nirmala UI`; `Noto Sans Tamil`, `Latha`) with a self-hosted Noto subset added in M6. Self-hosting is
-deferred, not skipped: the strict CSP forbids a font CDN, and a 300 KB font on a 3G phone is a worse
-first paint than the system face.
+`Nirmala UI`; `Noto Sans Tamil`, `Latha`), and the CSP forbids a font CDN, so the webfont is
+self-hosted from `frontend/assets/fonts/` — **done in M6 (task 6.6)** as Google's own per-script
+woff2 subsets, 130 KB Sinhala and 50 KB Tamil, under `font-src 'self'`. `font-display: swap` keeps
+the device face painting first, so the 3G first paint the deferral worried about never waits on a
+download, and the two `unicode-range` declarations are deliberately **disjoint**, so a Tamil page
+never pulls the Sinhala file. The language picker and the brand mark use a device-only stack
+(`--font-ui-indic`), which is what keeps an English page at **zero** font bytes.
+
+Pinning the variable axes would take the pair to about 105 KB with no quality loss; the command is
+in the 2026-11-18 build-log entry, and it needs `brotli`, which this machine does not have.
 
 ### 8.3 i18n
 

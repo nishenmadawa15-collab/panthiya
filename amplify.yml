@@ -12,6 +12,9 @@ frontend:
         - test -f frontend/i18n/si.json
         - test -f frontend/i18n/ta.json
         - test -f frontend/i18n/en.json
+        # And rather than ship Sinhala or Tamil as tofu boxes.
+        - test -f frontend/assets/fonts/noto-sans-sinhala.woff2
+        - test -f frontend/assets/fonts/noto-sans-tamil.woff2
   artifacts:
     baseDirectory: frontend
     files:

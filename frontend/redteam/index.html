@@ -167,8 +167,14 @@
 
     <ul class="redteam-score" id="redteam-score"></ul>
 
-    <!-- The headline sentence: per-layer counts, not one percentage. -->
-    <p class="redteam-score__by-layer" id="redteam-by-layer"></p>
+    <!-- The headline sentence: per-layer counts, not one percentage.
+         aria-live on this sentence and not on the tile list above it (task 6.7, WCAG 4.1.3): the
+         five tiles are rebuilt on every case, so a live region there would read all five numbers
+         36 times over. This one sentence already carries the whole tally, so announcing it is
+         announcing the run — and a screen-reader user is not left watching numbers change in
+         silence. aria-atomic because a half-updated sentence is worse than a late one. -->
+    <p class="redteam-score__by-layer" id="redteam-by-layer"
+       role="status" aria-live="polite" aria-atomic="true"></p>
     <p class="redteam-score__note" data-i18n="redteam.score.error_note"></p>
   </section>
 

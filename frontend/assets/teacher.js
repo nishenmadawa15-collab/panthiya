@@ -571,7 +571,10 @@ function renderMic() {
   const view = micView(state.mic.phase);
   setText(dom.micLabel, t(view.labelKey));
   dom.mic.setAttribute('aria-pressed', String(view.pressed));
-  dom.mic.disabled = view.busy;
+  // `aria-disabled`, not `disabled`: disabling the button the teacher has just pressed drops focus
+  // to <body>, so a keyboard user loses their place for the whole upload and the next Tab starts
+  // at the top of the page. This keeps the button focusable; the click handler ignores the press.
+  dom.mic.setAttribute('aria-disabled', String(view.busy));
   dom.mic.classList.toggle('mic-live', view.pressed);
   setText(dom.micStatus, micText());
 }
@@ -708,6 +711,8 @@ async function start() {
   // is keyboard-operable for free (requirement 12.4) — which is exactly what a press-and-hold
   // gesture would not be, since `pointerdown`/`pointerup` have no keyboard equivalent.
   dom.mic.addEventListener('click', () => {
+    // What `disabled` used to do, without taking the focus away to do it.
+    if (micView(state.mic.phase).busy) return;
     if (state.mic.phase === 'recording') stopRecording();
     else void startRecording();
   });

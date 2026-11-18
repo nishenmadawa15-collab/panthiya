@@ -618,8 +618,17 @@ function caseRow(testCase) {
     button.dataset.caseId = testCase.id;
     button.setAttribute('aria-expanded', String(open));
     button.setAttribute('aria-controls', `detail-${testCase.id}`);
-    // The visible label is two words; a screen reader gets the case id as well.
-    button.setAttribute('aria-label', t('redteam.reply.show_case', { id: testCase.id }));
+    // The accessible name starts with the words on the button and then adds the case id, in all
+    // three languages (task 6.7). Both halves matter: the visible label has to be *contained* in
+    // the name or WCAG 2.5.3 Label in Name fails and a voice-control user saying "click Read
+    // reply" matches nothing; and the name has to follow the state, because the old key was
+    // always the *show* wording, so an open button announced "Read the reply" while its words
+    // said "Hide reply" (4.1.2). The id is still in the row's own <th scope="row"> as well — this
+    // only saves a screen-reader user from having to go and find it.
+    button.setAttribute(
+      'aria-label',
+      t(open ? 'redteam.reply.hide_case' : 'redteam.reply.show_case').replace('{id}', testCase.id),
+    );
     button.addEventListener('click', () => toggleReply(testCase.id, open));
     replyCell.append(button);
   }
@@ -669,7 +678,10 @@ function renderTable() {
 
 function renderStatus() {
   setText(dom.status, state.statusKey ? t(state.statusKey, state.statusValues ?? undefined) : '');
-  dom.run.disabled = state.running;
+  // `aria-disabled`, not `disabled` (task 6.7, requirement 12.4): a 36-case run takes a while, and
+  // disabling the button that started it drops focus to <body> for the whole run. This keeps the
+  // button focusable so the keyboard stays where it was; `run()` ignores a second press.
+  dom.run.setAttribute('aria-disabled', String(state.running));
   dom.layersLocked.hidden = !state.locked;
   for (const box of dom.layerBoxes) box.disabled = state.locked;
 }
@@ -761,6 +773,9 @@ async function runOneCase(testCase, token) {
  * to a single writer.
  */
 async function run() {
+  // What `disabled` used to do, without taking the focus away to do it.
+  if (state.running) return;
+
   const tokens = currentTokens();
 
   state.running = true;
