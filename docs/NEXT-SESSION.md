@@ -492,7 +492,7 @@ Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ට�
 | 4 | Model choice after the day-1 Sinhala test | before M1 merge |
 | 5 | Should `chat/orchestrate.mjs` echo the `role` it read from the verified claims? One line, and it closes the last ceiling in `score.mjs` — the page and the CLI could then verify the session role instead of trusting the caller's own label | before 5.7 |
 | 6 | Native review of every Sinhala and Tamil string (the table above) | before M6 is called done |
-| 7 | Nov 18 — whether the Bedrock challenge rules permit a parallel Kiroween submission | Nov 18 |
+| 7 | **Half closed 2026-11-18.** The Kiroween rules were read in full from the official page: **nothing in them forbids submitting the same project elsewhere**, the deadline is Dec 4 2:00 PM PT, and judging runs to 2027-01-29 with the project required to stay live for judges throughout (see §0b). Still open: the **Bedrock challenge itself cannot be found** — Devpost's own search for *"agents your rules"*, *"bedrock agents"* and *"managed agents"* returns no such event, on top of two web searches, so `PANTHIYA_SETUP.md` §6 is its only source. **Kiroween is currently the only verified deadline this project has** | **blocking, Nishen only — the invitation email** |
 
 ---
 
@@ -500,7 +500,10 @@ Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ට�
 
 | Date | Milestone |
 |---|---|
-| **Nov 18** | Bedrock challenge rules publish — check whether submitting the same project to Kiroween is allowed |
+| **Nov 18** | ~~Bedrock challenge rules publish~~ — **no such event could be found.** Kiroween's rules were read instead and permit a parallel submission; the Bedrock challenge needs its invitation email |
+| **Dec 1, 12:00 PT** | **Kiro credit request deadline** — 4,000 credits, one allotment, requested through the Credit Request Form with the Kiro user ID or AWS account ID |
+| **Dec 4, 14:00 PT** | **Kiroween submission and registration close.** No extensions, no late submissions (Dec 5, 03:30 in Sri Lanka) |
+| Dec 16 – Jan 29 | **Kiroween judging.** The project must stay available to judges for testing throughout — so the stack stays up, and task 7.9 is answered |
 | Nov 25 | M4 student tutor done — **done early, on Nov 17** |
 | Nov 26–27 | M5 red-team page, 36/36 on screen — page and CLI built; the live score needs the deploy and the two demo logins |
 | Nov 28 | M6 voice + trilingual polish |

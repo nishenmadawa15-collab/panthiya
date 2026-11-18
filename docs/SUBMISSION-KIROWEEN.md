@@ -9,9 +9,89 @@ unanswerable field marked `TODO(nishen)`.
 
 ---
 
-## 0. The question that decides whether this file is used at all
+## 0. What the official rules say, read in full on 2026-11-18
 
-**Unresolved: may the same project be submitted to both the AWS Bedrock challenge and Kiroween?**
+Read from the official page (`kiroween.devpost.com/rules`, updated 2026-11-16). Everything in this
+section is from that text rather than from a summary of it.
+
+**The deadline is Dec 4 2026, 2:00 PM PT** — Dec 5, 3:30 AM in Sri Lanka. Registration closes at the
+same moment, and the rules say plainly that no extensions are granted and late submissions are not
+accepted. The Dec 3 target above is deliberate slack, not the rule.
+
+**The judging period runs 2026-12-16 to 2027-01-29**, winners around Feb 3 — and the rules require
+the project to stay available to judges *"free of charge and without any restriction, for testing,
+evaluation and use ... until the Judging Period ends"*. **So the stack cannot be torn down on
+submission day.** It has to stay up for about ten more weeks, which is the real cost question for
+this project and which answers task 7.9 before anyone asked it: leave it running, and budget for the
+window rather than for the demo.
+
+### Dual submission: the Kiroween half is answered
+
+**Nothing in these rules forbids submitting the same project to another challenge.** The only
+restrictions on where a project may come from are *New Projects Only* — built during the submission
+period, which opened Oct 30; this one began Nov 16 — and *Financial or Preferential Support*, which
+rules out projects funded or contracted by AWS or Devpost. Submissions stay the entrant's own IP,
+with a non-exclusive licence to the sponsor for judging and promotion. The *Multiple Submissions*
+clause is about entering more than one project **into Kiroween**, not about other events.
+
+So half of open decision 7 is closed: Kiroween does not prohibit it. The other half belongs to the
+Bedrock challenge's own rules, and nobody has them.
+
+`TODO(nishen)` — **the Bedrock challenge still cannot be found.** Two web searches and Devpost's own
+search for *"agents your rules"*, *"bedrock agents"* and *"managed agents"* return no such event.
+`PANTHIYA_SETUP.md` §6 remains its only source, including its Dec 2 deadline. The invitation email or
+a URL settles it; until then Kiroween is the only verified deadline this project has.
+
+### What the rules require of the repository, checked against it
+
+| Requirement | State on 2026-11-18 |
+|---|---|
+| `/.kiro` at the repo root, **not** in `.gitignore` (they say this can disqualify) | ✅ nine files tracked, and `.gitignore` carries an explicit comment never to ignore it |
+| Public repo with an open-source licence **detectable in the About section** | ✅ MIT `LICENSE` at the root — confirm GitHub shows it in About once the repo is public |
+| Newly created during the submission period (from Oct 30) | ✅ first commit Nov 16 |
+| **Disclose any pre-existing code** incorporated | ⚠️ the starter pack this repo grew from has to be disclosed — one honest line, see §13 |
+| A URL to a functional application | ❌ needs the Amplify deploy (task 0.15) |
+| Login credentials for judges, in the form's private field | ⚠️ the three demo logins go here — `scripts/demo-users.mjs` creates them |
+| Demo video **under 3 minutes, public, on YouTube** | ❌ task 7.7. YouTube specifically; another host does not satisfy it |
+| A write-up on how Kiro was used | ✅ `docs/KIRO-WRITEUP.md` — and see immediately below |
+
+### The sentence that matters more than any of the above
+
+> *"Insufficient use of Kiro will result in disqualification at the Judges' sole discretion."*
+
+And *Technological Implementation* — 20% of the score — asks **"how thoroughly and skillfully does
+the project use Kiro"**, with the rules listing what the judges want described: Kiro IDE / CLI / Web
+/ Crew, custom agents, agent hooks, spec-driven development, steering docs, MCP, property-based
+testing, and Kiro powers.
+
+`TODO(nishen)` — **this is a decision, not a writing task.** The write-up has to say truthfully which
+tool did which work. A write-up that overstates Kiro's share would be the one dishonest document in
+a project whose entire pitch is honesty about what was measured — and it is judged by the people who
+can see the repository. Whatever the true split is, say it, and let the specs, steering and hooks in
+`/.kiro` carry the weight they really carried.
+
+### Bonus prizes still reachable, with their own deadlines
+
+| Prize | What it needs | Deadline |
+|---|---|---|
+| Kiro credits (4,000, one allotment) | the Credit Request Form, with the Kiro user ID or AWS account ID | **request by Dec 1, 12:00 PM PT**; redeem by Dec 4; expire Dec 31 |
+| Bonus Blog (top 100 → 2,000 credits) | a public blog post on a third-party platform that **says it is for Kiroween 2026** | during the submission period |
+| Social Blitz (5 × 3-month Kiro Pro+) | a public post **starting with** `#KiroweenHackathon26` — the hashtag must be first — about a favourite thing in Kiro | during the submission period |
+| Best Demo ($1,000) | top 10% overall, judged on Presentation | with the submission |
+| Best Student Project ($1,500 + Kiro Pro Max, one per category) | LinkedIn, student email, year, degree, school — **all team members must be students** | with the submission |
+| Best Ghost of Kiroween Past ($2,000) | confirm you registered for Kiroween **2025**; Devpost verifies | with the submission |
+
+The hashtag is **verified**: `#KiroweenHackathon26`, and the rules are explicit that it must be at
+the start of the post. Teams are capped at three people. The category list is confirmed —
+Resurrection, Frankenstein, Skeleton Crew, Costume Contest — and **Frankenstein** is defined as
+*"stitch together a chimera of technologies into one app ... seemingly incompatible elements"*,
+which is the framing §2 already argues.
+
+---
+
+## 0b. ~~The question that decides whether this file is used at all~~ — half closed
+
+~~**Unresolved: may the same project be submitted to both the AWS Bedrock challenge and Kiroween?**~~
 
 The Bedrock challenge rules publish **today, 2026-11-18**, and nobody has read them yet. This is
 recorded as open decision 7 in `docs/NEXT-SESSION.md` §4 and as open question 5 in `design.md` §12,
@@ -292,7 +372,7 @@ in the same hour these were taken, so they were already slightly low when writte
 
 - `TODO(nishen)` — a blog post. The strongest material is already in this repo: the nine defects a
   green suite approved, or the C10 guardrail-versus-a-crying-child decision. Either stands alone.
-- `TODO(nishen)` — a LinkedIn post tagged **#KiroweenHackathon26**. Confirm the exact hashtag against
+- `TODO(nishen)` — a LinkedIn post **starting with** `#KiroweenHackathon26` (verified against the live rules on 2026-11-18; the rules require the hashtag to be the first thing in the post). Previously this line asked to confirm the hashtag against
   the live rules before posting; `PANTHIYA_SETUP.md` is the only source for it here and it has not been
   verified.
 
@@ -307,7 +387,7 @@ in the same hour these were taken, so they were already slightly low when writte
 - [ ] The demo video link (task 7.7).
 - [ ] The four Kiro screenshots the write-up names (§5).
 - [ ] The live red-team score, read off the screen rather than estimated (task 5.7).
-- [ ] The #KiroweenHackathon26 hashtag, verified against the live rules (§12).
+- [x] The #KiroweenHackathon26 hashtag — **verified 2026-11-18** against the official rules, and it must start the post.
 - [ ] Whether to merge `feat/m4-student-tutor` into `main`. Judges will read `main`, and Amplify
       watches it, so until that merge the public repository shows an older project than this file
       describes.
