@@ -73,11 +73,16 @@ export async function handleChat({ claims, body, deps }) {
     try {
       result = await deps.distressCheck(message, lang);
     } catch {
-      result = true;   // if the wellbeing check is broken, err towards care, not towards tutoring
+      result = { hit: true, kind: 'distress' };   // a broken wellbeing check errs towards care
     }
-    if (result) {
-      // A boolean is enough to block; `{hit, kind}` also picks which fixed reply to send.
-      const kind = (typeof result === 'object' && result.kind) || 'distress';
+    // Two shapes are accepted: `true`, and `{hit, kind}` — which is what `classify()` returns and
+    // what picks the medical reply over the distress one. Read `hit` explicitly: `{hit: false}` is
+    // an object, so plain truthiness made every single student message a wellbeing block, and the
+    // model was never reached at all. Nothing caught it, because every test for this block faked
+    // the dependency and none wired the real `classify` through.
+    const hit = result === true || (typeof result === 'object' && result !== null && result.hit === true);
+    if (hit) {
+      const kind = (typeof result === 'object' && result?.kind) || 'distress';
       // This reply is written by a human and stored, never generated. A child in difficulty should
       // not be the one turn where the model improvises, and there is nothing here to jailbreak.
       const reply = deps.distressReply ? deps.distressReply(kind, lang) : null;
