@@ -79,6 +79,10 @@
   "mic.error": "The voice note could not be sent. Nothing was saved — please type it instead.",
   "mic.mock_transcript": "Nimal paid 2500 for November",
 
+  "voice.unsupported_language": "Panthiya cannot understand this language by voice yet. Nothing was saved — please type it instead.",
+  "voice.no_speech": "No speech was found in that recording. Nothing was saved — please try again or type it instead.",
+  "voice.transcribe_failed": "The voice note could not be transcribed. Nothing was saved — please type it instead.",
+
   "ledger.month": "{month} {year}",
   "month.1": "January",
   "month.2": "February",
