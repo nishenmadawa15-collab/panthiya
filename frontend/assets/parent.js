@@ -95,6 +95,7 @@ const state = {
   asked: [],            // {side: 'parent'|'assistant', text?: string, key?: string}
   threadStatusKey: 'parent.thread.loading',
   askStatusKey: '',
+  asking: false,        // a /chat round-trip is open; the send button says so with aria-disabled
 };
 
 const el = (id) => document.getElementById(id);
@@ -296,12 +297,18 @@ function renderAsk() {
 
   dom.askEmpty.hidden = state.asked.length > 0;
   setText(dom.askStatus, state.askStatusKey ? t(state.askStatusKey) : '');
+  // `aria-disabled`, not `disabled`: disabling the button the parent has just pressed drops focus
+  // to <body> for the whole Bedrock round-trip, so the keyboard loses its place and the next Tab
+  // restarts at the top of the page. This keeps it focusable; the submit handler ignores the press.
+  dom.askSend.setAttribute('aria-disabled', String(state.asking));
 
   dom.askLog.scrollTop = dom.askLog.scrollHeight;
 }
 
 dom.askForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  // What `disabled` used to do, without taking the focus away to do it.
+  if (state.asking) return;
 
   const text = dom.askInput.value.trim();
   if (text === '') return;
@@ -309,7 +316,7 @@ dom.askForm.addEventListener('submit', async (event) => {
   dom.askInput.value = '';
   state.asked.push({ side: 'parent', text });
   state.askStatusKey = 'parent.ask.sending';
-  dom.askSend.disabled = true;
+  state.asking = true;
   renderAsk();
 
   try {
@@ -320,9 +327,11 @@ dom.askForm.addEventListener('submit', async (event) => {
     console.error(err);
     state.askStatusKey = 'parent.ask.error';
   } finally {
-    dom.askSend.disabled = false;
+    state.asking = false;
+    // No focus() here: it existed to undo the focus `disabled` had just thrown away. Nothing is
+    // dropped now, so calling it would instead yank the parent back out of the approved thread
+    // they had moved to while waiting (2.4.3, 3.2.5).
     renderAsk();
-    dom.askInput.focus();
   }
 });
 

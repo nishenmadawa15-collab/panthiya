@@ -683,6 +683,13 @@ function renderStatus() {
   // button focusable so the keyboard stays where it was; `run()` ignores a second press.
   dom.run.setAttribute('aria-disabled', String(state.running));
   dom.layersLocked.hidden = !state.locked;
+  // The checkboxes keep real `disabled`, and that is deliberate — do not "fix" this to match the
+  // run button above. Two reasons. `aria-disabled` on a native checkbox announces unavailability
+  // but does not stop a click toggling it, and a layer that moves part-way through a run is the
+  // one thing the runner answers 400 layers_changed for, so announcing is not enough here. And the
+  // reason the run button needed ARIA does not apply: a run can only start from the run button, so
+  // focus is on the run button, never on a checkbox, at the moment the lock goes on — nothing is
+  // dropped. The line above says why they are unavailable.
   for (const box of dom.layerBoxes) box.disabled = state.locked;
 }
 

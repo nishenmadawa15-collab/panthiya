@@ -125,6 +125,7 @@ function mockReply(shape) {
 const state = {
   turns: [],        // {side: 'student', text} | {side: 'tutor', reply?, mock?, blockedBy?}
   statusKey: '',
+  sending: false,   // a /chat round-trip is open; the send button says so with aria-disabled
 };
 
 // Built in start() rather than at module scope so that tests/unit/student-frontend.test.mjs can
@@ -220,6 +221,10 @@ function render() {
 
   dom.empty.hidden = state.turns.length > 0;
   setText(dom.status, state.statusKey ? t(state.statusKey) : '');
+  // `aria-disabled`, not `disabled`: disabling the button the student has just pressed drops focus
+  // to <body> for the whole Bedrock round-trip, so the keyboard loses its place and the next Tab
+  // restarts at the top of the page. This keeps it focusable; submit() ignores the press.
+  dom.send.setAttribute('aria-disabled', String(state.sending));
 
   // Keep the newest hint in view without moving focus.
   dom.log.scrollTop = dom.log.scrollHeight;
@@ -231,6 +236,8 @@ function render() {
 
 async function submit(event) {
   event.preventDefault();
+  // What `disabled` used to do, without taking the focus away to do it.
+  if (state.sending) return;
 
   const text = dom.input.value.trim();
   if (text === '') return;
@@ -238,7 +245,7 @@ async function submit(event) {
   dom.input.value = '';
   state.turns.push({ side: 'student', text });
   state.statusKey = 'student.sending';
-  dom.send.disabled = true;
+  state.sending = true;
   render();
 
   try {
@@ -249,9 +256,11 @@ async function submit(event) {
     console.error(err);
     state.statusKey = 'student.error';
   } finally {
-    dom.send.disabled = false;
+    state.sending = false;
+    // No focus() here: it existed to undo the focus `disabled` had just thrown away. Nothing is
+    // dropped now, so calling it would instead yank the student back from wherever they had moved
+    // during the request (2.4.3, 3.2.5).
     render();
-    dom.input.focus();
   }
 }
 

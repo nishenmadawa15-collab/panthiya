@@ -215,6 +215,7 @@ const state = {
   ledger: null,        // {month, students[]} once loaded
   audit: null,         // [entry, …] in the order the server gave them, once loaded
   chatStatusKey: '',   // pack key, or '' for no status line
+  sending: false,      // a /chat round-trip is open; the send button says so with aria-disabled
   ledgerStatusKey: '',
   auditStatusKey: '',
   // `message` is a server string shown unedited; `messageKey` is one of ours. Never both.
@@ -286,6 +287,10 @@ function renderChat() {
 
   dom.empty.hidden = state.messages.length > 0;
   setText(dom.status, state.chatStatusKey ? t(state.chatStatusKey) : '');
+  // `aria-disabled`, not `disabled`, for the same reason as the microphone below: disabling the
+  // button the teacher has just pressed drops focus to <body> for the whole Bedrock round-trip.
+  // This keeps it focusable; the submit handler ignores the press.
+  dom.send.setAttribute('aria-disabled', String(state.sending));
 
   // Keep the newest message in view without moving focus.
   dom.log.scrollTop = dom.log.scrollHeight;
@@ -301,7 +306,7 @@ function renderChat() {
 async function submitMessage(text) {
   state.messages.push({ side: 'teacher', text });
   state.chatStatusKey = 'chat.sending';
-  dom.send.disabled = true;
+  state.sending = true;
   renderChat();
 
   try {
@@ -312,9 +317,11 @@ async function submitMessage(text) {
     console.error(err);
     state.chatStatusKey = 'chat.error';
   } finally {
-    dom.send.disabled = false;
+    state.sending = false;
+    // No focus() here. It existed to undo the focus `disabled` had just thrown away; now that
+    // nothing is dropped, calling it would instead yank the teacher back from wherever they moved
+    // during the request — the ledger, the mic, the language picker (2.4.3, 3.2.5).
     renderChat();
-    dom.input.focus();
   }
 }
 
@@ -701,6 +708,8 @@ async function start() {
 
   dom.form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    // What `disabled` used to do, without taking the focus away to do it.
+    if (state.sending) return;
     const text = dom.input.value.trim();
     if (text === '') return;
     dom.input.value = '';

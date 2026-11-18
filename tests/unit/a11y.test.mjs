@@ -69,10 +69,13 @@ test('req 12.4 — the skip link becomes visible when it is focused', () => {
 
 test('req 12.4 — a busy control is aria-disabled, never disabled, so focus is not dropped', () => {
   // Disabling the button the user has just pressed hands focus to <body>: the keyboard loses its
-  // place mid-task and the next Tab restarts at the top of the page. Both long-running controls in
-  // the app — the teacher's microphone and the red-team run button — say it with ARIA instead.
+  // place mid-task and the next Tab restarts at the top of the page. Every control in the app that
+  // stays busy across a network round-trip — the teacher's microphone, the red-team run button and
+  // the three chat send buttons — says it with ARIA instead and guards its own handler.
   const teacher = read('frontend/assets/teacher.js');
   const redteam = read('frontend/assets/redteam.js');
+  const student = read('frontend/assets/student.js');
+  const parent = read('frontend/assets/parent.js');
 
   assert.doesNotMatch(teacher, /dom\.mic\.disabled\s*=/, 'teacher.js disables the mic button');
   assert.match(teacher, /dom\.mic\.setAttribute\('aria-disabled'/, 'teacher.js never sets aria-disabled on the mic');
@@ -82,8 +85,49 @@ test('req 12.4 — a busy control is aria-disabled, never disabled, so focus is 
   assert.match(redteam, /dom\.run\.setAttribute\('aria-disabled'/, 'redteam.js never sets aria-disabled on the run button');
   assert.match(redteam, /if \(state\.running\) return;/, 'run() does not ignore a second press');
 
+  // The three send buttons, which were the same defect: a hard `disabled` held for the whole
+  // Bedrock round-trip, which on a slow link is seconds of focus sitting on <body>.
+  for (const [file, source, button, busy] of [
+    ['teacher.js', teacher, 'dom.send', 'state.sending'],
+    ['student.js', student, 'dom.send', 'state.sending'],
+    ['parent.js', parent, 'dom.askSend', 'state.asking'],
+  ]) {
+    const name = button.replace('dom.', '').replace(/[^\w]/g, '');
+    assert.doesNotMatch(
+      source, new RegExp(`${button.replace('.', '\\.')}\\.disabled\\s*=`),
+      `${file} disables the ${name} button, which drops focus to <body> for the whole request`,
+    );
+    assert.match(
+      source, new RegExp(`${button.replace('.', '\\.')}\\.setAttribute\\('aria-disabled'`),
+      `${file} never sets aria-disabled on the ${name} button`,
+    );
+    assert.match(
+      source, new RegExp(`if \\(${busy.replace('.', '\\.')}\\) return;`),
+      `${file} has no busy guard, so an aria-disabled button is still clickable`,
+    );
+  }
+
+  // The red-team layer checkboxes are the one place `disabled` is still right: aria-disabled on a
+  // native checkbox does not stop a click toggling it, and a layer that moves mid-run is exactly
+  // what the runner answers 400 layers_changed for. Nothing is dropped either — a run can only
+  // start from the run button, so focus is never on a checkbox when the lock goes on.
+  assert.match(redteam, /for \(const box of dom\.layerBoxes\) box\.disabled = state\.locked;/,
+    'the layer checkboxes no longer actually prevent a change during a run');
+
   // And an aria-disabled control still has to look unavailable.
   assert.match(CSS, /\[aria-disabled="true"\]/, 'styles.css has no aria-disabled styling');
+  assert.match(
+    CSS, /\.composer__send\[aria-disabled="true"\]\s*\{/,
+    'the send button has no aria-disabled styling, so a busy send looks available',
+  );
+
+  // The focus() that used to paper over the dropped focus has to go with it: once the button keeps
+  // focus, forcing it back into the input steals it from wherever the user moved while waiting.
+  for (const [file, source] of [['teacher.js', teacher], ['student.js', student], ['parent.js', parent]]) {
+    for (const block of source.match(/\} finally \{[\s\S]*?\n  \}/g) ?? []) {
+      assert.doesNotMatch(block, /\.focus\(\)/, `${file} still forces focus in a finally block`);
+    }
+  }
 });
 
 test('req 12.4 — the sideways-scrolling case table is reachable by keyboard', () => {
@@ -141,18 +185,44 @@ test('4.1.3 — the red-team tally announces itself as a run progresses', () => 
   );
 });
 
-test('2.5.3 — the reply toggle\'s accessible name is the words on it', () => {
+test('2.5.3 — the reply toggle\'s accessible name contains the words on it, and follows its state', () => {
   // It used to carry aria-label="Read the reply to case R-01" while the button said "Read reply":
   // the visible label was not contained in the accessible name, so voice control could not reach
-  // it, and an open button still announced the "read" wording. The name is the visible text now;
-  // the case id reaches a screen reader from the row's own <th scope="row">.
+  // it, and the *show* wording was used even when the button said "Hide reply" (4.1.2). The fix is
+  // the show_case/hide_case pair, whose whole basis is that each one starts with the words of the
+  // plain key — in Sinhala and Tamil as well as English, which is what this checks.
   const redteam = read('frontend/assets/redteam.js');
   const block = redteam.match(/const button = el\('button', 'redteam-reply-toggle'[\s\S]{0,1600}?replyCell\.append/);
   assert.ok(block, 'the reply toggle is no longer built where this test looks');
 
-  assert.doesNotMatch(block[0], /button\.setAttribute\('aria-label'/, 'the reply toggle sets an aria-label again');
+  // The name is set, and it is the state-aware key — not the old always-"show" one.
+  assert.match(block[0], /setAttribute\(\s*'aria-label'/, 'the reply toggle sets no aria-label');
+  assert.match(
+    block[0], /open \? 'redteam\.reply\.hide_case' : 'redteam\.reply\.show_case'/,
+    'the accessible name does not follow the open/closed state, so an open button announces "read"',
+  );
+  assert.match(
+    block[0], /t\(open \? 'redteam\.reply\.hide' : 'redteam\.reply\.show'\)/,
+    'the visible label is not the plain show/hide pair the accessible name has to contain',
+  );
   assert.match(block[0], /aria-expanded/, 'the reply toggle does not expose its expanded state');
   assert.match(block[0], /aria-controls/, 'the reply toggle does not point at what it opens');
+
+  for (const lang of ['en', 'si', 'ta']) {
+    const pack = JSON.parse(read(`frontend/i18n/${lang}.json`));
+    for (const [plain, withCase] of [['show', 'show_case'], ['hide', 'hide_case']]) {
+      const label = pack[`redteam.reply.${plain}`];
+      const name = pack[`redteam.reply.${withCase}`];
+      assert.ok(label && name, `${lang}.json is missing redteam.reply.${plain} or .${withCase}`);
+      // WCAG 2.5.3 Label in Name: the visible words have to be *in* the accessible name, or a
+      // voice-control user saying what the button says matches nothing.
+      assert.ok(
+        name.startsWith(label),
+        `${lang}: redteam.reply.${withCase} ("${name}") does not start with the visible label ("${label}")`,
+      );
+      assert.ok(name.includes('{id}'), `${lang}: redteam.reply.${withCase} carries no {id} to fill`);
+    }
+  }
 });
 
 /* ================================================================================================
@@ -214,6 +284,65 @@ test('req 12.5 — the ratio written beside each token is the ratio it actually 
       `--${name} says ${onEdge}:1 on paper-edge but is ${ratio(hex, TOKENS['paper-edge']).toFixed(2)}:1`,
     );
   }
+});
+
+test('req 12.5 — a contrast ratio written out in prose is the ratio it actually has', () => {
+  // The test above only matches the `--name: #hex; /* N:1 on paper · N:1 on paper-edge */` shape,
+  // so it is structurally blind to the section headers, which write ratios out in sentences. That
+  // is exactly how "--stamp-draft … 4.8:1 on paper" and "--stamp-paid … 5.0:1 on paper and 5.7:1
+  // on white" survived a measurement pass. This reads every ratio anywhere in the file, attributes
+  // it to the nearest ink token named before it, and checks it at the precision it was written to.
+  const INKS = ['ink-soft', 'ink', 'stamp-paid', 'stamp-absent', 'stamp-draft', 'focus'];
+  const NAMED = { paper: TOKENS.paper, 'paper-edge': TOKENS['paper-edge'], white: '#FFFFFF', '#FFF4D6': '#FFF4D6' };
+  // 4.5:1 and 3:1 are the WCAG floors this file quotes at itself, not claims about a colour.
+  const FLOORS = new Set(['4.5', '3']);
+  const inkBefore = new RegExp(`--(${INKS.join('|')})(?![\\w-])`, 'g');
+
+  let checked = 0;
+  for (const comment of CSS.matchAll(/\/\*[\s\S]*?\*\//g)) {
+    // The scope a number is read in is its own comment plus the start of the line the comment
+    // opens on, which is what makes `--ink: #1E2733; /* 14.10:1 on paper */` attributable.
+    const from = CSS.lastIndexOf('\n', comment.index) + 1;
+    const scope = CSS.slice(from, comment.index + comment[0].length);
+
+    for (const m of scope.matchAll(/(\d[\d.]*):1(?:\s+on\s+(?:the\s+)?(#[0-9A-Fa-f]{6}|-{0,2}[\w-]+))?/g)) {
+      const [, stated, background] = m;
+      if (FLOORS.has(stated)) continue;
+
+      // Prose that quotes a ratio without naming the ink is the hole the two stale numbers lived
+      // in: "Amber ink is … at 4.8:1 on paper" was unattributable, so nothing could check it.
+      const ink = [...scope.slice(0, m.index).matchAll(inkBefore)].pop()?.[1];
+      assert.ok(
+        ink,
+        `"${stated}:1" is written with no ink token named before it, so nobody can check it: ${scope.trim().slice(0, 80)}`,
+      );
+
+      const hex = TOKENS[ink];
+      const places = (stated.split('.')[1] ?? '').length;
+      const wanted = Number(stated).toFixed(places);
+      const surface = background ? NAMED[background.replace(/^--/, '')] : undefined;
+
+      if (surface) {
+        assert.equal(
+          ratio(hex, surface).toFixed(places), wanted,
+          `--${ink} is written as ${stated}:1 on ${background} but is ${ratio(hex, surface).toFixed(2)}:1`,
+        );
+      } else {
+        // No background named right after the number ("--ink on it is 13.75:1", "(7.04:1)"): then
+        // it has to at least be a real ratio for that ink on a surface the app paints on.
+        const options = Object.entries(BACKGROUNDS).map(([name, bg]) => [name, ratio(hex, bg)]);
+        assert.ok(
+          options.some(([, r]) => r.toFixed(places) === wanted),
+          `--${ink} is written as ${stated}:1, which is none of ${options.map(([n, r]) => `${r.toFixed(2)} on ${n}`).join(', ')}`,
+        );
+      }
+      checked += 1;
+    }
+  }
+
+  // The two stale numbers were both in prose. If this count collapses, either the prose documenting
+  // the palette has gone or this scan has stopped finding it, and the blind spot is back.
+  assert.ok(checked >= 30, `only ${checked} contrast ratios were found in styles.css`);
 });
 
 /* ================================================================================================
