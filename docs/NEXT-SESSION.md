@@ -137,25 +137,38 @@ A URL or the invitation email settles both in five minutes.
 
 | # | Step | Who | Time | Cost |
 |---|---|---|---|---|
-| 1 | `aws configure` (IAM user `panthiya-dev`) and the SAM CLI. **The CLI has neither right now.** Model access no longer needs enabling — that console page has been retired and models auto-enable on first invoke | Nishen | ~20 min | $0 |
+| 1 | `aws configure` (IAM user `panthiya-dev`), then the SAM CLI — `winget install Amazon.SAM-CLI`. **Checked 2026-11-18: the `aws` CLI is already installed (2.36.49); only credentials and SAM are missing.** No model-access step exists any more — that console page has been retired and models auto-enable on first invoke | Nishen | ~15 min | $0 |
 | 2 | 🚦 **The Sinhala gate** — `node scripts/test-sinhala.mjs --yes`, and read the Sinhala replies by eye | Nishen runs, agent reads | ~5 min | under 5¢ |
-| 3 | **The orchestration decision** — the A/B spike above | Agent, Nishen decides | ~2 h | a few cents |
+| 2a | **Which service is this challenge about?** `node scripts/bma-probe.mjs --yes` — read-only, free, and it reads its own 403 for you: identity-shaped means our IAM policy, account-shaped means BMA is blocked too. Needs step 1 only | Agent runs, Nishen reads the verdict | ~2 min | $0 |
+| 3 | **The orchestration decision — now A, B or C** (§0a). **B is built**: 23 tests, deployable, the known quantity. So this is no longer a spike but a choice, and the challenge rules decide it more than the code does | Nishen decides; agent has already built B | ~15 min | $0 |
 | 4 | Create the **Guardrail** from `backend/agent/guardrail.json` (3.1) — unaffected by any of this | Nishen, agent guides | ~10 min | $0 |
 | 5 | 💰 `sam deploy --guided` | **Nishen approves before it runs** | ~10 min | ~$0 |
 | 6 | `demo-users.mjs --apply`, then `seed --apply` — in that order, for the reason in §1 | Agent; Nishen sets the password | ~5 min | ~$0 |
 | 7 | Take and verify the four SWAP POINTs | Agent | ~10 min | $0 |
 | 8 | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page for the version a judge sees. Fix every leak | Agent | 30–40 min | ~$1–2 |
 
-**Step 2 is still early for the same reason.** Five milestones rest on the cheapest model being able
-to read Sinhala. If it cannot, the fix is a parameter rather than a rewrite — but every
-prompt-sensitive behaviour has to be re-measured against the new model, which means step 8. It is
-also worth doing before step 3, since the spike should use the model the project will actually ship.
+**Step 2 is still early for the same reason, but it now has a prerequisite of its own.** Five
+milestones rest on the model being able to read Sinhala — and §0a means nobody yet knows *which*
+model that is. If the challenge is about BMA, the gate has to run against an **OpenAI** model, not
+Nova Micro; the gate can now do that (`--model openai.gpt-oss-120b-1:0`, with `AWS_REGION` set to a
+US region, which it warns about), and it is the only thing allowed to decide the model. So run 2a
+first: it costs nothing and it says which model step 2 should be about. If the gate fails on the
+chosen model the fix is a parameter rather than a rewrite — but every prompt-sensitive behaviour has
+to be re-measured against the replacement, which means step 8.
 
-**Two decisions are needed before step 5**, both in §4: whether `feat/m4-student-tutor` merges into
-`main` (Amplify watches `main`, so there is no live URL until it does), and whether
-`chat/orchestrate.mjs` should echo the verified role.
+**One decision is still needed before step 5** (§4): whether `feat/m4-student-tutor` merges into
+`main`. Amplify watches `main`, so there is no live URL until it does, and judges read `main` — until
+the merge the public repo shows an older project than either submission draft describes. The role
+echo is **settled and implemented** (decision 7).
 
-### Lanes that need no AWS and can run beside all of it
+### ~~Lanes that need no AWS and can run beside all of it~~ — **all three done 2026-11-18**
+
+**Q1, Q2 and Q3 all landed on 2026-11-18, together with option B and the BMA probe. Do not restart
+them.** What they produced: the three `voice.*` keys borrowed verbatim from the voice backend plus a
+parity test that cannot be satisfied by a reworded server message; self-hosted Noto Sinhala and Tamil
+with disjoint unicode-ranges and zero font bytes on an English page; four real accessibility defects
+fixed and two deferred with reasons; and a README that no longer claims a running system, plus both
+submission drafts. The table below is kept only because its notes name the files each lane owned.
 
 | Lane | Deliverable | Tasks |
 |---|---|---|
@@ -249,19 +262,20 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**62 of 79 tasks done. 487 tests pass, nothing skipped. Nothing has been deployed and nothing has
-been spent.**
+**67 of 79 tasks done. 554 tests pass, nothing skipped. Nothing has been deployed and nothing has
+been spent.** (Counted 2026-11-18 at the end of the session. Re-derive rather than trust it:
+`npm test`, and `grep -c "^- \[x\]" .kiro/specs/panthiya/tasks.md`.)
 
 | Milestone | State |
 |---|---|
 | M0 hello page | Code complete |
 | M1 data model + teacher chat | Code complete |
 | M2 roles + parent view | Code complete, sign-in included |
-| M3 defence layers | policyCheck done and audited, audit screen done. Guardrail defined but not created in AWS (3.1) |
+| M3 defence layers | policyCheck done and audited, audit screen done. Guardrail defined but not created in AWS (3.1) — and **how it attaches now depends on §0a**: on a `Converse` call it rides in `guardrailConfig`; on BMA it may have to become an explicit `ApplyGuardrail` call |
 | M4 student tutor | **Done** — action group, tutor page, C1–C10 proved offline |
 | M5 red-team | Runner, scoreboard page and CLI done. The live run (5.7) needs AWS **and two demo logins** |
-| M6 voice + polish | Backend and mic UI done (6.1–6.4). i18n completeness, fonts and the a11y pass remain |
-| M7 docs + submissions | Kiro write-up and demo script done (7.2, 7.3). The rest needs the live run |
+| M6 voice + polish | **Done** (6.1–6.7) — backend, mic UI, the three packs complete and parity-tested, self-hosted Sinhala and Tamil, and the accessibility pass. No browser or screen reader has run, so the a11y pass is a code audit, not a verified one |
+| M7 docs + submissions | Write-up, demo script, README and both submission drafts done (7.1 part, 7.2–7.5). What remains needs the live URL, the video, the measured red-team score, and eight screenshots |
 
 Sixteen commits sit on `feat/m4-student-tutor`, which has not been merged. Everything still runs
 offline, and not one line of it has met a real Bedrock agent — still the single largest unknown.
