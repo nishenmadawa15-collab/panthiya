@@ -111,7 +111,7 @@ undergraduate built it.
 | **Teacher** | Create classes and students; mark attendance, record fees and add marks by chat **or Sinhala/Tamil voice note**; see who owes fees; draft parent updates and approve them before they send; read the audit log |
 | **Parent** | A thread of teacher-approved updates about **their own child only**, plus an ask box answered from stored data about that child |
 | **Student** | The past-paper tutor: hints and a different worked example, never the answer. If the student shows distress, tutoring stops and a fixed, human-written, localised reply points to a trusted adult or the **1926** helpline |
-| **Teacher (`/redteam`)** | Runs all 36 documented attacks against the live system and shows a per-case, per-layer scoreboard |
+| **Teacher (`/redteam`)** | Built to run all 36 documented attacks against the deployed system and show a per-case, per-layer scoreboard. **It has not been run against a live system** — nothing is deployed (§0), so the runner and the page are tested offline and this file carries no score |
 
 Sinhala, Tamil and English throughout, mobile-first, no build step. The theme is a Sri Lankan exercise
 book — ruled lines and a red margin drawn in CSS gradients, rotated "Paid" and "Absent" stamps with no
@@ -126,7 +126,7 @@ The whole repository is the Kiro workflow's output, and `.kiro/` is committed an
 | | What it is |
 |---|---|
 | **Steering** | Three documents in `.kiro/steering/`, all `inclusion: always`, read at the start of every task: the 8 product rules, the tech and cost rules, and the folder and commit conventions |
-| **Specs** | `.kiro/specs/panthiya/` — `requirements.md` (13 requirements in EARS phrasing, plus a table mapping all 36 attacks to the criteria they test), `design.md` (architecture, trust model, 8-table data model, the policyCheck algorithm, the cost model), `tasks.md` (the M0–M7 plan, every AWS step marked `[human]`). All three written and approved **before any application code existed** |
+| **Specs** | `.kiro/specs/panthiya/` — `requirements.md` (13 requirements in EARS phrasing, plus a table mapping all 36 attacks to the criteria they test), `design.md` (architecture, trust model, 8-table data model, the policyCheck algorithm, the cost model), `tasks.md` (the M0–M7 plan, every AWS step marked `[human]`). All three written and approved **before any backend code existed**: the triad landed in commit `f3577cc` alongside the static M0 page, and the first backend module followed 22 minutes later in `33e3709` |
 | **Hooks** | `.kiro/hooks/` — run the unit tests on save; regenerate the red-team suite whenever its own document or the steering rules change; append a row to the build log on task completion |
 
 Three things make that more than paperwork, and each is checkable:
@@ -135,9 +135,19 @@ Three things make that more than paperwork, and each is checkable:
    `backend/agent/instructions.md` reads *"Source of truth: `.kiro/steering/product.md`"*, and each
    numbered line under **Always** is one of the eight rules. Layer 1 is not a prompt somebody wrote;
    it is the steering rules restated as model-facing behaviour.
-2. **The code cites the spec by number.** A grep for requirement and case references across
-   `backend/**/*.mjs` returns **169 matches in 24 files**, plus 79 references to numbered `design.md`
-   sections.
+2. **The code cites the spec by number — every file of it.** Here is the command, so the figure is
+   checkable rather than quotable. Counted 2026-11-18 at 17:53 UTC — and it moved twice while it was
+   being counted, because two other lanes were writing code, so re-run it rather than quoting it:
+
+   ```bash
+   # citations of a numbered requirement or a numbered design.md section
+   grep -rhoiE 'req(uirement)?s? [0-9]+\.[0-9]+|design §[0-9]+(\.[0-9]+)?' backend --include='*.mjs' | wc -l   # 235
+   grep -rliE 'req(uirement)?s? [0-9]+\.[0-9]+|design §[0-9]+(\.[0-9]+)?' backend --include='*.mjs' | wc -l   # 27 files
+   find backend -name '*.mjs' | wc -l                                                                         # 27 files in all
+   ```
+
+   **235 citations, and all 27 `.mjs` files under `backend/` carry at least one** — 144 pointing at a
+   numbered requirement, 91 at a numbered `design.md` section.
 3. **One document is executable.** `docs/RED-TEAM-CASES.md` is the document a judge reads; a hook
    parses it into `tests/redteam/cases.json`, asserts exactly 36 case IDs, and writes both copies the
    app needs — and a test fails if either disagrees with the document. Reword an attack and forget to
@@ -206,8 +216,9 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 - **A refusal that leaks nothing.** An unowned class, a non-existent class, a real child the caller
   may not see and an invented child all return the **byte-identical** refusal — asserted by `deepEqual`
   across English, Sinhala, Tamil, Singlish and a Cyrillic homoglyph.
-- **487 passing tests, nothing skipped, zero dependencies.** The Node.js built-in runner; the whole
-  suite finishes in about five seconds and touches no AWS service, so the save hook can run it freely.
+- **565 passing tests, nothing skipped, zero dependencies** (2026-11-18 17:59 UTC; `npm test`). The
+  Node.js built-in runner, under ten seconds a run — four runs here reported `duration_ms`
+  between 5.5 s and 8.9 s — and it touches no AWS service, so the save hook can run it freely.
 - **A build log that records what broke**, including a defect found by one lane in another lane's code
   and a privacy test that flickered once and was written down rather than dismissed.
 
@@ -262,15 +273,16 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 | Architecture, costs, security, known ceilings | [`README.md`](../README.md) |
 | Build log | [`docs/BUILD-LOG.md`](BUILD-LOG.md) |
 
-**Test and task evidence**, counted 2026-11-18 at 15:40 UTC and expected to move:
+**Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **487 of 487 tests pass, nothing skipped.**
-- **62 of 79 planned tasks done.** Re-check with `npm test` and
+- **565 of 565 tests pass, nothing skipped.**
+- **67 of 79 planned tasks done**, 12 open, 9 of those marked `[human]`. Re-check with `npm test` and
   `grep -c '^- \[x\]' .kiro/specs/panthiya/tasks.md`.
-- **$0 spent, nothing deployed.** Every AWS step in `tasks.md` is `[human]` and none has run.
+- **$0 spent, nothing deployed.** Every AWS step in `tasks.md` is `[human]` and none has run;
+  `aws configure list` on the build machine shows no credentials at all.
 
-`TODO(nishen)` — re-run both counts on the morning of submission. Three lanes were writing code and
-tests when these were taken.
+`TODO(nishen)` — re-run both counts on the morning of submission. Two other lanes were adding tests
+in the same hour these were taken, so they were already slightly low when written.
 
 ---
 

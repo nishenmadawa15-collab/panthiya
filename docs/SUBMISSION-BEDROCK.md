@@ -60,7 +60,7 @@ Panthiya is therefore built rules-first, and the demo is an attack demo.
 | **Teacher** | Create classes and students; mark attendance, record fees and add marks **by chat or by Sinhala/Tamil voice note**; see who owes fees; draft parent updates and approve them before they send; read an append-only audit log of every write |
 | **Parent** | A message thread of teacher-approved updates about **their own child only**, plus an ask box answered from stored data about that child |
 | **Student** | A past-paper tutor for O/L Maths, Science and ICT that gives Socratic hints and a worked example of a **different** problem, and never the final answer |
-| **Teacher (`/redteam`)** | Runs all 36 documented attacks against the live system and shows a per-case, per-layer scoreboard |
+| **Teacher (`/redteam`)** | Built to run all 36 documented attacks against the deployed system and show a per-case, per-layer scoreboard. **It has not been run against a live system** — nothing is deployed (§0, §8), so the page and its runner are tested offline and this repository holds no score |
 
 Interface in Sinhala, Tamil and English, mobile-first, no build step.
 
@@ -142,7 +142,8 @@ Serverless and scales to zero: Amplify Hosting (static, strict CSP) → API Gate
 Cognito JWT authorizer → four Lambdas (`chat`, `read`, `voice`, `redteam`) → three role-scoped action
 Lambdas → eight on-demand DynamoDB tables. Voice notes are a presigned S3 PUT into Amazon Transcribe,
 with an S3 lifecycle rule deleting the audio after one day. No EC2, no NAT Gateway, no RDS, nothing
-billed by the hour. Region `ap-south-1` (Mumbai, ~40 ms from Colombo).
+billed by the hour. Region `ap-south-1` (Mumbai — the nearest AWS region to Sri Lanka; no latency
+from Colombo has been measured, because nothing is deployed).
 
 **The orchestration layer is an open decision, and the submission should say so rather than describe
 something that does not exist.**
@@ -176,6 +177,10 @@ paragraph instead.
 
 ## 7. AWS services used
 
+Every row below is **written into `backend/template.yaml` and not yet created**: no AWS resource for
+this project exists, and `aws configure list` on the build machine shows no credentials at all. Read
+the table as the stack the deploy will make, not as an inventory of a running account.
+
 | Service | What for |
 |---|---|
 | Amazon Bedrock | Model inference, and the Guardrail that is defence layer 2 |
@@ -187,7 +192,7 @@ paragraph instead.
 | Amazon S3 | Voice-note bucket, lifecycle rule deleting objects after one day |
 | AWS Amplify Hosting | Static front end, security headers from `customHttp.yml` |
 | AWS SAM / CloudFormation | The whole stack except Amplify Hosting |
-| AWS Budgets | $10 alert, configured before the first deploy |
+| AWS Budgets | A $10/month alert — **to create by hand in the console before the first deploy.** Unlike every other row, this one is not in `backend/template.yaml` at all: there is no `AWS::Budgets` resource, so no deploy will make it |
 
 `TODO(nishen)` — add AgentCore (Runtime, Gateway, Policy) to this table if option A is chosen in §6.
 
@@ -208,11 +213,22 @@ Target under **US$15** for the whole hackathon. **Spent so far: $0.**
 | S3 + Amplify Hosting | tiny | < $1.00 |
 | **Total** | | **~$7, headroom to $15** |
 
-Held down by `maxTokens` caps (400 tutor / 250 teacher), a 6-turn history window, a 2,000-character
-input limit, a TTL on `redteam_runs`, the one-day S3 lifecycle rule, and the $10 budget alert.
+Held down, in the code as it stands, by **one flat `maxTokens: 1024`** on every turn
+(`backend/functions/chat/index.mjs`), a 2,000-character input limit, a TTL on `redteam_runs`, and the
+one-day S3 lifecycle rule. Two controls named in earlier drafts are not in force, and the difference
+matters to this table:
+
+- **No `maxTokens` split.** The design asked for 400 tutor / 250 teacher. The code sends 1024 for
+  every role, which is over three times the ~300 output tokens the ~$1.50 inference row assumes.
+- **No history window.** `MAX_HISTORY_TURNS = 6` exists in `backend/functions/chat/orchestrate.mjs`,
+  but the loop we built is single-message — it keeps no history and `invokeAgent` does not take the
+  parameter — so the window is not a cost control today. Cheaper, not dearer; it also means cases B7
+  and C6 meet a different system than the one documented (`docs/BUILD-LOG.md`).
+- **The $10 budget alert does not exist.** It is a console step to take before the first deploy (§7).
 
 Every row is an estimate against a system that has never run, so these are the design's assumptions
-and not measurements. Option A in §6 prices runtime, memory and gateway as separate consumption lines,
+and not measurements — and with a 1024-token ceiling in place, **~$7 is the optimistic end** rather
+than a midpoint. Option A in §6 prices runtime, memory and gateway as separate consumption lines,
 so the table needs re-checking if A is chosen. `TODO(nishen)` — replace the total with the amount
 actually spent before submitting, from Cost Explorer (task 7.9).
 
@@ -293,19 +309,21 @@ reply that scored as a pass. A green suite is a necessary condition. It was neve
 | Build log, including every defect | [`docs/BUILD-LOG.md`](BUILD-LOG.md) |
 | Kiro write-up | [`docs/KIRO-WRITEUP.md`](KIRO-WRITEUP.md) |
 
-**Test and task evidence**, counted 2026-11-18 at 15:40 UTC and expected to move:
+**Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **487 of 487 unit and policy tests pass, nothing skipped.** Zero dependencies — the Node.js built-in
-  runner — so the whole suite finishes in about five seconds and touches no AWS service.
-- **62 of 79 planned tasks done.** Re-check with `npm test` and
+- **565 of 565 unit and policy tests pass, nothing skipped.** Zero dependencies — the Node.js built-in
+  runner — and it touches no AWS service. Four runs that evening reported `duration_ms` between
+  5.5 s and 8.9 s on the build machine, so "under ten seconds" is the honest figure; your hardware
+  decides the rest.
+- **67 of 79 planned tasks done**, 12 open, 9 of those marked `[human]`. Re-check with `npm test` and
   `grep -c '^- \[x\]' .kiro/specs/panthiya/tasks.md`.
 - **$0 spent, nothing deployed.** Every AWS step in `tasks.md` is marked `[human]` and none has run,
   which is the only honest proof that `tech.md`'s "ask before anything that costs money" rule was
   obeyed rather than agreed to.
 
 `TODO(nishen)` — re-run both counts on the morning of submission and update this block. Do not paste
-the numbers above without re-checking them; three lanes were writing code and tests when they were
-taken.
+the numbers above without re-checking them; two other lanes were adding tests in the same hour these
+were taken, so they were already slightly low when they were written.
 
 ---
 

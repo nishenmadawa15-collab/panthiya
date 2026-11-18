@@ -14,16 +14,19 @@ Bedrock agents build and **Kiroween 2026** (Frankenstein category).
 | Repository | [`github.com/nishenmadawa15-collab/panthiya`](https://github.com/nishenmadawa15-collab/panthiya) — public, MIT, `.kiro/` committed |
 | Live app | `TODO(nishen)` — paste the Amplify URL here once task 0.15 is done (Amplify Hosting → connect `main` → copy the branch URL) |
 | Demo video | `TODO(nishen)` — paste the YouTube link here after task 7.7 is recorded |
-| Build status | **487 of 487 tests pass, nothing skipped · 62 of 79 tasks done** — snapshot taken 2026-11-18 15:40 UTC, re-check before quoting it · nothing deployed, **$0 spent** |
+| Build status | **565 of 565 tests pass, nothing skipped · 67 of 79 tasks done** — snapshot taken 2026-11-18 17:59 UTC, re-check before quoting it · nothing deployed, **$0 spent** |
+| Branch you are reading | Active work is on `feat/m4-student-tutor`. Whether it merges into `main` is still open, and **at 2026-11-18 17:50 UTC `main` was 24 commits behind it** and still being added to — so a clone of `main` shows an older project than this README describes, and Amplify watches `main`. Re-derive below |
 | Licence | [MIT](LICENSE) |
 
-> **How to re-check that status row.** Both numbers were counted on **2026-11-18 at 15:40 UTC**, while
-> other work was in flight, and they move every session. Re-run rather than trust them:
+> **How to re-check that status row.** Both numbers were counted on **2026-11-18 at 17:59 UTC**, while
+> other work was in flight — two lanes were adding tests that hour — and they move every session.
+> Re-run rather than trust them:
 >
 > ```bash
 > npm test                                            # read the "pass" / "fail" tail
 > grep -c '^- \[x\]' .kiro/specs/panthiya/tasks.md    # tasks done
 > grep -c '^- \['   .kiro/specs/panthiya/tasks.md     # tasks total
+> git rev-list --count main..feat/m4-student-tutor    # commits main is behind; 0 once merged
 > ```
 
 > **Nothing here is a claim about a running system.** No part of Panthiya has been deployed to AWS and
@@ -245,6 +248,10 @@ Three sequencing facts that each cost an evening if met during the deploy rather
   would be a legitimate request from a parent who really is Dilmi's parent, and the privacy half of
   the red-team suite would be measuring nothing. The seed refuses to write if that is ever untrue.
 
+And one step that belongs **before** that first `sam deploy`: **create the $10/month budget alert by
+hand**, in Billing → Budgets. `backend/template.yaml` holds no `AWS::Budgets` resource, so no deploy
+will create one, and an alert added afterwards says nothing about spend that has already happened.
+
 ---
 
 ## Cost
@@ -262,14 +269,26 @@ Target: **under US$15** for the whole hackathon. **Spent so far: $0.**
 | S3 + Amplify Hosting | tiny | < $1.00 |
 | **Total** | | **~$7, headroom to $15** |
 
-Kept down by: `maxTokens` caps (400 tutor / 250 teacher), a 6-turn history window, a 2,000-character
-input limit, a TTL on `redteam_runs`, an S3 lifecycle rule deleting voice notes after one day, and a
-$10 budget alert already configured.
+What is actually in the code holding this down: **one flat `maxTokens: 1024`** on every turn
+(`backend/functions/chat/index.mjs` — not the 400-tutor / 250-teacher split the design asked for), a 2,000-character input limit, a TTL on `redteam_runs`, and an S3 lifecycle rule deleting voice
+notes after one day. Two things named here before were not true and are worth stating plainly:
 
-Two honest caveats. **Every row above is an estimate against a system that has never run**, so the
-token counts are the design's assumptions and not measurements. And the orchestration decision above
-can change the shape of this table: option A prices runtime, memory and gateway as separate
-consumption lines, so if A is chosen the budget needs re-checking before the first long run.
+- **There is no history window in force.** `MAX_HISTORY_TURNS = 6` exists in
+  `backend/functions/chat/orchestrate.mjs` and is passed on the agent path, but the tool loop we
+  actually built is **single-message**: `messages` starts empty and is thrown away when the request
+  ends, and `invokeAgent` does not even take the parameter. Costs less, not more — but it also means
+  the two multi-message attacks (B7, C6) meet a different system than the one documented, which is
+  recorded in [`docs/BUILD-LOG.md`](docs/BUILD-LOG.md).
+- **The $10 budget alert does not exist yet.** There is no `AWS::Budgets` resource in
+  `backend/template.yaml`, and no AWS resources exist at all. **Create it in the console before the
+  first deploy**, not after.
+
+Three honest caveats. **Every row above is an estimate against a system that has never run**, so the
+token counts are the design's assumptions and not measurements. **A 1024-token ceiling is over three
+times the ~300 output tokens the ~$1.50 inference row was costed against**, so treat the ~$7 total as
+optimistic rather than re-forecasting it from the same guesses. And the orchestration decision above can change
+the shape of this table: option A prices runtime, memory and gateway as separate consumption lines,
+so if A is chosen the budget needs re-checking before the first long run.
 `TODO(nishen)` — after the hackathon, record the amount actually spent here (task 7.9).
 
 ---

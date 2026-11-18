@@ -74,7 +74,7 @@ API Gateway (HTTP API)
 
 - **Model:** cheapest that handles Sinhala well enough (start with Amazon Nova Lite or a Haiku-class model; test Sinhala early, switch if poor).
 - **Messaging:** a WhatsApp-*style* in-app parent inbox for the hackathon. Real WhatsApp Business API needs Meta approval and costs money, so it's **Phase 2**.
-- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. Budget alert at $10/month is already set.
+- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. **Set a $10/month budget alert before the first deploy** — it is a console step, not part of the stack: there is no `AWS::Budgets` resource in `backend/template.yaml`, and as of 2026-11-18 the account holds no Panthiya resources at all.
 - **Audit log:** every money or marks change is written to `audit_log` with who, when and the before/after values. Judges love this, and real teachers will need it.
 
 ## 4. Install & tools
@@ -97,6 +97,26 @@ API Gateway (HTTP API)
 - **Screenshots** of specs, hooks and steering in use, as you go. You'll need them for the write-up.
 
 ## 6. THE PROMPT (paste into Kiro Spec mode)
+
+> **Superseded 2026-11-18 — do not paste this unchanged; two of its instructions cannot be followed.**
+> This is kept as the record of what was actually pasted into Kiro on day one, not as a current
+> instruction.
+>
+> 1. **"one Bedrock Managed Agent … with three role-scoped action groups"** cannot be created on this
+>    account: `CreateAgent` → `AccessDeniedException`, Agents Classic is in maintenance mode, and
+>    there is no exception process. **Bedrock Managed Agents (BMA, powered by OpenAI)** is a
+>    different service — different endpoint, model family, and MCP tools instead of action groups —
+>    and whether the challenge means that one is the open question at the top of
+>    `docs/NEXT-SESSION.md` §0a. What replaces that box is tracked in `README.md` § Architecture.
+> 2. **"a live Blocked / Leaked scoreboard"** was built, deliberately, as something else. A two-number
+>    tally would score a case `blocked` on the strength of the agent's own refusal, which no code
+>    read. The page shipped with per-layer attribution from `totals.byLayer` plus `needsEye` and
+>    `error` as their own tiles — see `README.md` § "The 36 attacks, and what the scoreboard may and
+>    may not say".
+>
+> The rest of the prompt — roles, features, languages, front end, infra, deliverables — still stands,
+> and the milestone list still describes the build. Milestone M0's "live on Amplify" has not happened
+> (task 0.15 is still open).
 
 ---
 
@@ -128,21 +148,38 @@ Build **Panthiya**, an AI assistant for Sri Lankan tuition classes, for two hack
 
 ## 7. Day-by-day timeline
 
+> **Where the project actually is, 2026-11-18 17:45 UTC.** This table is the original plan and is kept
+> as one; it is not a record of what happened. What is true today, measured rather than remembered:
+> **67 of 79 tasks done, 12 open, 9 of those marked `[human]`** (`grep -c '^- \[x\]'` and
+> `grep -c '^- \[ \]'` over `.kiro/specs/panthiya/tasks.md`). **Nothing has been deployed and $0 has
+> been spent** — `aws configure list` shows no access key, no secret and no region, so nothing on this
+> machine can authenticate to AWS at all. Every M1–M6 code task is marked done and tested **offline**;
+> the only one left in that range is **5.7, running the 36 cases live**, which needs a deployed system.
+> The AWS half of the plan — Amplify Hosting, the agent, the guardrail, the first `sam deploy` — has
+> not started: six of the nine open `[human]` tasks are AWS steps (0.15, 0.16, 1.1, 1.11, 1.15, 3.1),
+> and the other three are the demo video, the two submissions and the teardown decision. `aws` CLI
+> **is** installed (2.36.49,
+> checked here); **SAM CLI is not**; Node is v24.14.1.
+>
+> So the dates below are now behind, and the two that matter are the submission deadlines in §1, not
+> the row dates. Re-derive the counts before quoting them; two other lanes were writing tests while
+> this was taken.
+
 | Date | Milestone | Done when |
 |---|---|---|
-| Nov 16–17 | Install + IAM user + M0 | Live Amplify URL opens on your phone |
+| Nov 16–17 | Install + IAM user + M0 | Live Amplify URL opens on your phone — **not done: task 0.15 is still open and nothing is deployed** |
 | **Nov 18** | Join Bedrock challenge officially; read rules | Double-submit question answered |
 | Nov 18–20 | M1 teacher chat: attendance + fees | "Nimal paid 2500" updates the ledger |
 | Nov 21–22 | M2 roles + parent view | Parent sees only their child |
 | Nov 23–24 | M3 guardrail + policyCheck + audit log | First 10 red-team cases pass |
 | Nov 25 | M4 student tutor | Gives hints, refuses answers |
-| Nov 26–27 | M5 red-team page | 36/36 blocked on screen |
+| Nov 26–27 | M5 red-team page | 36 cases run, each attributed to the layer that held it, with `needsEye` and `error` shown as their own tiles |
 | Nov 28 | M6 voice + Sinhala/Tamil polish | Sinhala voice note marks attendance |
 | Nov 29–30 | M7 docs, record demo video | Video under 3 minutes on YouTube |
 | **Dec 1** | **Submit Bedrock** | |
 | Dec 2–3 | Kiroween extras: blog post, LinkedIn post (#KiroweenHackathon26), **submit Kiroween** | |
 
-**Demo video (2:45):** 0:00 hook ("Every tuition sir in Sri Lanka keeps fees in a notebook…") → 0:20 teacher marks attendance by Sinhala voice note → 0:50 fee recorded, parent gets an approved update → 1:15 parent tries to see another child's marks, refused → 1:35 student asks for the answer, gets a hint → 1:55 red-team page runs 36 attacks, 36 blocked → 2:20 architecture in 15 seconds → 2:35 "built by a Sri Lankan student, for Sri Lankan classes".
+**Demo video (2:45):** 0:00 hook ("Every tuition sir in Sri Lanka keeps fees in a notebook…") → 0:20 teacher marks attendance by Sinhala voice note → 0:50 fee recorded, parent gets an approved update → 1:15 parent tries to see another child's marks, refused → 1:35 student asks for the answer, gets a hint → 1:55 red-team page runs all 36 cases and the scoreboard shows, from `totals.byLayer` on screen, which layer held each one, with `needsEye` and `error` as their own tiles → 2:20 architecture in 15 seconds → 2:35 "built by a Sri Lankan student, for Sri Lankan classes".
 
 ## 8. After the hackathon: business roadmap
 
@@ -159,7 +196,7 @@ Build **Panthiya**, an AI assistant for Sri Lankan tuition classes, for two hack
 ## 9. Your checklist right now
 
 - [ ] Install Git + Kiro
-- [ ] Create IAM user `panthiya-dev`, access key, AWS CLI + SAM CLI
+- [ ] Create IAM user `panthiya-dev`, access key, then `aws configure` — and install the SAM CLI. Checked on this machine 2026-11-18: the **AWS CLI is already installed** (2.36.49), the **SAM CLI is not**, and `aws configure list` shows no credentials yet
 - [ ] Decide the agent layer, and with it the region (`docs/NEXT-SESSION.md` §0) — there is no model-access step any more
 - [ ] Copy this starter pack into `C:\Projects\panthiya`, open in Kiro
 - [ ] Paste §6 prompt into Spec mode → review → start M0

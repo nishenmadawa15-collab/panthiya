@@ -348,8 +348,10 @@ Reduced motion disables the stamp drop-in and the message-arrive slide; nothing 
 
 ### 8.2 Scripts and fonts
 
-Sinhala and Tamil are served from the device font stack first (`Noto Sans Sinhala`, `Iskoola Pota`,
-`Nirmala UI`; `Noto Sans Tamil`, `Latha`), and the CSP forbids a font CDN, so the webfont is
+Since M6, `Noto Sans Sinhala` and `Noto Sans Tamil` are **`@font-face` family names, not device
+faces** — each resolves to a self-hosted woff2, with the device faces behind it as the fallback
+(`Iskoola Pota`, `Nirmala UI` for Sinhala; `Latha`, `Nirmala UI` for Tamil), as
+`frontend/assets/styles.css` sets out — and the CSP forbids a font CDN, so the webfont is
 self-hosted from `frontend/assets/fonts/` — **done in M6 (task 6.6)** as Google's own per-script
 woff2 subsets, 130 KB Sinhala and 50 KB Tamil, under `font-src 'self'`. `font-display: swap` keeps
 the device face painting first, so the 3G first paint the deferral worried about never waits on a
@@ -406,8 +408,26 @@ in the 2026-11-18 build-log entry, and it needs `brotli`, which this machine doe
 | S3 + Amplify Hosting | tiny | < $1.00 |
 | **Total** | | **~$7, headroom to $15** |
 
-Guards: `maxTokens` caps, 6-turn history, 2000-character input limit, TTL on `redteam_runs`, S3
-lifecycle deleting voice notes after 1 day, and a $10 budget alert already configured.
+Guards **in the code as it stands**: one flat `maxTokens: 1024` on every turn
+(`backend/functions/chat/index.mjs` — the 400 tutor / 250 teacher split asked for above was never
+built), a 2000-character input limit, TTL on `redteam_runs`, and the S3 lifecycle rule deleting
+voice notes after 1 day.
+
+Two guards named in earlier drafts are **not in force**. `MAX_HISTORY_TURNS = 6` exists, but the
+tool loop is single-message and `invokeAgent` does not take the parameter, so there is no history
+window at all. And the **$10 budget alert does not exist** — there is no `AWS::Budgets` resource in
+`backend/template.yaml`, so no deploy creates one; it is a console step to take **before** the
+first deploy, because an alert added afterwards says nothing about spend that has already
+happened. With a 1024-token ceiling against the ~300-output-token assumption the inference row was
+costed on, **~$7 is the optimistic end of this table rather than its midpoint**.
+
+> **And the table is costed for the wrong duration.** Kiroween's official rules (read 2026-11-18)
+> put the judging period at **2026-12-16 to 2027-01-29**, and require that the project stay
+> available to judges for testing *until the judging period ends*. So the stack cannot be torn down
+> on submission day: it has to stay up for roughly **ten more weeks** after it. Whatever bills per
+> hour rather than per request — the Cognito domain, any NAT gateway, anything provisioned —
+> decides the real total, and task 7.9 ("tear down or leave running?") is therefore answered for
+> us: leave it running, and cost it for the window rather than for the demo.
 
 ---
 
