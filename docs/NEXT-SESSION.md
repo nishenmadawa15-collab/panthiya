@@ -1,8 +1,62 @@
 # Next session — start here
 
-Written at the end of 2026-11-17. Read this, then `.kiro/specs/panthiya/tasks.md`, then the
-2026-11-17 block of `docs/BUILD-LOG.md` — the defects it records are the reason some of the lanes
-below are shaped the way they are.
+**Updated at the end of 2026-11-18** (the session ran past midnight into the 19th). The sections
+below were written on the 17th and corrected on the 18th; where the two disagree, the dated
+correction wins. Read this, then the **2026-11-18 block of `docs/BUILD-LOG.md`**, then
+`.kiro/specs/panthiya/tasks.md`.
+
+---
+
+## Where 2026-11-18 ended
+
+**67 of 79 tasks. 565 tests pass, nothing skipped. Fourteen commits. Nothing deployed, $0 spent,
+and nothing pushed** — the branch is 29 commits ahead of `origin/main` and has never left this
+machine. `git push -u origin feat/m4-student-tutor` is the first thing worth doing tomorrow, before
+anything can be lost.
+
+Four lanes ran in parallel with no AWS at all, then a verification pass read what they produced, and
+three more lanes fixed what it found. What that pass found is the thing to carry forward:
+
+> **Every defect it found sat behind a green suite**, and three of them sat inside the work of lanes
+> whose brief was to be careful. The worst was a demo-breaker — every student message was answered
+> with the mental-health helpline, which on a live red-team run would have scored a **false pass on
+> 44% of the suite** before the model was ever invoked. A pass that only re-ran the tests would have
+> reported success.
+
+Built today: the **option B tool loop** (`Converse` + `toolConfig`, 23 tests, deployable — so the
+A/B/C decision is now a choice rather than a spike); `scripts/bma-probe.mjs`, which answers in one
+read-only command whether this account can reach BMA and reads its own 403 for you; the three
+`voice.*` keys and a pack-parity test; self-hosted Sinhala and Tamil with disjoint unicode-ranges;
+the accessibility pass and the five focus defects it eventually found; `README.md` and both
+submission drafts; and the Sinhala gate taught to test an OpenAI model.
+
+Found today, and each one changes a decision: **§0a** — the challenge may be named after a service
+nobody had looked at, and guardrails are **not supported** on it, which also couples the model choice
+to defence layer 2 (`openai.gpt-5.4`/`5.5` cannot take a guardrail at all). **`docs/SUBMISSION-
+KIROWEEN.md` §0** — the Kiroween rules, read in full: Dec 4 2:00 PM PT, judging to 2027-01-29 with
+the project required to stay live throughout (so the stack cannot be torn down, and the $7 estimate
+is costed for the wrong duration), a parallel submission is **not** forbidden, and *"insufficient use
+of Kiro will result in disqualification"*.
+
+### The five things only Nishen can do, in order
+
+| # | | Why it is first |
+|---|---|---|
+| 1 | **Sign in to AWS and to Kiro** in the Chrome window the extension is attached to | Both answered with a sign-in page on the 18th. Credentials are not the agent's to enter, and everything in the console is blocked behind this |
+| 2 | **The Bedrock challenge's invitation email or URL** | It cannot be found: Devpost's own search for *"agents your rules"*, *"bedrock agents"* and *"managed agents"* finds no such event, on top of two web searches. **Kiroween is currently the only verified deadline this project has.** One read answers which service is required, whether this account is even eligible, and the other half of decision 7 |
+| 3 | `aws configure` (IAM user `panthiya-dev`) and `winget install Amazon.SAM-CLI` | The `aws` CLI is already installed — 2.36.49. Only credentials and SAM are missing. Then step 2a (the probe) and the Sinhala gate can both run |
+| 4 | **Decide what the Kiro write-up will say** | 20% of the Kiroween score is how thoroughly the project uses Kiro, and the rules disqualify insufficient use. The honest split between Kiro and other tools is not an agent's to choose, and `docs/KIRO-WRITEUP.md` is judged by people who can read this repository |
+| 5 | **Request the 4,000 Kiro credits before Dec 1, 12:00 PT** | One allotment, no second chance, and the form needs the Kiro user ID or AWS account ID |
+
+### Then, in this order
+
+1. `node scripts/bma-probe.mjs --yes` — free, read-only, and it says which of the three answers came back.
+2. 🚦 the Sinhala gate, **against whichever model step 1 and the rules point at** — `node scripts/test-sinhala.mjs --yes [--model …]`.
+3. The A/B/C orchestration decision (§0a), which by then is a reading of the rules rather than of the code.
+4. The guardrail, the deploy, the demo logins, the seed, the four SWAP POINTs, and the first live run of the 36 — the run sheet below, unchanged.
+
+**Do not restart the Q1/Q2/Q3 lanes or the V1/V2/V3 fixes.** All six landed on the 18th; the lane
+table further down is struck through for that reason.
 
 ---
 
