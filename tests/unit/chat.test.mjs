@@ -129,7 +129,9 @@ test('the distress gate applies to students, and does not gate teachers', async 
 test('a successful reply carries no blocking layer', async () => {
   const deps = fakeDeps({ invokeAgent: async () => 'Attendance recorded for Kasun.' });
   const res = await handleChat({ claims: teacher, body: { message: 'Kasun was absent' }, deps });
-  assert.deepEqual(res.body, { reply: 'Attendance recorded for Kasun.', blockedBy: null });
+  // `role` is decision 5 of docs/NEXT-SESSION.md §4: the verified role, echoed back so the
+  // red-team runner can check the session it scored instead of trusting its own label.
+  assert.deepEqual(res.body, { reply: 'Attendance recorded for Kasun.', blockedBy: null, role: 'teacher' });
 });
 
 test('a distressed student receives the human-written reply, not an empty block', async () => {

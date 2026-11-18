@@ -509,12 +509,44 @@ Resources:
           GUARDRAIL_ID: !Ref GuardrailId
           GUARDRAIL_VERSION: !Ref GuardrailVersion
           POLICY_CHECK_FUNCTION: !Ref PolicyCheckFunction
+          # Option B (docs/NEXT-SESSION.md §0): the loop in chat/orchestrate.mjs dispatches each
+          # tool use to the action group that owns it, by Lambda invoke, so every group keeps its
+          # own IAM role (design §3.3). An in-process import would need all three sets of
+          # permissions on this one function. index.mjs still selects InvokeAgent when
+          # BEDROCK_AGENT_ID is a real id, so option A stays a parameter rather than a rewrite.
+          ACTIONS_TEACHER_FUNCTION: !Ref ActionsTeacherFunction
+          ACTIONS_PARENT_FUNCTION: !Ref ActionsParentFunction
+          ACTIONS_STUDENT_FUNCTION: !Ref ActionsStudentFunction
+          # Rounds of tool use per message, so a looping model is a tunable rather than a redeploy.
+          # The code default is MAX_TOOL_TURNS = 4 in orchestrate.mjs; drop it if the live round
+          # trip is slow, because five model calls have to fit in this function's 29 seconds.
+          MAX_TOOL_TURNS: "4"
       Policies:
         - Statement:
             - Sid: InvokeTheOneAgentAlias
               Effect: Allow
               Action: bedrock:InvokeAgent
               Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/${BedrockAgentId}/${BedrockAgentAliasId}"
+            - Sid: InvokeTheModelForTheToolLoop
+              Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${ModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${ModelId}"
+            # ponytail: guardrail/* rather than guardrail/${GuardrailId} because GuardrailId
+            # defaults to "" until A3 creates it, and an ARN ending in "guardrail/" is a
+            # deploy-time failure. Narrow it to the real id once the guardrail exists.
+            - Sid: ApplyTheGuardrailOnEveryModelCall
+              Effect: Allow
+              Action: bedrock:ApplyGuardrail
+              Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:guardrail/*"
+            - Sid: InvokeTheThreeActionGroups
+              Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                - !GetAtt ActionsTeacherFunction.Arn
+                - !GetAtt ActionsParentFunction.Arn
+                - !GetAtt ActionsStudentFunction.Arn
             - Sid: InvokePolicyCheckOnly
               Effect: Allow
               Action: lambda:InvokeFunction
