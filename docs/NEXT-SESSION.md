@@ -6,6 +6,91 @@ below are shaped the way they are.
 
 ---
 
+## 0a. Read this first — the blocker may be the wrong blocker (found 2026-11-18)
+
+**The service this project is named after may not be the service that was found to be blocked.**
+
+`PANTHIYA_SETUP.md` §6 names the challenge: AWS **"Agents, your rules: Bedrock Managed Agents
+build"**, deadline Dec 2 2026 PT. Yesterday's §0 read "Bedrock Managed Agents" as *Agents for
+Amazon Bedrock* — Agents Classic, the `CreateAgent` API — and concluded, correctly **for that
+service**, that this account cannot create one. But AWS shipped a **separate service with almost
+exactly that name** on 2026-09-29: **Amazon Bedrock Managed Agents, powered by OpenAI (BMA)**, in
+public preview. A challenge with a Dec 2 2026 deadline named after it is far more likely to mean
+the new preview service than the one in maintenance mode.
+
+### What BMA actually is, from AWS's own documentation
+
+| | |
+|---|---|
+| **Not Agents Classic** | A different service: stateful agent *sessions* running OpenAI models, built on a customised OpenAI Agents API. Nothing to do with `CreateAgent` |
+| **Endpoint** | `https://bedrock-mantle.<region>.api.aws`, signing service `bedrock-mantle`, sessions at `/openai/v1/agents/sessions`. **Explicitly not** `bedrock-runtime` |
+| **IAM** | Actions in the `bedrock-mantle:` namespace, e.g. `bedrock-mantle:CreateAgentSession`. Runs under our own IAM identities, with a session role we own |
+| **Access** | Public preview, API-only (no console). **No allowlist, waitlist or prior-usage requirement is documented anywhere** — which is the whole difference from yesterday |
+| **Regions** | `us-east-1`, `us-west-2`, `us-east-2` only. **`ap-south-1` is not one of them** |
+| **Models** | BMA-supported **OpenAI** models available in that region and account. Cross-region inference profiles unsupported |
+| **Tools** | Filesystem *skills* and **environment-based STDIO MCP servers** — not Lambda action groups |
+| **Compute** | We must supply an execution environment: our own host running `codex exec-server`, or AgentCore Runtime. The AgentCore example creates a NAT gateway that **bills while idle** |
+| **Input** | Text. No subagents, and no built-in long-term memory in the preview |
+| **Guardrails** | **Not mentioned on any BMA page.** Unverified — see below |
+
+### So there is a third option, and it is the challenge's own namesake
+
+| | Path | What it costs |
+|---|---|---|
+| **A** | AgentCore harness | as yesterday |
+| **B** | Our own `Converse` + `toolConfig` loop | as yesterday — but **built, tested and 23 tests deep as of 2026-11-18**, so it is now the known-good fallback rather than a plan |
+| **C** | **BMA** — the service the challenge appears to be named after | A new region, a new model family, an exec server to keep running, and MCP instead of action groups. But it is the only path that answers "did you build on the thing the challenge asked for?" with a yes |
+
+### What flips if C is the answer
+
+1. **Region reopens (decision 3).** The agent layer cannot live in `ap-south-1`. The cheapest
+   coherent answer is the whole stack in `us-east-1`; splitting regions buys latency and confusion.
+2. **Model reopens (decision 4), and with it the Sinhala gate.** The gate is still the first thing
+   that happens — but it has to run against the **OpenAI model BMA will actually use**, not Nova
+   Micro. Five milestones rest on that model reading Sinhala, and no OpenAI model has been tested
+   on it. This is the single biggest unmeasured risk in the project.
+3. **The three action Lambdas stay.** They get wrapped by a small STDIO MCP server inside the
+   execution environment instead of being action groups. The role gate *strengthens*: the MCP
+   wrapper and the session role are both ours, so the role still never leaves our code (design
+   §3.1), exactly as lane B argued for option B.
+4. **Layer 2 needs a decision, not a guess.** If a guardrail cannot be attached to a BMA session,
+   it survives as an explicit `ApplyGuardrail` call on the input and on the reply — layer 2 moves
+   from *attached* to *called*, and the scoreboard can still attribute to it. Confirm before
+   building; assume neither way.
+5. **Budget.** The preview adds no service charge beyond model inference and the resources we
+   create — but the AgentCore Runtime example's NAT gateway is the kind of thing that eats a $15
+   budget while idling. A self-hosted exec server is the $0 path, with one honest cost: **a judge
+   opening the live URL needs that host running**, which a recorded demo does not.
+
+### The two things that settle it, neither of which an agent can do
+
+- **The challenge's own page.** A second search found no event by that name — nothing under
+  `"Agents, your rules"`, and nothing matching "Bedrock Managed Agents" with a Dec 2 deadline. The
+  invitation email or a URL answers three things in five minutes: which service is required;
+  whether Agents Classic specifically is required (in which case this account is **ineligible**,
+  and that is worth knowing on Nov 18 rather than Dec 1); and whether Kiroween may take the same
+  project.
+- **One signed request to `bedrock-mantle.us-east-1.api.aws`, once `aws configure` is done.** It
+  either returns a session or returns `AccessDenied`, and that is the entire answer to "can this
+  account use BMA?". Whether AWS CLI 2.36.49 ships a `bedrock-mantle` command is itself unverified;
+  the documented route is the preview's own example bundle.
+
+**Nothing below this section is wasted.** Everything that made yesterday's §0 true of Agents
+Classic is still true of Agents Classic. Guardrails, the three Lambdas, the role gate, policyCheck
+and all 36 cases do not care which orchestrator calls them — which is exactly why the project
+survived finding this out twice.
+
+### Tooling, checked rather than assumed (2026-11-18)
+
+| | |
+|---|---|
+| `aws` CLI | **Already installed** — 2.36.49. Yesterday's run sheet says the CLI has neither; it has one |
+| Credentials | **Not configured.** `aws sts get-caller-identity` → `NoCredentials`, and `~/.aws` holds only `cli/` |
+| SAM CLI | **Not installed** — `sam: command not found` |
+| Node | v24.14.1, against `engines: >=20` |
+
+---
+
 ## 0. Tomorrow — start here
 
 **Read this section before anything else. The plan changed on the evening of 2026-11-17, and the
@@ -138,8 +223,12 @@ visible to a judge.
    `chat.mock_reply`, `status.now` and `status.next`, which were stale in the same way. All of the
    new Sinhala and Tamil is unreviewed.
 3. **`README.md`'s status row is stale**: "M0–M3 code complete, 270 tests passing · 41/79 tasks".
-   It is 455 tests and 59 of 79 now, and the repo URL and Amplify URL are still placeholders. Part
-   of task 7.1.
+   **All three parts of that sentence were wrong.** The row it quotes was not the row in the file;
+   455/59 was itself already stale; and the repo URL was never a placeholder (that decision is now
+   closed in §4). Task 7.1 has since rewritten the row as a **dated snapshot plus the two commands
+   that re-derive it** — `npm test`, and `grep -c "^- \[x\]" .kiro/specs/panthiya/tasks.md`. Re-run
+   them before either submission rather than trusting a number in any document, this one included.
+   The Amplify URL and the demo video are the only true placeholders left in it.
 4. **Two documents disagree about the expected by-layer split.** §3 of this file carried "20 held
    by role scoping, 9 by the guardrail, 7 by policyCheck", and `backend/agent/README.md` §7's tally
    maps to a different one. Both are pre-live guesses, and tonight's step 7 replaces them with the
@@ -366,7 +455,7 @@ Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ට�
 | # | Decision | Needed by |
 |---|---|---|
 | 1 | Merge `feat/m4-student-tutor` into `main`? Amplify watches `main` | before 0.15 |
-| 2 | Public GitHub repo URL (placeholder `github.com/<your-user>/panthiya` is in README and `index.html`) | M0 go-live |
+| ~~2~~ | ~~Public GitHub repo URL~~ — **closed 2026-11-18**: `github.com/nishenmadawa15-collab/panthiya` is the real remote and is already in `frontend/index.html`. No placeholder was ever in the repo | — |
 | 3 | Region: `ap-south-1` if Bedrock Managed Agents and the model are available there, else `us-east-1` | before the first deploy |
 | 4 | Model choice after the day-1 Sinhala test | before M1 merge |
 | 5 | Should `chat/orchestrate.mjs` echo the `role` it read from the verified claims? One line, and it closes the last ceiling in `score.mjs` — the page and the CLI could then verify the session role instead of trusting the caller's own label | before 5.7 |

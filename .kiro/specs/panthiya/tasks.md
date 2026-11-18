@@ -121,9 +121,9 @@ stops and asks before those.
 - [x] 6.2 Unsupported-language fallback message, honest and localised — req 3.6
 - [x] 6.3 S3 lifecycle rule deleting voice notes after 1 day — design §10
 - [x] 6.4 Microphone UI: press-to-record, visible recording state, keyboard accessible — req 12.4
-- [ ] 6.5 Complete `si.json` / `ta.json` / `en.json`; assert no missing key across the three — req 12.2
-- [ ] 6.6 Self-hosted Noto Sinhala and Noto Tamil subsets, CSP-compatible — design §8.2
-- [ ] 6.7 Accessibility pass: keyboard, focus rings, contrast test, screen-reader labels, reduced motion — req 12.4–12.6
+- [x] 6.5 Complete `si.json` / `ta.json` / `en.json`; assert no missing key across the three — req 12.2
+- [x] 6.6 Self-hosted Noto Sinhala and Noto Tamil subsets, CSP-compatible — design §8.2
+- [x] 6.7 Accessibility pass: keyboard, focus rings, contrast test, screen-reader labels, reduced motion — req 12.4–12.6
 
 **Done when:** a Sinhala voice note marks attendance, and the UI has no untranslated string.
 
@@ -134,8 +134,8 @@ stops and asks before those.
 - [ ] 7.1 `README.md` final: diagram, setup, costs, security and privacy, screenshots
 - [x] 7.2 `docs/KIRO-WRITEUP.md` — how steering, specs and hooks were actually used, with screenshots
 - [x] 7.3 `docs/DEMO-SCRIPT.md` — the 2:45 beat sheet from `PANTHIYA_SETUP.md` §7
-- [ ] 7.4 `docs/SUBMISSION-BEDROCK.md`
-- [ ] 7.5 `docs/SUBMISSION-KIROWEEN.md` — Frankenstein framing: agent + voice + inbox + ledger + tutor
+- [x] 7.4 `docs/SUBMISSION-BEDROCK.md`
+- [x] 7.5 `docs/SUBMISSION-KIROWEEN.md` — Frankenstein framing: agent + voice + inbox + ledger + tutor
 - [ ] 7.6 `docs/BUILD-LOG.md` complete, including every bypass found and fixed
 - [ ] 7.7 **[human]** Record the demo video under 3 minutes, upload
 - [ ] 7.8 **[human]** Submit to Bedrock (target Dec 1) and Kiroween (target Dec 3)

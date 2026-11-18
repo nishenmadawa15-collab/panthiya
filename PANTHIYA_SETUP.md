@@ -64,6 +64,14 @@ API Gateway (HTTP API)
         └─► DynamoDB: classes, students, fees, attendance, marks, audit_log, redteam_runs
 ```
 
+> **Superseded 2026-11-18 — the orchestration box is wrong.** `Bedrock Managed Agent "Panthiya"`
+> with three action groups is a Bedrock **Agents Classic** agent, and this account cannot create one
+> (`CreateAgent` → `AccessDeniedException`, maintenance mode, no exception process). It is also not
+> what **Bedrock Managed Agents (BMA, powered by OpenAI)** means — that is a separate preview
+> service with a different endpoint, a different model family, and MCP tools instead of action
+> groups. Everything else in this diagram stands. The live architecture, and the open decision about
+> what replaces that one box, is in `README.md` § Architecture and `docs/NEXT-SESSION.md` §0.
+
 - **Model:** cheapest that handles Sinhala well enough (start with Amazon Nova Lite or a Haiku-class model; test Sinhala early, switch if poor).
 - **Messaging:** a WhatsApp-*style* in-app parent inbox for the hackathon. Real WhatsApp Business API needs Meta approval and costs money, so it's **Phase 2**.
 - **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. Budget alert at $10/month is already set.
@@ -78,7 +86,7 @@ API Gateway (HTTP API)
    ```
 2. **Kiro IDE**: https://kiro.dev (free tier), then sign in.
 3. **AWS access for Kiro:** create an **IAM user** (not root) named `panthiya-dev` with these managed policies only: `AmazonBedrockFullAccess`, `AWSLambda_FullAccess`, `AmazonDynamoDBFullAccess`, `AmazonAPIGatewayAdministrator`, `AmazonCognitoPowerUser`, `AWSCloudFormationFullAccess`, `AmazonTranscribeFullAccess`, `IAMFullAccess` (needed for SAM to create roles — remove after the hackathon). Create an access key and install the AWS CLI + SAM CLI. Kiro's deploy tasks need them. *(This is the one place where a CLI is worth it: deploying a real backend from a browser alone is painful.)*
-4. In AWS Console → Bedrock → **Model access**: enable the model you'll use, in the region you'll deploy to. Check that Bedrock Managed Agents is available in that region; if ap-south-1 doesn't have it, use **us-east-1**.
+4. **No model-access step exists any more.** That console page has been retired; serverless foundation models auto-enable on first invoke. **Do not region-shop for Bedrock Agents Classic:** `CreateAgent` fails on this account in both `ap-south-1` and `us-east-1`, because the maintenance-mode allowlist is per-account and there is no exception process. Which region to deploy in follows from which agent layer is chosen — see `docs/NEXT-SESSION.md` §0. `ap-south-1` serves AgentCore and our own `Converse` loop; **Bedrock Managed Agents (BMA, powered by OpenAI) is preview-only in `us-east-1`, `us-west-2` and `us-east-2`**.
 5. Create the folder `C:\Projects\panthiya` and copy **this whole starter pack into it** (including the hidden `.kiro` folder). Open the folder in Kiro.
 
 ## 5. Kiro workflow (this also earns the "Kiro write-up" points)
@@ -152,7 +160,7 @@ Build **Panthiya**, an AI assistant for Sri Lankan tuition classes, for two hack
 
 - [ ] Install Git + Kiro
 - [ ] Create IAM user `panthiya-dev`, access key, AWS CLI + SAM CLI
-- [ ] Enable a Bedrock model; confirm the Managed Agents region
+- [ ] Decide the agent layer, and with it the region (`docs/NEXT-SESSION.md` §0) — there is no model-access step any more
 - [ ] Copy this starter pack into `C:\Projects\panthiya`, open in Kiro
 - [ ] Paste §6 prompt into Spec mode → review → start M0
 - [ ] Create an empty public GitHub repo `panthiya` → tell me the URL; we connect Amplify together in Chrome

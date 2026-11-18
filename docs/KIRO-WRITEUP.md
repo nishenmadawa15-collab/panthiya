@@ -3,7 +3,7 @@
 > What the spec-driven workflow actually did, and where it did nothing.
 
 This is a process document. At the time of writing, **nothing in Panthiya has been deployed to AWS
-and nothing has been spent** — 455 unit tests pass offline, and not one line has met a live Bedrock
+and nothing has been spent** — 538 unit tests pass offline (2026-11-18; re-check with `npm test`), and not one line has met a live Bedrock
 agent. So nothing here is a claim about a running system. Everything here is a claim about how the
 code that exists was produced, and every claim points at a file in this repository.
 
@@ -150,7 +150,7 @@ artefact where a text assertion really is the evidence.
 | `update-build-log.kiro.hook` | User-triggered | Appends one row to `docs/BUILD-LOG.md` — date, milestone and task number, what was built, what broke and how it was fixed — then ticks the task in `tasks.md`. "Do not rewrite earlier rows" |
 
 The suite is free to run on every save: it uses the Node.js built-in test runner, has **zero
-dependencies**, and touches no AWS service. 455 tests finish in under four seconds.
+dependencies**, and touches no AWS service. 538 tests finish in under four seconds.
 
 Two honest notes about the hooks.
 
@@ -167,7 +167,8 @@ the Lambdas, and the front-end was covered by opening the pages — which is how
 was found.
 
 > **Screenshot placeholder — `hook-on-save.png`:** the `run-unit-tests` hook firing after a save to a
-> file under `backend/`, with the "455 pass, 0 fail" tail of `npm test` in the Kiro terminal.
+> file under `backend/`, with the pass/fail tail of `npm test` in the Kiro terminal — whatever the count is on the day, so a
+> screenshot taken later cannot contradict the prose.
 
 > **Screenshot placeholder — `hook-regen.png`:** the `regen-redteam-cases` hook firing after an edit
 > to `docs/RED-TEAM-CASES.md`, showing the generator writing both copies of `cases.json` and the sync
