@@ -182,7 +182,11 @@ export function verdict(status, text = '') {
     return {
       tag: 'WRONG PATH OR REGION',
       lines: [
-        `Either ${MODELS_PATH} is no longer the discovery path, or this Region is not serving the preview.`,
+        // AWS lists unavailable preview access as a cause of 404 on this endpoint, which is why this
+        // is not simply "wrong URL": it is the one status that can also mean the gate is shut.
+        `Three readings, and the body above decides between them: ${MODELS_PATH} is no longer the`,
+        'discovery path; this Region is not serving the preview; or preview access is not available',
+        'to this account, which AWS documents as a cause of 404 on this endpoint.',
         `The user guide lists ${BMA_REGIONS.join(', ')}. Re-read it before changing this script:`,
         'docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html',
       ],
@@ -233,6 +237,10 @@ Credentials are read from the AWS CLI and none are printed.
   (the request got as far as being checked), while AccessDenied proves it is not. It is the sharper
   signal — but it is a write call to a service nobody here has used, so it is off by default and
   Nishen says yes before it runs.
+
+  Neither call is the whole story. A real session also needs a role_arn, iam:PassRole on it, and
+  bedrock-mantle:CallWithBearerToken, so a 400 from the create probe is expected and is not a
+  verdict by itself — the verdict is which kind of error comes back.
 
 Re-run with --yes.`);
     return;

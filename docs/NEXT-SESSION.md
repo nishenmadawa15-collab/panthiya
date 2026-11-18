@@ -14,7 +14,7 @@ below are shaped the way they are.
 build"**, deadline Dec 2 2026 PT. Yesterday's §0 read "Bedrock Managed Agents" as *Agents for
 Amazon Bedrock* — Agents Classic, the `CreateAgent` API — and concluded, correctly **for that
 service**, that this account cannot create one. But AWS shipped a **separate service with almost
-exactly that name** on 2026-09-29: **Amazon Bedrock Managed Agents, powered by OpenAI (BMA)**, in
+exactly that name** in 2026, well before this deadline: **Amazon Bedrock Managed Agents, powered by OpenAI (BMA)**, in
 public preview. A challenge with a Dec 2 2026 deadline named after it is far more likely to mean
 the new preview service than the one in maintenance mode.
 
@@ -25,13 +25,13 @@ the new preview service than the one in maintenance mode.
 | **Not Agents Classic** | A different service: stateful agent *sessions* running OpenAI models, built on a customised OpenAI Agents API. Nothing to do with `CreateAgent` |
 | **Endpoint** | `https://bedrock-mantle.<region>.api.aws`, signing service `bedrock-mantle`, sessions at `/openai/v1/agents/sessions`. **Explicitly not** `bedrock-runtime` |
 | **IAM** | Actions in the `bedrock-mantle:` namespace, e.g. `bedrock-mantle:CreateAgentSession`. Runs under our own IAM identities, with a session role we own |
-| **Access** | Public preview, API-only (no console). **No allowlist, waitlist or prior-usage requirement is documented anywhere** — which is the whole difference from yesterday |
+| **Access** | API-only, no console. No allowlist, waitlist or prior-usage requirement is **documented** — but that is absence of a published process, not proof of no gate: the docs require account access to the BMA model and list *unavailable preview access* as a cause of a 404, the user guide says *public* preview while AWS's launch post says *limited* preview, and `role_arn`, `iam:PassRole` and `bedrock-mantle:CallWithBearerToken` are all needed before a session exists. Still the real difference from yesterday — Agents Classic publishes its block and its no-exception rule; this service publishes neither |
 | **Regions** | `us-east-1`, `us-west-2`, `us-east-2` only. **`ap-south-1` is not one of them** |
 | **Models** | BMA-supported **OpenAI** models available in that region and account. Cross-region inference profiles unsupported |
-| **Tools** | Filesystem *skills* and **environment-based STDIO MCP servers** — not Lambda action groups |
-| **Compute** | We must supply an execution environment: our own host running `codex exec-server`, or AgentCore Runtime. The AgentCore example creates a NAT gateway that **bills while idle** |
+| **Tools** | Filesystem *skills* and MCP — environment-based **STDIO** MCP servers in the preview workflow, and AWS also documents **AgentCore Gateway** as an MCP tool on a BMA session, which would take the three existing Lambdas unchanged. Either way: MCP, not action groups |
+| **Compute** | We must supply an execution environment: our own host running `codex exec-server`, or AgentCore Runtime. The supplied **CDK bundle** creates a NAT gateway that bills while idle — that is the bundle, not the service; the documented AgentCore CLI path runs without VPC access by default |
 | **Input** | Text. No subagents, and no built-in long-term memory in the preview |
-| **Guardrails** | **Not mentioned on any BMA page.** Unverified — see below |
+| **Guardrails** | **Settled, and against this option.** AWS states it in one sentence: *"The `bedrock-mantle` endpoint doesn't support Amazon Bedrock Guardrails."* So layer 2 cannot be attached on a BMA session. It survives as the documented alternative — `ApplyGuardrail`, which *"applies a guardrail to content that you supply directly, so it isn't tied to any model"* — but as an explicit call on the way in and on the way out, which is a real regression against A and B, and a cost that belongs in the comparison rather than in a list of unknowns |
 
 ### So there is a third option, and it is the challenge's own namesake
 
@@ -39,7 +39,7 @@ the new preview service than the one in maintenance mode.
 |---|---|---|
 | **A** | AgentCore harness | as yesterday |
 | **B** | Our own `Converse` + `toolConfig` loop | as yesterday — but **built, tested and 23 tests deep as of 2026-11-18**, so it is now the known-good fallback rather than a plan |
-| **C** | **BMA** — the service the challenge appears to be named after | A new region, a new model family, an exec server to keep running, and MCP instead of action groups. But it is the only path that answers "did you build on the thing the challenge asked for?" with a yes |
+| **C** | **BMA** — the service the challenge appears to be named after | A new region, a new model family, an exec server to keep running, MCP instead of action groups, **and no attachable guardrail** (above), so layer 2 becomes an explicit `ApplyGuardrail` call. In exchange it is the only path that answers "did you build on the thing the challenge asked for?" with a yes — which is worth a great deal **if** the rules ask for it, and nothing at all if they do not. That is the decision, and it is a reading of the rules rather than of the code |
 
 ### What flips if C is the answer
 
@@ -53,10 +53,21 @@ the new preview service than the one in maintenance mode.
    execution environment instead of being action groups. The role gate *strengthens*: the MCP
    wrapper and the session role are both ours, so the role still never leaves our code (design
    §3.1), exactly as lane B argued for option B.
-4. **Layer 2 needs a decision, not a guess.** If a guardrail cannot be attached to a BMA session,
-   it survives as an explicit `ApplyGuardrail` call on the input and on the reply — layer 2 moves
-   from *attached* to *called*, and the scoreboard can still attribute to it. Confirm before
-   building; assume neither way.
+4. **Layer 2 moves from *attached* to *called*, and that is now settled rather than assumed.**
+   `bedrock-mantle` does not support Guardrails, so on option C the guardrail becomes an explicit
+   `ApplyGuardrail` call on the input and on the reply. The scoreboard can still attribute to it,
+   `backend/agent/guardrail.json` is unaffected, and the IAM for it is already in `template.yaml`.
+   What changes is the claim: "a managed guardrail sits between the model and the child" becomes
+   "we call the guardrail ourselves on both sides", which is honest but weaker, and the demo
+   script says it either way.
+
+   **And a constraint that bites option B too, found while checking this:** guardrails are not
+   supported with every model. `openai.gpt-5.4` and `openai.gpt-5.5` are on AWS's unsupported
+   list, and a request naming a guardrail with one of those fails outright —
+   *"ValidationException: Guardrail is not supported with the chosen model"*. So **the Sinhala
+   gate and layer 2 are now coupled**: if the gate picks an OpenAI model, check that model's card
+   before assuming `guardrailConfig` will work on the `Converse` path, because the fallback is the
+   same `ApplyGuardrail` call. Nova and Claude-class models are unaffected.
 5. **Budget.** The preview adds no service charge beyond model inference and the resources we
    create — but the AgentCore Runtime example's NAT gateway is the kind of thing that eats a $15
    budget while idling. A self-hosted exec server is the $0 path, with one honest cost: **a judge
@@ -70,10 +81,17 @@ the new preview service than the one in maintenance mode.
   whether Agents Classic specifically is required (in which case this account is **ineligible**,
   and that is worth knowing on Nov 18 rather than Dec 1); and whether Kiroween may take the same
   project.
-- **One signed request to `bedrock-mantle.us-east-1.api.aws`, once `aws configure` is done.** It
-  either returns a session or returns `AccessDenied`, and that is the entire answer to "can this
-  account use BMA?". Whether AWS CLI 2.36.49 ships a `bedrock-mantle` command is itself unverified;
-  the documented route is the preview's own example bundle.
+- **One signed request to `bedrock-mantle.us-east-1.api.aws`, once `aws configure` is done.** It is
+  a script now: `node scripts/bma-probe.mjs --yes` — read-only, free, and it reads its own 403 for
+  you, because a 403 here has two opposite meanings and only the wording separates them. An
+  identity-shaped denial is our own IAM policy (`AmazonBedrockFullAccess` predates this service and
+  almost certainly does not cover the `bedrock-mantle:` namespace) and says nothing whatever about
+  the challenge; an account-shaped one says BMA is as closed as Agents Classic.
+
+  It is **not** the whole answer, and the script says so. A session also needs `role_arn`,
+  `iam:PassRole` and `bedrock-mantle:CallWithBearerToken`, so a bare POST returns a 400 rather than
+  a verdict — which is why `--create-probe` is off by default and why a ValidationException from it
+  counts as the good news: the request got past authorisation and only the body was wrong.
 
 **Nothing below this section is wasted.** Everything that made yesterday's §0 true of Agents
 Classic is still true of Agents Classic. Guardrails, the three Lambdas, the role gate, policyCheck
