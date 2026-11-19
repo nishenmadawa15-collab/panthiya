@@ -14,8 +14,8 @@ Bedrock agents build and **Kiroween 2026** (Frankenstein category).
 | Repository | [`github.com/nishenmadawa15-collab/panthiya`](https://github.com/nishenmadawa15-collab/panthiya) — public, MIT, `.kiro/` committed |
 | Live app | `TODO(nishen)` — paste the Amplify URL here once task 0.15 is done (Amplify Hosting → connect `main` → copy the branch URL) |
 | Demo video | `TODO(nishen)` — paste the YouTube link here after task 7.7 is recorded |
-| Build status | **565 of 565 tests pass, nothing skipped · 67 of 79 tasks done** — snapshot taken 2026-11-18 17:59 UTC, re-check before quoting it · nothing deployed, **$0 spent** |
-| Branch you are reading | Active work is on `feat/m4-student-tutor`. Whether it merges into `main` is still open, and **at 2026-11-18 17:50 UTC `main` was 24 commits behind it** and still being added to — so a clone of `main` shows an older project than this README describes, and Amplify watches `main`. Re-derive below |
+| Build status | **565 of 565 tests pass, nothing skipped · 67 of 79 tasks done** — re-counted 2026-11-19, re-check before quoting it · nothing deployed, **$0 spent** |
+| Branch you are reading | Active work is on `feat/m4-student-tutor`, **pushed to `origin` on 2026-11-19**. Whether it merges into `main` is still open, and `main` is **30 commits behind it** — so a clone of `main` shows an older project than this README describes, and Amplify watches `main`. Re-derive below |
 | Licence | [MIT](LICENSE) |
 
 > **How to re-check that status row.** Both numbers were counted on **2026-11-18 at 17:59 UTC**, while

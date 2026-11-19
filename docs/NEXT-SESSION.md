@@ -10,9 +10,12 @@ correction wins. Read this, then the **2026-11-18 block of `docs/BUILD-LOG.md`**
 ## Where 2026-11-18 ended
 
 **67 of 79 tasks. 565 tests pass, nothing skipped. Fourteen commits. Nothing deployed, $0 spent,
-and nothing pushed** — the branch is 29 commits ahead of `origin/main` and has never left this
-machine. `git push -u origin feat/m4-student-tutor` is the first thing worth doing tomorrow, before
-anything can be lost.
+and nothing pushed** — the branch was 29 commits ahead of `origin/main` and had never left this
+machine.
+
+> **Corrected 2026-11-19:** the push is done. `feat/m4-student-tutor` is on `origin` with 30 commits
+> and the work can no longer be lost with the machine. `main` is still untouched, so the merge
+> decision in §4 is unchanged and Amplify still has nothing to build.
 
 Four lanes ran in parallel with no AWS at all, then a verification pass read what they produced, and
 three more lanes fixed what it found. What that pass found is the thing to carry forward:
@@ -334,7 +337,7 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 554 tests pass, nothing skipped. Nothing has been deployed and nothing has
+**67 of 79 tasks done. 565 tests pass, nothing skipped. Nothing has been deployed and nothing has
 been spent.** (Counted 2026-11-18 at the end of the session. Re-derive rather than trust it:
 `npm test`, and `grep -c "^- \[x\]" .kiro/specs/panthiya/tasks.md`.)
 

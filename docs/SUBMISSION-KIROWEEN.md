@@ -44,10 +44,10 @@ a URL settles it; until then Kiroween is the only verified deadline this project
 
 ### What the rules require of the repository, checked against it
 
-| Requirement | State on 2026-11-18 |
+| Requirement | State on 2026-11-18, with 2026-11-19 corrections marked |
 |---|---|
 | `/.kiro` at the repo root, **not** in `.gitignore` (they say this can disqualify) | ✅ nine files tracked, and `.gitignore` carries an explicit comment never to ignore it |
-| Public repo with an open-source licence **detectable in the About section** | ✅ MIT `LICENSE` at the root — confirm GitHub shows it in About once the repo is public |
+| Public repo with an open-source licence **detectable in the About section** | ✅ **confirmed live 2026-11-19**: `gh repo view` reports `visibility: PUBLIC` and `licenseInfo: MIT License`, so GitHub has detected it rather than merely holding the file |
 | Newly created during the submission period (from Oct 30) | ✅ first commit Nov 16 |
 | **Disclose any pre-existing code** incorporated | ⚠️ the starter pack this repo grew from has to be disclosed — one honest line, see §13 |
 | A URL to a functional application | ❌ needs the Amplify deploy (task 0.15) |
