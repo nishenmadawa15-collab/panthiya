@@ -113,8 +113,17 @@ table further down is struck through for that reason.
 
 ## 0b. The challenge is on AWS Builder Center, not Devpost (found 2026-11-19)
 
-Four searches on 2026-11-19 turned up **exactly one trace of the event name anywhere on the public
-web**, and it moves the search:
+**First, the part that was never missing.** `PANTHIYA_SETUP.md` §1 — this project's own setup
+file, committed on day one — has a two-column table whose left-hand heading reads
+**"Agents, your rules" (AWS Builder Center)**, with the prize (5 × $1,000 AWS credits and swag)
+and the deadline as **Dec 2, 11:59 PM PT** / Dec 3, 1:29 PM in Sri Lanka. The host was in the
+repository the whole time. Three sessions read §6 of that file, which names the challenge without
+naming where it lives, and went to Devpost. **Five searches were spent on a fact that was two
+screens above the one being read** — which is the cheapest lesson available today: read the
+project's own source document all the way through before searching the web for what it says.
+
+Four searches on 2026-11-19 then confirmed it independently, and that is worth something too — the
+repository's own claim is now corroborated from outside it:
 
 > A GitHub repository, `romanceresnak/break-me-agentcore`, describes itself as *"Built for the*
 > **Agents, your rules** *hackathon on AWS Builder Center."*
@@ -127,14 +136,19 @@ What that changes, and what it does not:
 
 | | |
 |---|---|
-| **Where to look** | Builder Center hackathons: `builder.aws.com/build/hackathons`, individual events at `builder.aws.com/build/hackathons/<uuid>/<slug>`. **Stop searching Devpost for this one** |
+| **Where to look** | Builder Center hackathons: `builder.aws.com/build/hackathons`, individual events at `builder.aws.com/build/hackathons/<uuid>/<slug>`. **Stop searching Devpost for this one** — and note that `PANTHIYA_SETUP.md` §1 says Kiroween is the Devpost one, which is how the two got crossed |
 | **Why the agent cannot read it** | That index is client-rendered and hung on two attempts from here (`Loading hackathons…`, then a 45-second script timeout). A site-restricted search of `builder.aws.com` returns Builder Center articles and one unrelated hackathon — *Agent Experience Hackathon: Strands Decider* — but no page for this event, which is what an unlisted or invitation-only event looks like. **It needs Nishen's signed-in browser**, which is human step 1 |
 | **A single hint about the service, worth exactly what it is** | That repo builds on the **AgentCore managed harness** — option **A** — and mentions a *"Bedrock Managed Agents path (preview, allow-listed)"* only as an alternative in its own table. One entrant's choice is **not** a rule, and it does not settle §0a. But it is the only external signal about which service the challenge is about, and it points at **A rather than C** |
-| **What is still unverified** | The deadline, the required service, whether this account is eligible, and whether both challenges may take the same project. `PANTHIYA_SETUP.md` §6 remains the only source for the Dec 2 date |
+| **What is still unverified** | The **required service**, whether this account is eligible, and whether both challenges may take the same project — none of which `PANTHIYA_SETUP.md` answers. The deadline it gives (Dec 2, 11:59 PM PT) is now a repository claim corroborated by nothing external, which is better than before and still not the rules page |
 
 **So the ask is narrower than it was.** Not "find the rules" — open Builder Center signed in, find
 *Agents, your rules* in the hackathons list, and paste the URL. If it is not in the list, the
 invitation email is the only path and it is worth saying so plainly rather than searching again.
+
+**And the Dec 2 deadline is now the one to plan against**, nine days before Kiroween's Dec 4 and
+**thirteen days from today** — with the live deploy, the Sinhala gate, the guardrail, the 36-case
+live run and a demo video all still ahead of it, and every one of them behind a sign-in that has not
+happened.
 
 ## 0a. Read this first — the blocker may be the wrong blocker (found 2026-11-18)
 

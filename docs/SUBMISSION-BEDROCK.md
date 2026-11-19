@@ -340,3 +340,17 @@ were taken, so they were already slightly low when they were written.
 - [ ] Whether to submit at all if the rules require Bedrock Agents Classic. If they do, say so in the
       submission rather than describing an agent that was never created — that is the one answer this
       project cannot give dishonestly without undoing its own point.
+
+## Pre-existing material
+
+Disclosed in full in [`SUBMISSION-KIROWEEN.md` §12a](SUBMISSION-KIROWEEN.md): the starter pack this
+repository grew from is **five documents and no application code** — the plan, the three Kiro
+steering files and the 36 attack cases — all dated 2026-11-16, the day of the first commit. Three of
+the five are byte-identical in the repo today.
+
+It is repeated here rather than cross-referenced only, because **this challenge's rules have not been
+read by anyone** (`docs/NEXT-SESSION.md` §0b) and a disclosure requirement is exactly the kind of
+clause that differs between events. If the form asks, the answer above is the whole answer.
+
+---
+

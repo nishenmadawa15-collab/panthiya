@@ -182,7 +182,14 @@ the claim false.
    in those words. Turning off the final policy check moves the score by exactly the number of cases
    it was holding alone, and that number — the one in the warning banner — is true.
 3. **An error is not a block.** The page renders `error` as its own tile for this reason. If a tile
-   shows errors, say what failed; do not fold it into the blocked count.
+   shows errors, say what failed; do not fold it into the blocked count. **Two of the causes are new
+   on 2026-11-19 and both are deliberate**, so they are worth recognising rather than apologising
+   for on camera: `reply_truncated` means the model's answer hit the 1,024-token ceiling and was
+   refused rather than delivered half-finished — the alternative, found in review, was a parent fee
+   message going out mid-number as a 200 that scored as a pass; and `tool_use_duplicate_id` means
+   the model asked for the same tool twice with one id, which is refused because the results could
+   not be told apart. Either tile is the system declining to guess, which is the story this demo is
+   telling.
 
 **One thing to watch on camera.** Three of the four layer-3 defects found in review were
 *over-blocks* — a correct refusal or a truthful fee read-back thrown away — and an over-block is

@@ -49,7 +49,7 @@ a URL settles it; until then Kiroween is the only verified deadline this project
 | `/.kiro` at the repo root, **not** in `.gitignore` (they say this can disqualify) | ✅ nine files tracked, and `.gitignore` carries an explicit comment never to ignore it |
 | Public repo with an open-source licence **detectable in the About section** | ✅ **confirmed live 2026-11-19**: `gh repo view` reports `visibility: PUBLIC` and `licenseInfo: MIT License`, so GitHub has detected it rather than merely holding the file |
 | Newly created during the submission period (from Oct 30) | ✅ first commit Nov 16 |
-| **Disclose any pre-existing code** incorporated | ⚠️ the starter pack this repo grew from has to be disclosed — one honest line, see §13 |
+| **Disclose any pre-existing code** incorporated | ✅ **done 2026-11-19, §12a** — and the answer is better than expected: the starter pack is **five documents and no code**, all dated 2026-11-16, three of them byte-identical in the repo today. Two facts about its own authorship are still yours to confirm |
 | A URL to a functional application | ❌ needs the Amplify deploy (task 0.15) |
 | Login credentials for judges, in the form's private field | ⚠️ the three demo logins go here — `scripts/demo-users.mjs` creates them |
 | Demo video **under 3 minutes, public, on YouTube** | ❌ task 7.7. YouTube specifically; another host does not satisfy it |
@@ -376,6 +376,46 @@ in the same hour these were taken, so they were already slightly low when writte
 - `TODO(nishen)` — a LinkedIn post **starting with** `#KiroweenHackathon26` (verified against the live rules on 2026-11-18; the rules require the hashtag to be the first thing in the post). Previously this line asked to confirm the hashtag against
   the live rules before posting; `PANTHIYA_SETUP.md` is the only source for it here and it has not been
   verified.
+
+---
+
+## 12a. Pre-existing material, disclosed — and it is five documents, not code
+
+The rules require any pre-existing code incorporated into a submission to be disclosed. This
+repository grew from a "starter pack" (`panthiya-starter.zip`), so here is exactly what was in it,
+read from the archive rather than from memory:
+
+| File | Size | In the archive, dated | In the repo today |
+|---|---|---|---|
+| `.kiro/steering/product.md` | 2,020 B | 2026-11-16 | **byte-identical** |
+| `.kiro/steering/tech.md` | 2,360 B | 2026-11-16 | **byte-identical** |
+| `.kiro/steering/structure.md` | 1,874 B | 2026-11-16 | **byte-identical** |
+| `PANTHIYA_SETUP.md` | 14,069 B | 2026-11-16 | grown to 18,667 B — the 2026-11-18 corrections |
+| `docs/RED-TEAM-CASES.md` | 5,175 B | 2026-11-16 | **byte-identical** |
+
+**Nine entries, five files, 25 KB, and not one line of application code.** The pack is the plan,
+the three steering documents and the 36 attack cases — all prose. Every line of code in this
+repository was written after the first commit, on 2026-11-16.
+
+Three things follow, and each is checkable:
+
+1. **The pack itself is not pre-existing in the rules' sense.** Its files are dated **2026-11-16**,
+   inside the submission period that opened Oct 30, and the first commit is the same day. It is
+   disclosed here because the honest answer to "did anything come from before?" is *these five
+   documents, written the same day*, not because the rules exclude it.
+2. **The spec triad was not in the pack.** `.kiro/specs/panthiya/requirements.md`, `design.md` and
+   `tasks.md` — 862 lines in the first commit, including the 79 numbered tasks every later commit
+   cites — are **not** among its nine entries. They were produced in Kiro from the prompt recorded
+   in `PANTHIYA_SETUP.md` §6. That is the most load-bearing artefact in the project and Kiro made it.
+3. **The steering documents were never edited to match what got built.** All three are byte-identical
+   to the archive thirty commits later, which is the opposite of the usual direction: rules written
+   on day one and not loosened once. §1 traces three of their clauses into the build; this row says
+   they were never moved to make that tracing work.
+
+`TODO(nishen)` — **two facts only you can confirm**, and the submission form may ask: when and with
+what the starter pack was written (the archive says 2026-11-16, and whether a tool helped write it
+is yours to state), and whether any of its five documents has been submitted to another event
+before. If either answer differs from what is above, this section is the one to correct.
 
 ---
 

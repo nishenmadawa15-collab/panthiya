@@ -19,6 +19,8 @@ Why it cannot wait for the deploy: Kiroween closes **Dec 4, 2:00 PM PT**, 20% of
 | **What the commit history says** | **All 45 commits carry `Co-Authored-By: Claude Opus 5`.** Not some. All of them |
 | **What the write-up currently says about that** | Nothing. `docs/KIRO-WRITEUP.md` is 257 lines on the Kiro workflow and never names another tool |
 | **Who reads it** | Judges with the public repo open. `git log` is one command, and the write-up itself invites them to check every claim against a file |
+| **Found 2026-11-19, and it raises Kiro's verifiable share** | The starter pack this repo grew from contains **nine entries, five files, no code** — and the **spec triad is not among them**. `requirements.md`, `design.md` and `tasks.md`, 862 lines in the first commit including the 79 numbered tasks every later commit cites, were produced **in Kiro** from the §6 prompt. Read from the archive, not from memory (`SUBMISSION-KIROWEEN.md` §12a) |
+| **And the steering held** | All three `.kiro/steering` documents are **byte-identical** to that archive thirty commits later — rules written on day one and never loosened to match what got built, which is the opposite of the usual direction |
 
 So the gap is not whether Kiro was used — the specs and hooks are real and traceable. The gap is
 that a document titled *"How Kiro was used to build Panthiya"* is silent on a trailer that appears
@@ -62,6 +64,13 @@ Kiro when the A/B/C orchestration decision lands.
 the submission. C is the only thing that moves the 20% score, and it is worth doing only with the
 hours it actually takes, not instead of the deploy.
 
+**The 2026-11-19 finding makes A cheaper than it looked when this brief was written.** The honest
+sentence is no longer "Kiro held the rules and something else wrote the code" — it is "Kiro produced
+the 862-line spec and the 79-task plan that every commit cites, its steering was fixed on day one and
+never loosened, and the implementation against it was written by a coding agent." That is a larger
+Kiro share than the silent version implies, and all of it is checkable from the archive and the
+diff.
+
 ---
 
 ## The text, if you pick A
@@ -78,6 +87,13 @@ that distinction matters.
 > the three `inclusion: always` steering documents that every task was written against, and the
 > three hooks. That layer decided what got built, in what order, and under which non-negotiable
 > rules — §1 and §2 below trace individual steering clauses into individual files.
+>
+> Two things about that layer are worth checking rather than taking on trust. The spec triad was
+> **not** in the starter pack this repository grew from — `requirements.md`, `design.md` and
+> `tasks.md` were produced in Kiro from the prompt recorded in `PANTHIYA_SETUP.md` §6, and they are
+> 862 lines in the first commit. And all three steering documents are **byte-identical** to that
+> archive thirty commits later: the rules were written on day one and never adjusted to match what
+> got built.
 >
 > **The implementation was written by an AI coding agent driven against that spec** — every one of
 > the 45 commits carries a `Co-Authored-By: Claude Opus 5` trailer, which is why this section exists
