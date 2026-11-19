@@ -28,7 +28,16 @@ const DISTRESS = [
   'beat me', 'will hit me', 'going to hit me', 'father will kill', 'amma will kill',
   'mother will kill', 'they will kill me', 'punish me badly',
   // hopelessness and exhaustion
-  'no point', 'pointless', 'hopeless', 'give up on everything', 'i give up', 'cannot go on',
+  //
+  // "no point" is the one phrase in this list that a maths question owns as much as a hopeless
+  // child does: "there is no point on the graph where x = 3" was sent the 1926 helpline, and an
+  // over-block scores as a pass on the red-team scoreboard, so nothing would have reported it.
+  // Narrowed to the phrasings that are about the student and not about a graph. "in the graph" and
+  // "in that region" are why "no point in" alone is not one of them.
+  'no point in living', 'no point in life', 'no point in anything', 'no point in trying',
+  'no point in going', 'no point in studying', 'no point in me', 'no point anymore',
+  'no point any more', 'no point living', 'no point going on',
+  'pointless', 'hopeless', 'give up on everything', 'i give up', 'cannot go on',
   "can't go on", 'cannot take it', "can't take it", 'cannot do this anymore',
   "can't do this anymore", 'too much for me', 'nothing matters', 'nobody cares', 'no one cares',
   'hate myself', 'i am worthless', "i'm worthless", 'i am useless', "i'm useless", 'i am a failure',
@@ -52,7 +61,9 @@ const MEDICINE = [
   'medicine', 'medicines', 'tablet', 'tablets', 'pill', 'pills', 'capsule', 'drug', 'drugs',
   'syrup', 'injection', 'supplement', 'supplements', 'caffeine pill', 'energy pill',
   'sleeping pill', 'adderall', 'modafinil', 'ritalin', 'dose', 'dosage', 'prescription',
-  'බෙහෙත්', 'පෙති', 'ඖෂධ', 'මාත්‍රා',
+  // Sinhala stems rather than one inflection: a student asks for "බෙහෙතක්" and "පෙත්තක්", which
+  // 'බෙහෙත්' and 'පෙති' do not contain — this file's own Sinhala reply uses both of those forms.
+  'බෙහෙත', 'පෙති', 'පෙත්ත', 'ඖෂධ', 'මාත්‍රා',
   'மருந்து', 'மாத்திரை', 'மருந்துகள்', 'ஊசி',
 ];
 
@@ -60,19 +71,68 @@ const MEDICINE = [
  * Only a medicine question *about the student* is a wellbeing matter; "what is in paracetamol" as
  * a Science question is not. Every phrase here is two words or a distinctive one: a bare "me" or
  * "my" would match the "me" inside "medicine" and turn the gate below into no gate at all.
+ *
+ * These are the phrases that are **only** ever about the person asking — asking to be given
+ * something, to take something, to be kept awake. A medicine word anywhere in the same message as
+ * one of these is a wellbeing matter, however far apart they sit, because a student assembling the
+ * question across two sentences is a real red-team shape (cases.json C6) and not a reason to stop
+ * caring.
  */
 const SELF_ADVICE = [
   'help me', 'helps me', 'keep me', 'keeps me', 'make me', 'makes me', 'give me', 'for me',
-  'should i', 'can i', 'could i', 'i take', 'i need', 'i want', 'i use', 'my exam', 'my paper',
-  'stay awake', 'staying awake', 'awake all', 'all night', 'to study', 'for studying', 'studying',
-  'for exam', 'before exam', 'concentrate', 'focus', 'memory', 'sleep', 'tired', 'energy',
-  'මට', 'මම', 'නිදා', 'අවදි', 'ඉගෙන',
-  'எனக்கு', 'நான்', 'தூங்க', 'விழித்த', 'படிக்க',
+  'should i', 'can i', 'could i', 'i take', 'i use',
+  'stay awake', 'staying awake', 'awake all', 'all night',
+  'මට', 'මම',
+  'எனக்கு', 'நான்',
 ];
+
+/**
+ * The same intent, in words the O/L syllabus also owns.
+ *
+ * "Explain how drugs affect the nervous system, I need it for my exam" is a Science question, and
+ * it was answered with "I cannot suggest any medicine" — because `drugs` was in one clause and
+ * `i need` in the next, and the lists were OR'd across the whole message. Every phrase here is a
+ * thing a student says about studying rather than about taking something, so on its own it means
+ * nothing: it counts only next to the medicine word, where "what tablet helps my memory" is, and
+ * where a sentence about the nervous system is not.
+ */
+const STUDY_CONTEXT = [
+  'i need', 'i want', 'my exam', 'my paper', 'to study', 'for studying', 'studying',
+  'for exam', 'before exam', 'concentrate', 'focus', 'memory', 'sleep', 'tired', 'energy',
+  'නිදා', 'අවදි', 'ඉගෙන',
+  'தூங்க', 'விழித்த', 'படிக்க',
+];
+
+/**
+ * How far apart a MEDICINE phrase and a STUDY_CONTEXT phrase may sit and still be one thought.
+ *
+ * 24 characters of ordinary Sinhala, Tamil or English prose: about four short words, which is as
+ * far as "what tablet helps my memory" ever spreads. The 28 characters between `drugs` and
+ * `i need` in the Science question above are a clause boundary, which is the distinction.
+ */
+const MEDICAL_WINDOW = 24;
 
 const normalise = (text) => text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
 
 const hits = (text, phrases) => phrases.some((phrase) => text.includes(phrase));
+
+/** Every `[start, end)` where one of `phrases` appears in `text`. */
+const spans = (text, phrases) => phrases.flatMap((phrase) => {
+  const found = [];
+  for (let at = text.indexOf(phrase); at !== -1; at = text.indexOf(phrase, at + 1)) {
+    found.push([at, at + phrase.length]);
+  }
+  return found;
+});
+
+/** True when some phrase from each list appears within `window` characters of the other. */
+const nearby = (text, left, right, window) => {
+  const rights = spans(text, right);
+  return spans(text, left).some(([leftAt, leftEnd]) => rights.some(([rightAt, rightEnd]) => (
+    // Negative when the two overlap, which is as close as they get.
+    (rightAt >= leftEnd ? rightAt - leftEnd : leftAt - rightEnd) <= window
+  )));
+};
 
 /**
  * Classify one user message.
@@ -86,7 +146,9 @@ export function classify(text) {
   if (!t) return { hit: false, kind: null };
 
   if (hits(t, DISTRESS)) return { hit: true, kind: 'distress' };
-  if (hits(t, MEDICINE) && hits(t, SELF_ADVICE)) return { hit: true, kind: 'medical' };
+  const medicine = hits(t, MEDICINE);
+  if (medicine && hits(t, SELF_ADVICE)) return { hit: true, kind: 'medical' };
+  if (medicine && nearby(t, MEDICINE, STUDY_CONTEXT, MEDICAL_WINDOW)) return { hit: true, kind: 'medical' };
   return { hit: false, kind: null };
 }
 

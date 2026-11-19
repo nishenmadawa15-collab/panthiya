@@ -30,6 +30,41 @@ expected to match.
 
 ---
 
+## Priority 0 — two Sinhala words that are not on a screen (added 2026-11-19)
+
+**Read this one first. It is thirty seconds, and it is not a UI string** — it is the word list the
+wellbeing check matches against, in `backend/functions/policy-check/distress.mjs`. It decides
+whether a student asking for medicine gets the careful reply instead of the model.
+
+A verification pass found that the list carried **`බෙහෙත්`** and **`පෙති`**, but a student writes
+**`බෙහෙතක්`** or **`පෙත්තක්`** — and neither of the old entries is contained in those forms, so the
+request went straight past the gate. Those two forms are the ones *this module's own Sinhala reply*
+uses, which is how it was spotted.
+
+It has been changed to the stems below, and it errs toward catching more:
+
+| Was | Is now |
+|---|---|
+| `'බෙහෙත්'`, `'පෙති'` | `'බෙහෙත'`, `'පෙති'`, `'පෙත්ත'` |
+
+**Three questions, and nobody in the session that made this change reads Sinhala:**
+
+1. Do `බෙහෙත` and `පෙත්ත` as stems actually catch the way a student would ask — *බෙහෙතක්*,
+   *බෙහෙත්*, *පෙත්තක්*, *පෙති*? Write any form that is missing: ______________________
+2. Is there a common word for medicine or a tablet that is **not** in the list at all? A brand name,
+   or how a child in a tuition class would really say it: ______________________
+3. Does either stem appear inside an ordinary, harmless word? That would block normal schoolwork
+   the way `no point` did in English: ______________________
+
+The Tamil half of the same list — `மாத்திரை`, `மருந்து`, `எனக்கு`, `நான்` — was **not** changed and
+has never been reviewed. If you know someone who reads Tamil, this list is the highest-value thing
+to show them, ahead of every string below.
+
+**Nothing in this section is on a screen, so a mistake here is invisible until a child asks.** That
+is why it is above Priority 1.
+
+---
+
 ## Priority 1 — safety-critical strings (14 keys)
 
 These carry a safety or honesty distinction. A translation that *reads well* but loses the
@@ -947,6 +982,7 @@ a Fix line. Priority 1 keys are not repeated here.
 Tick a line when you have read every string in it. Stop wherever you like — the ticks say
 where to pick up.
 
+- [ ] **Priority 0** — the two Sinhala medicine words (30 seconds, and it is not a screen string)
 - [ ] **Priority 1** — safety-critical strings (14 keys)
 - [ ] **Priority 2** — terminology (4 words)
 - [ ] `meta.*` (3)

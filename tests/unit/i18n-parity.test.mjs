@@ -43,16 +43,28 @@ const namespaces = new Set(Object.keys(packs.en).map((key) => key.split('.')[0])
 /**
  * Every pack key a script reads.
  *
+ * Two passes, because the first one has a hole the second one closes.
+ *
  * Matched by shape rather than by `t(...)`, because a key reaches `t()` three ways here: written
  * out at the call, held in a map (`LAYER_KEY`, `MIC`), or carried on a field (`statusKey`,
  * `replyKey`). A dotted literal whose first segment is a pack namespace is a pack key in all
  * three, and nothing else in these files looks like one — an S3 key has slashes in it.
+ *
+ * But "whose first segment is a pack namespace" means a key whose **whole namespace** is missing
+ * is not checked at all: `t('tutorchat.sending')` with no `tutorchat.*` in en.json was dropped by
+ * this function and reported by nobody, which is the one case where every single key of a screen
+ * renders blank. So anything handed straight to `t()` is collected whether its namespace is known
+ * or not — at that call site there is no ambiguity about what the string is for.
  */
-function referencedKeys() {
+function referencedKeys(sources = scripts) {
   const found = new Map();
-  for (const [name, src] of scripts) {
-    for (const [, key] of code(src).matchAll(/'([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'/g)) {
+  for (const [name, src] of sources) {
+    const source = code(src);
+    for (const [, key] of source.matchAll(/'([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'/g)) {
       if (namespaces.has(key.split('.')[0])) found.set(key, name);
+    }
+    for (const [, key] of source.matchAll(/\bt\(\s*'([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'/g)) {
+      found.set(key, name);
     }
   }
   return found;
@@ -107,6 +119,18 @@ test('req 12.2 — every key the scripts read exists in en.json', () => {
   for (const [key, file] of referenced) {
     assert.ok(key in packs.en, `assets/${file} reads "${key}", missing from en.json`);
   }
+});
+
+test('req 12.2 — a key whose whole namespace is missing is still a missing key', () => {
+  // The hole this closes: the scan above identifies a pack key by its first segment being a
+  // namespace en.json already has, so `t('tutorchat.sending')` with no `tutorchat.*` in the pack
+  // was collected by nobody and reported by nobody — and that is the one failure that blanks an
+  // entire screen rather than one label. Checked on a fixture rather than on a real asset, because
+  // the live files are (correctly) clean, and a test that only passes while they are is decoration.
+  const found = referencedKeys([['fixture.js', "status.textContent = t('tutorchat.sending');"]]);
+  assert.deepEqual([...found.keys()], ['tutorchat.sending'], 'the literal at a t() call must be collected whatever its namespace');
+  assert.ok(!(namespaces.has('tutorchat')), 'pick an unused namespace for this fixture');
+  assert.ok(!('tutorchat.sending' in packs.en), 'if this key is ever added, this fixture needs a different one');
 });
 
 test('req 12.2 — a key built at runtime has a namespace that exists', () => {

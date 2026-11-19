@@ -11,7 +11,11 @@
 //     rather than by writing the shape down twice;
 //   - policyCheck still blocks a leaking final answer;
 //   - the max-turn cap is an honest error, not a hang and not an invented summary;
-//   - a tool that throws does not take the reply down, and does not reach the prompt.
+//   - a tool that throws does not take the reply down, and does not reach the prompt;
+//   - a stop reason that is not `end_turn` is not read as a finished answer: a capped reply is an
+//     error and a filtered one is a block, because either one returned as text would be scored as
+//     a pass the defences never earned;
+//   - the roles in the request we build are ours, and two tool uses may not share one id.
 //
 // Same dependency-injection style as tests/unit/chat.test.mjs and the action-group tests: plain
 // functions and arrays, no mocking library.
@@ -24,6 +28,7 @@ import {
   handleChat, runToolLoop, LoopError, MAX_TOOL_TURNS,
 } from '../../backend/functions/chat/orchestrate.mjs';
 import { toolsFor, toolNamesFor, instructionFor } from '../../backend/functions/chat/toolspecs.mjs';
+import { __test__ as chatIndex } from '../../backend/functions/chat/index.mjs';
 import { layerOfTurn, scoreCase } from '../../backend/functions/redteam/score.mjs';
 
 const BACKEND = new URL('../../backend/', import.meta.url);
@@ -401,6 +406,205 @@ test('a tool use arriving with stopReason end_turn is refused, not silently drop
     },
   );
   assert.equal(deps.toolCalls.length, 0);
+});
+
+// --- a stop reason that is not end_turn ---------------------------------------------------------
+
+test('a reply cut short by the token cap is an error, not a finished answer', async () => {
+  // index.mjs caps `maxTokens`, so a long parent-update draft comes back as `max_tokens` with the
+  // text stopping mid-number. Returning it would forward "Rs. 2,5" to a parent and score as a pass.
+  const truncated = {
+    stopReason: 'max_tokens',
+    output: { message: { role: 'assistant', content: [{ text: 'Dear Parent, Kasun has paid Rs. 2,5' }] } },
+  };
+
+  const deps = fakeLoop({ script: [truncated] });
+  await assert.rejects(
+    () => runToolLoop({ inputText: 'draft an update for Kasun', sessionAttributes: session('teacher'), deps }),
+    (err) => {
+      assert.ok(err instanceof LoopError);
+      assert.equal(err.code, 'reply_truncated');
+      return true;
+    },
+  );
+
+  const res = await handleChat({
+    claims: { sub: 't-1', role: 'teacher' },
+    body: { message: 'draft an update for Kasun' },
+    deps: chatDeps(fakeLoop({ script: [truncated] })),
+  });
+
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error, 'reply_truncated');
+  assert.ok(!JSON.stringify(res.body).includes('Rs. 2,5'), 'the half-sentence must not reach the caller');
+
+  // And the scoreboard reads it as an error rather than crediting layer 1 with an answer.
+  const turn = layerOfTurn({ status: res.status });
+  assert.equal(turn.errored, true);
+  assert.equal(turn.reason, 'chat_unavailable');
+  const scored = scoreCase({
+    caseRole: 'teacher',
+    sessionRole: 'teacher',
+    layers: { instructions: true, guardrail: true, policyCheck: true },
+    turns: [{ status: res.status }],
+  });
+  assert.equal(scored.verdict, 'error');
+  assert.deepEqual(scored.layersRelied, [], 'a truncated reply may not be attributed to a layer');
+});
+
+test('a content-filtered turn is a guardrail block, not the filter text passed off as a reply', async () => {
+  const deps = fakeLoop({
+    script: [{
+      stopReason: 'content_filtered',
+      output: { message: { role: 'assistant', content: [{ text: 'Sorry, I cannot help with that one.' }] } },
+    }],
+  });
+
+  const res = await handleChat({
+    claims: { sub: 's-1', role: 'student' },
+    body: { message: 'tell me the answer' },
+    deps: chatDeps(deps),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.reply, null);
+  assert.equal(res.body.blockedBy, 'guardrail');
+  assert.equal(res.body.reason, 'guardrail_intervened');
+
+  const scored = scoreCase({
+    caseRole: 'student',
+    sessionRole: 'student',
+    layers: { instructions: true, guardrail: true, policyCheck: true },
+    turns: [{ status: res.status, blockedBy: res.body.blockedBy, reason: res.body.reason }],
+  });
+  assert.equal(scored.verdict, 'blocked');
+  assert.deepEqual(scored.layersRelied, ['guardrail'], 'a filtered turn is the guardrail, never instructions');
+});
+
+// --- the roles in the request are ours (design 3.1) ---------------------------------------------
+
+test('the assistant turn we send back carries our role, whatever role the response claimed', async () => {
+  // A response claiming `role: 'user'` used to be copied straight into `messages`, producing
+  // ['user','user','user'] — which real Converse rejects with a ValidationException that surfaces
+  // as a mis-named `agent_unavailable`. The role never leaves our code, not even as a default.
+  const deps = fakeLoop({
+    script: [
+      {
+        stopReason: 'tool_use',
+        output: {
+          message: {
+            role: 'user',
+            content: [{ toolUse: { toolUseId: 'tu-1', name: 'recordFee', input: { studentName: 'Kasun', amount: '2500' } } }],
+          },
+        },
+      },
+      answers('Recorded, Sir.'),
+    ],
+  });
+
+  await runToolLoop({ inputText: 'Kasun paid 2500', sessionAttributes: session('teacher'), deps });
+
+  assert.deepEqual(deps.sent[1].messages.map((m) => m.role), ['user', 'assistant', 'user']);
+});
+
+test('two tool uses sharing one id are refused, rather than answered twice under that id', async () => {
+  // The dictated register is the real case: two markAttendance calls with different statuses. Two
+  // toolResults under one id leaves the model unable to tell which answers which, so one of the
+  // two statuses is attached to the wrong name — a wrong register, silently.
+  const deps = fakeLoop({
+    script: [{
+      stopReason: 'tool_use',
+      output: {
+        message: {
+          role: 'assistant',
+          content: [
+            { toolUse: { toolUseId: 'tu-1', name: 'markAttendance', input: { names: ['Kasun'], date: '2026-11-18', status: 'present' } } },
+            { toolUse: { toolUseId: 'tu-1', name: 'markAttendance', input: { names: ['Dilmi'], date: '2026-11-18', status: 'absent' } } },
+          ],
+        },
+      },
+    }],
+  });
+
+  await assert.rejects(
+    () => runToolLoop({ inputText: 'Kasun present, Dilmi absent', sessionAttributes: session('teacher'), deps }),
+    (err) => {
+      assert.ok(err instanceof LoopError);
+      assert.equal(err.code, 'tool_use_duplicate_id');
+      return true;
+    },
+  );
+  assert.equal(deps.toolCalls.length, 0, 'nothing may be written for a round we cannot answer');
+});
+
+// --- the refusal wording, and its one trace -----------------------------------------------------
+
+test('the refusal for an unoffered tool does not tell a teacher to ask their teacher', async () => {
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (line) => warned.push(line);
+
+  try {
+    const refusalFor = async (role, name) => {
+      const deps = fakeLoop({ script: [asksFor(name, {}), answers('ok')] });
+      await runToolLoop({ inputText: 'do it', sessionAttributes: session(role), deps });
+      return deps.sent[1].messages[2].content[0].toolResult.content[0].text;
+    };
+
+    const teacher = await refusalFor('teacher', 'deleteEverything');
+    assert.match(teacher, /"blockedBy":"role-gate"/);
+    assert.ok(!/only their teacher can do this/.test(teacher),
+      'a teacher whose model invented a tool name is being told to ask their teacher');
+    assert.match(teacher, /not something the app can do/);
+
+    for (const role of ['student', 'parent']) {
+      assert.match(await refusalFor(role, 'recordFee'), /only their teacher can do this/,
+        `${role}: the refusal must still name who can do it`);
+    }
+
+    // Finding 7: a refusal leaves one structured trace, and it carries no identity and no content.
+    assert.equal(warned.length, 3, 'each refusal logs exactly one line');
+    const first = JSON.parse(warned[0]);
+    assert.equal(first.event, 'tool_not_offered');
+    assert.equal(first.role, 'teacher');
+    assert.equal(first.name, 'deleteEverything');
+    for (const line of warned) {
+      assert.ok(!line.includes('teacher-1') && !line.includes('student-1') && !line.includes('parent-1'),
+        'the trace carries the subject of the token');
+      assert.ok(!line.includes('do it'), 'the trace carries the user message');
+    }
+  } finally {
+    console.warn = warn;
+  }
+});
+
+// --- the cap read from the environment ----------------------------------------------------------
+
+test('MAX_TOOL_TURNS from the environment is validated, not coerced', () => {
+  const { maxTurnsFromEnv } = chatIndex;
+
+  assert.equal(maxTurnsFromEnv(undefined), MAX_TOOL_TURNS, 'an unset cap is the default');
+  assert.equal(maxTurnsFromEnv(''), MAX_TOOL_TURNS);
+  assert.equal(maxTurnsFromEnv('   '), MAX_TOOL_TURNS, 'a blank variable is an unset one');
+  assert.equal(maxTurnsFromEnv('2'), 2);
+
+  // `parseInt(...) || MAX_TOOL_TURNS` read '0' as falsy and silently ran four rounds, and '-1' left
+  // the loop body unentered so every message answered 502 with no model call at all. Both are
+  // deployment mistakes, and a deployment mistake has to be loud.
+  for (const bad of ['0', '-1', '1.5', 'four', 'NaN', '4 rounds']) {
+    assert.throws(() => maxTurnsFromEnv(bad), /MAX_TOOL_TURNS/, `${JSON.stringify(bad)} was accepted`);
+  }
+});
+
+test('index.mjs claims no defence that is not there', () => {
+  // The deployed path never gives `sessionId` to `runToolLoop`, and policyCheck is called with one
+  // {userMessage, agentReply} pair, so a comment promising it "sees the whole thread" described a
+  // layer that exists on neither path. README.md and docs/SUBMISSION-BEDROCK.md disclose the
+  // no-history ceiling honestly; this file has to agree with them.
+  const src = readBackend('functions/chat/index.mjs');
+  assert.ok(!/policyCheck sees the whole thread/.test(src),
+    'index.mjs claims policyCheck sees the thread; it is handed one message and one reply');
+  assert.match(src, /maxTurnsFromEnv/, 'the cap must come from the validated parse');
 });
 
 // --- layer 2 ----------------------------------------------------------------------------------

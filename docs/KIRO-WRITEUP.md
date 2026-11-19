@@ -3,7 +3,7 @@
 > What the spec-driven workflow actually did, and where it did nothing.
 
 This is a process document. At the time of writing, **nothing in Panthiya has been deployed to AWS
-and nothing has been spent** — 565 unit tests pass offline (counted 2026-11-19; re-check with `npm test`), and not one line has met a live Bedrock
+and nothing has been spent** — 587 unit tests pass offline (counted 2026-11-19; re-check with `npm test`), and not one line has met a live Bedrock
 agent. So nothing here is a claim about a running system. Everything here is a claim about how the
 code that exists was produced, and every claim points at a file in this repository.
 
@@ -150,7 +150,7 @@ artefact where a text assertion really is the evidence.
 | `update-build-log.kiro.hook` | User-triggered | Appends one row to `docs/BUILD-LOG.md` — date, milestone and task number, what was built, what broke and how it was fixed — then ticks the task in `tasks.md`. "Do not rewrite earlier rows" |
 
 The suite is free to run on every save: it uses the Node.js built-in test runner, has **zero
-dependencies**, and touches no AWS service. 565 tests finish in about twelve seconds.
+dependencies**, and touches no AWS service. 587 tests finish in about sixteen seconds.
 
 Two honest notes about the hooks.
 

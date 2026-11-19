@@ -296,9 +296,10 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 - **A refusal that leaks nothing.** An unowned class, a non-existent class, a real child the caller
   may not see and an invented child all return the **byte-identical** refusal — asserted by `deepEqual`
   across English, Sinhala, Tamil, Singlish and a Cyrillic homoglyph.
-- **565 passing tests, nothing skipped, zero dependencies** (2026-11-18 17:59 UTC; `npm test`). The
-  Node.js built-in runner, under ten seconds a run — four runs here reported `duration_ms`
-  between 5.5 s and 8.9 s — and it touches no AWS service, so the save hook can run it freely.
+- **587 passing tests, nothing skipped, zero dependencies** (counted 2026-11-19; `npm test`). The
+  Node.js built-in runner, around fifteen seconds a run — the two runs on 2026-11-19 reported
+  `duration_ms` of 12.2 s and 15.6 s — and it touches no AWS service, so the save hook can run it
+  freely.
 - **A build log that records what broke**, including a defect found by one lane in another lane's code
   and a privacy test that flickered once and was written down rather than dismissed.
 
@@ -355,7 +356,7 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 
 **Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **565 of 565 tests pass, nothing skipped.**
+- **587 of 587 tests pass, nothing skipped.**
 - **67 of 79 planned tasks done**, 12 open, 9 of those marked `[human]`. Re-check with `npm test` and
   `grep -c '^- \[x\]' .kiro/specs/panthiya/tasks.md`.
 - **$0 spent, nothing deployed.** Every AWS step in `tasks.md` is `[human]` and none has run;

@@ -28,8 +28,24 @@ const ACTION_FUNCTIONS = {
   student: process.env.ACTIONS_STUDENT_FUNCTION,
 };
 
-/** Tunable without a code change, because the first live run is where a looping model shows up. */
-const MAX_TURNS = Number.parseInt(process.env.MAX_TOOL_TURNS ?? '', 10) || MAX_TOOL_TURNS;
+/**
+ * Tunable without a code change, because the first live run is where a looping model shows up.
+ *
+ * Validated rather than coerced: `parseInt(...) || MAX_TOOL_TURNS` read `0` as falsy and quietly
+ * ran four rounds, and `-1` left the loop body unentered so every single message answered 502
+ * `tool_loop_exhausted` with no model call at all. A misconfigured cap is a deployment mistake, so
+ * it fails at init where it is visible, not per request where it looks like an outage.
+ */
+function maxTurnsFromEnv(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return MAX_TOOL_TURNS;
+  const turns = Number(raw);
+  if (!Number.isInteger(turns) || turns < 1) {
+    throw new Error('MAX_TOOL_TURNS must be a positive whole number of rounds');
+  }
+  return turns;
+}
+
+const MAX_TURNS = maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
 
 /**
  * Which orchestrator this deployment uses (docs/NEXT-SESSION.md §0).
@@ -205,7 +221,7 @@ export async function handler(event) {
       distressReply,
       today: todayInColombo(),
       // One Bedrock session per user per day keeps multi-message attacks (B7, C6) inside one
-      // session where policyCheck sees the whole thread, without carrying history forever.
+      // session, without carrying history forever.
       sessionId: `${claims?.sub ?? 'anon'}-${todayInColombo()}`,
     },
   });
@@ -215,4 +231,4 @@ export async function handler(event) {
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
-export const __test__ = { todayInColombo };
+export const __test__ = { todayInColombo, maxTurnsFromEnv };

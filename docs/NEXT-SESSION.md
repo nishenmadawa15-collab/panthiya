@@ -1,9 +1,56 @@
 # Next session — start here
 
-**Updated at the end of 2026-11-18** (the session ran past midnight into the 19th). The sections
-below were written on the 17th and corrected on the 18th; where the two disagree, the dated
-correction wins. Read this, then the **2026-11-18 block of `docs/BUILD-LOG.md`**, then
-`.kiro/specs/panthiya/tasks.md`.
+**Updated at the end of 2026-11-19.** The sections below were written on the 17th and corrected on
+the 18th and 19th; where any two disagree, **the latest dated correction wins**. Read this, then the
+**2026-11-19 block of `docs/BUILD-LOG.md`**, then `.kiro/specs/panthiya/tasks.md`.
+
+---
+
+## Where 2026-11-19 ended
+
+**587 tests pass, nothing skipped. 67 of 79 tasks. Nothing deployed, $0 spent — and the branch is
+on `origin`.** No AWS work was possible today: there are still no credentials on this machine, and
+neither AWS nor Kiro is signed in to the browser the extension sees. Everything below was done
+without either.
+
+| Done | |
+|---|---|
+| **The push** | `feat/m4-student-tutor` → `origin`, 30 commits. `main` untouched, so the merge decision and Amplify are unchanged |
+| **A second verification pass** | Same brief as the first: assume the claims are ahead of the evidence. **Six defects CONFIRMED by running them**, four lower, six areas reported clean — and **every one of them sat behind the green 565** |
+| **All of them fixed** | Two parallel lanes, seventeen mutations, every guard confirmed **red-then-green**. 565 → 587 tests |
+| **`docs/TRANSLATION-REVIEW.md`** | The si/ta review surface. 261 keys per pack, the 14 safety-critical strings first, and now a **Priority 0** above them |
+| **`docs/DECISION-KIRO-WRITEUP.md`** | Decision 4 as a choice of letter, with the recommended text drafted in full |
+| **§0b below** | The challenge is on **AWS Builder Center**, not Devpost — which is why five searches found nothing |
+
+**The two worst defects, because they say what to look for tomorrow.** A reply cut short by the
+token cap was returned as a **finished 200** — and the longest legitimate reply in this product is
+the parent-update draft a teacher forwards to a parent, so a fee message would have gone out
+mid-number while the scoreboard called it a pass. And the test asserting that nothing can delete a
+row from the audit log **could not fail**: granting the teacher Lambda `DeleteItem`, `UpdateItem`
+*and* `BatchWriteItem` on `audit_log` left it green, because its regex window was 400 characters and
+the real distance was 850.
+
+> Yesterday's lesson was *a passing suite is not evidence that a thing runs.* Today's is the
+> narrower half: **a suite that has never been seen to fail is not evidence that it tests
+> anything.** Every fix today was held to a mutation — break the thing the guard protects, watch it
+> go red, restore it. That is the standard for the live run too, and the live run will have far more
+> to be wrong about.
+
+**One thing is open for Nishen that was not on yesterday's list**, and it is thirty seconds: the
+wellbeing check's Sinhala medicine words were matching `බෙහෙත්` and `පෙති`, which a student's
+`බෙහෙතක්` / `පෙත්තක්` do not contain — so req 8.6 could be asked straight past the gate in Sinhala.
+The stems are widened and pinned by a test, erring toward catching more, but **it is a change to the
+most safety-sensitive word list in the project made by a lane that does not read the language.** It
+is Priority 0 in `docs/TRANSLATION-REVIEW.md`. The Tamil half of the same list has never been
+reviewed by anyone.
+
+**Three things were left unfixed on purpose**, named rather than buried: a `max_tokens` response
+that also carries `toolUse` blocks reports `tool_use_without_stop_reason` (an honest 502, just
+mis-named); the microphone can still be *started* during an open typed send, though a transcript can
+no longer race the send; and the full per-turn trace in `runToolLoop` is still discarded on success,
+because where it should go is a privacy-and-cost decision rather than a bug.
+
+**Do not restart any of today's four lanes**, or yesterday's six.
 
 ---
 
@@ -46,10 +93,11 @@ of Kiro will result in disqualification"*.
 | # | | Why it is first |
 |---|---|---|
 | 1 | **Sign in to AWS and to Kiro** in the Chrome window the extension is attached to | Both answered with a sign-in page on the 18th. Credentials are not the agent's to enter, and everything in the console is blocked behind this |
-| 2 | **The Bedrock challenge's invitation email or URL** | It cannot be found: Devpost's own search for *"agents your rules"*, *"bedrock agents"* and *"managed agents"* finds no such event, on top of two web searches. **Kiroween is currently the only verified deadline this project has.** One read answers which service is required, whether this account is even eligible, and the other half of decision 7 |
+| 2 | **The Bedrock challenge's invitation email or URL** | Still the blocker, but **2026-11-19 narrowed where to look: the event is on AWS Builder Center, not Devpost** (§0b). So the three Devpost searches were searching the wrong site. **Kiroween is currently still the only verified deadline this project has.** One read answers which service is required, whether this account is even eligible, and the other half of decision 7 |
 | 3 | `aws configure` (IAM user `panthiya-dev`) and `winget install Amazon.SAM-CLI` | The `aws` CLI is already installed — 2.36.49. Only credentials and SAM are missing. Then step 2a (the probe) and the Sinhala gate can both run |
 | 4 | **Decide what the Kiro write-up will say** | 20% of the Kiroween score is how thoroughly the project uses Kiro, and the rules disqualify insufficient use. The honest split between Kiro and other tools is not an agent's to choose, and `docs/KIRO-WRITEUP.md` is judged by people who can read this repository |
 | 5 | **Request the 4,000 Kiro credits before Dec 1, 12:00 PT** | One allotment, no second chance, and the form needs the Kiro user ID or AWS account ID |
+| 6 | **`docs/TRANSLATION-REVIEW.md`** — Priority 0 is thirty seconds, Priority 1 is about twenty minutes | Added 2026-11-19, and it is on this list because it is the only work in the project that **nobody else can do at all**. Priority 0 is two Sinhala words in the wellbeing check's medicine list, changed today by a lane that does not read the language. Priority 1 is the fourteen strings that carry the safety promises. Five milestones of UI are in two languages no one has checked |
 
 ### Then, in this order
 
@@ -62,6 +110,31 @@ of Kiro will result in disqualification"*.
 table further down is struck through for that reason.
 
 ---
+
+## 0b. The challenge is on AWS Builder Center, not Devpost (found 2026-11-19)
+
+Four searches on 2026-11-19 turned up **exactly one trace of the event name anywhere on the public
+web**, and it moves the search:
+
+> A GitHub repository, `romanceresnak/break-me-agentcore`, describes itself as *"Built for the*
+> **Agents, your rules** *hackathon on AWS Builder Center."*
+
+That is one other entrant's README, not a rules page — but it is the only external confirmation
+that the event exists at all, and it says the host is **AWS Builder Center**. Yesterday's three
+Devpost searches found nothing because Devpost is not where it lives.
+
+What that changes, and what it does not:
+
+| | |
+|---|---|
+| **Where to look** | Builder Center hackathons: `builder.aws.com/build/hackathons`, individual events at `builder.aws.com/build/hackathons/<uuid>/<slug>`. **Stop searching Devpost for this one** |
+| **Why the agent cannot read it** | That index is client-rendered and hung on two attempts from here (`Loading hackathons…`, then a 45-second script timeout). A site-restricted search of `builder.aws.com` returns Builder Center articles and one unrelated hackathon — *Agent Experience Hackathon: Strands Decider* — but no page for this event, which is what an unlisted or invitation-only event looks like. **It needs Nishen's signed-in browser**, which is human step 1 |
+| **A single hint about the service, worth exactly what it is** | That repo builds on the **AgentCore managed harness** — option **A** — and mentions a *"Bedrock Managed Agents path (preview, allow-listed)"* only as an alternative in its own table. One entrant's choice is **not** a rule, and it does not settle §0a. But it is the only external signal about which service the challenge is about, and it points at **A rather than C** |
+| **What is still unverified** | The deadline, the required service, whether this account is eligible, and whether both challenges may take the same project. `PANTHIYA_SETUP.md` §6 remains the only source for the Dec 2 date |
+
+**So the ask is narrower than it was.** Not "find the rules" — open Builder Center signed in, find
+*Agents, your rules* in the hackathons list, and paste the URL. If it is not in the list, the
+invitation email is the only path and it is worth saying so plainly rather than searching again.
 
 ## 0a. Read this first — the blocker may be the wrong blocker (found 2026-11-18)
 
@@ -337,7 +410,7 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 565 tests pass, nothing skipped. Nothing has been deployed and nothing has
+**67 of 79 tasks done. 587 tests pass, nothing skipped. Nothing has been deployed and nothing has
 been spent.** (Counted 2026-11-18 at the end of the session. Re-derive rather than trust it:
 `npm test`, and `grep -c "^- \[x\]" .kiro/specs/panthiya/tasks.md`.)
 

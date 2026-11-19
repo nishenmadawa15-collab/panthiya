@@ -304,6 +304,12 @@ function renderChat() {
  * second code path that could drift from this one.
  */
 async function submitMessage(text) {
+  // The busy guard lives here as well as in the submit handler, because this is where both paths
+  // meet: a voice note landing while a typed send is still open used to start a second round trip
+  // sharing one `state.sending`, and the first to finish cleared it — the send button went live
+  // mid-request. Returns false when it refused, so the caller can keep the words.
+  if (state.sending) return false;
+
   state.messages.push({ side: 'teacher', text });
   state.chatStatusKey = 'chat.sending';
   state.sending = true;
@@ -323,6 +329,7 @@ async function submitMessage(text) {
     // during the request — the ledger, the mic, the language picker (2.4.3, 3.2.5).
     renderChat();
   }
+  return true;
 }
 
 /* ================================================================================================
@@ -678,7 +685,13 @@ async function transcribe(blob) {
  */
 async function sendTranscript(transcript) {
   setMicPhase('idle');
-  await submitMessage(transcript);
+  if (await submitMessage(transcript)) return;
+
+  // A typed send is still in flight, so this one was refused rather than run alongside it. The
+  // words are not thrown away and not queued behind it either: they go into the typed box, which
+  // is where a failed transcription already leaves the teacher, and they send it when they choose.
+  dom.input.value = dom.input.value ? `${dom.input.value} ${transcript}` : transcript;
+  dom.input.focus();
 }
 
 /* ================================================================================================

@@ -311,7 +311,7 @@ reply that scored as a pass. A green suite is a necessary condition. It was neve
 
 **Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **565 of 565 unit and policy tests pass, nothing skipped.** Zero dependencies — the Node.js built-in
+- **587 of 587 unit and policy tests pass, nothing skipped.** Zero dependencies — the Node.js built-in
   runner — and it touches no AWS service. Four runs that evening reported `duration_ms` between
   5.5 s and 8.9 s on the build machine, so "under ten seconds" is the honest figure; your hardware
   decides the rest.

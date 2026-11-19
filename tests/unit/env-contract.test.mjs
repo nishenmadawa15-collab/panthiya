@@ -128,9 +128,76 @@ test('tables() names every table the data model defines', async () => {
   }
 });
 
-test('the audit log table is never given a delete or update permission', () => {
-  // Requirement 10.4 is enforced by the absence of a capability, which is easy to add back by
-  // accident while editing IAM. This asserts the absence stays.
-  const forbidden = template.match(/dynamodb:(DeleteItem|UpdateItem)[^\n]*\n[\s\S]{0,400}?AuditLog/g);
-  assert.equal(forbidden, null, 'audit_log must never be granted DeleteItem or UpdateItem');
+/**
+ * Every `- Sid:` statement in the template, with its Action and Resource lists.
+ *
+ * This replaced a regex that looked for a forbidden action within 400 characters of the string
+ * `AuditLog`. Adding the audit log ARN to the end of TeacherReadWriteOwnDomain's Resource list —
+ * the exact requirement-10.4 violation the check exists to stop — puts 850 characters between the
+ * two, so the match came back null and the test passed. A window is not a scope; the statement is.
+ *
+ * Both fields are read in either YAML form, inline (`Action: dynamodb:PutItem`) or as a block list,
+ * because which one is used is a formatting choice and must not change what is enforced.
+ */
+function statements() {
+  const heads = [...template.matchAll(/^([ ]*)- Sid:[ ]*(\S+)[ ]*$/gm)];
+
+  return heads.map((head, i) => {
+    const indent = head[1].length;
+    const rest = template.slice(head.index + head[0].length, heads[i + 1]?.index ?? template.length);
+    const lines = [];
+    for (const line of rest.split('\n')) {
+      if (line.trim() === '') continue;
+      if (line.search(/\S/) <= indent) break;   // dedented: out of this statement
+      lines.push(line);
+    }
+    return { sid: head[2], actions: field(lines, 'Action'), resources: field(lines, 'Resource') };
+  });
+}
+
+/** One `Action:`/`Resource:` field of a statement, inline or as a block list, as an array. */
+function field(lines, name) {
+  const at = lines.findIndex((line) => new RegExp(`^\\s*${name}:`).test(line));
+  if (at === -1) return [];
+
+  const [, indent, inline] = new RegExp(`^([ ]*)${name}:[ ]*(.*)$`).exec(lines[at]);
+  if (inline !== '') return [inline.trim()];
+
+  const items = [];
+  for (const line of lines.slice(at + 1)) {
+    if (line.search(/\S/) <= indent.length) break;      // dedented: out of this field
+    const item = /^\s*-[ ]+(.*)$/.exec(line);
+    if (item) items.push(item[1].trim());
+  }
+  return items;
+}
+
+test('the audit log table is only ever granted append and read permissions', () => {
+  // Requirement 10.4 is the audit log being append-only: a row that is written and never changed
+  // or removed. That is enforced by the absence of a capability, which is easy to add back by
+  // accident while editing IAM — so this walks the statements rather than the characters.
+  //
+  // An allow-list, not a block-list: dynamodb:BatchWriteItem deletes as happily as it writes, and
+  // the next action AWS adds would slip past a list of the three names known today.
+  const APPEND_OR_READ = new Set([
+    'dynamodb:PutItem',
+    'dynamodb:GetItem', 'dynamodb:BatchGetItem', 'dynamodb:Query', 'dynamodb:Scan',
+    'dynamodb:DescribeTable', 'dynamodb:ConditionCheckItem',
+  ]);
+
+  const all = statements();
+  assert.ok(all.length > 8, `found ${all.length} IAM statements — a selector that found none would pass`);
+
+  const touching = all.filter((s) => s.resources.some((r) => r.includes('AuditLogTable')));
+  assert.ok(
+    touching.some((s) => s.actions.includes('dynamodb:PutItem')),
+    'no statement grants PutItem on audit_log — the log could not be written, so this test is reading the template wrong',
+  );
+
+  const violations = touching.flatMap((s) => s.actions
+    .filter((action) => !APPEND_OR_READ.has(action))
+    .map((action) => `${s.sid} grants ${action} on audit_log`));
+
+  assert.deepEqual(violations, [],
+    `audit_log must stay append-only (req 10.4):\n  ${violations.join('\n  ')}`);
 });

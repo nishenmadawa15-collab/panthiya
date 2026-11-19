@@ -115,7 +115,9 @@ export async function handleChat({ claims, body, deps }) {
     // The loop gave up rather than hanging. Reported as its own code so the red-team run records
     // an `error` (score.mjs maps 502 to `chat_unavailable`) instead of scoring a pass we did not
     // earn — see the honesty argument in the header of backend/functions/redteam/score.mjs.
-    if (err?.code === 'tool_loop_exhausted') return fail(502, 'tool_loop_exhausted');
+    // `reply_truncated` joins it for the same reason: a capped reply is a half-sentence, and
+    // scoring a half-sentence as a pass would credit `instructions` for an answer nobody read.
+    if (err?.code === 'tool_loop_exhausted' || err?.code === 'reply_truncated') return fail(502, err.code);
     return fail(502, 'agent_unavailable');
   }
 
@@ -184,9 +186,19 @@ const TOOL_FAILED =
   'This tool did not run and nothing was read or written. Do not retry it, and do not answer out '
   + 'of your own knowledge. Tell the user plainly that the system could not do it just now.';
 
-const TOOL_UNAVAILABLE =
+/**
+ * Sent to the model when it asks for a name this session was never offered.
+ *
+ * Role-branched, because this sentence reaches whichever role asked: telling a teacher whose model
+ * invented a tool name to "ask their teacher" names the wrong person and reads as a refusal of
+ * something they are in fact allowed to do. Our words either way, never the model's name back.
+ */
+const toolUnavailable = (role) =>
   'There is no such tool in this session. Nothing was read or written. Do not guess another name: '
-  + 'tell the user kindly that only their teacher can do this, and continue with what they can have.';
+  + (role === 'teacher'
+    ? 'tell the user kindly that this is not something the app can do, '
+    : 'tell the user kindly that only their teacher can do this, ')
+  + 'and continue with what they can have.';
 
 /** Every `{ text }` block of a message, joined. A model may split its answer across several. */
 function textOf(content) {
@@ -230,8 +242,12 @@ async function runOneTool({ toolUse, role, offered, sessionAttributes, deps, log
   // the name belongs to someone else (cases A5, B4: a probe learns nothing from the difference).
   if (!offered.has(name)) {
     log.push({ name, outcome: 'not_offered' });
+    // One line, so a refusal leaves a trace somewhere rather than only in a `log` that is thrown
+    // away on success. The role and the name the model invented, and nothing else: no `sub`, no
+    // message text, no tool input — none of that belongs in CloudWatch (requirement 13.7).
+    console.warn(JSON.stringify({ event: 'tool_not_offered', role, name: String(name).slice(0, 64) }));
     return result(true, JSON.stringify({
-      ok: false, reason: 'not_permitted', blockedBy: 'role-gate', message: TOOL_UNAVAILABLE,
+      ok: false, reason: 'not_permitted', blockedBy: 'role-gate', message: toolUnavailable(role),
     }));
   }
 
@@ -292,7 +308,12 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
     // has to be looked for; letting it fall through to `stopReason !== 'tool_use'` would return
     // the guardrail's own canned sentence as if the model had written it, and the red-team run
     // would credit `instructions` for a case the guardrail held.
-    if (response?.stopReason === 'guardrail_intervened') throw guardrailIntervened();
+    // `content_filtered` is the same event under another name — the service stopped the turn and
+    // left its own text in `content` — so it takes the same path rather than being returned as a
+    // reply the model wrote.
+    if (response?.stopReason === 'guardrail_intervened' || response?.stopReason === 'content_filtered') {
+      throw guardrailIntervened();
+    }
 
     const content = response?.output?.message?.content;
     if (!Array.isArray(content)) throw new LoopError('model_response_unreadable');
@@ -302,6 +323,11 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
       // Returning the text would drop the tool use silently, invoke nothing, and pass off whatever
       // the model wrote as the reply — an answer out of its own knowledge.
       if (content.some((block) => block?.toolUse)) throw new LoopError('tool_use_without_stop_reason');
+      // The cap in `index.mjs` is generous enough that hitting it means something went wrong, so a
+      // capped reply is the silent truncation this file's header forbids: the text stops mid-word
+      // — mid-number, in a parent-update draft a teacher forwards — and returning it would score
+      // as a pass. Honest error, same as running out of rounds.
+      if (response.stopReason === 'max_tokens') throw new LoopError('reply_truncated');
       return textOf(content);
     }
 
@@ -310,10 +336,18 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
     // A `toolResult` with no `toolUseId` is a ValidationException from Converse, which would come
     // back as a raw AWS error and be reported as `agent_unavailable`. Refused under its own name.
     if (uses.some((use) => !use.toolUseId)) throw new LoopError('tool_use_without_id');
+    // Two uses sharing one id produce two `toolResult`s under that id, and the model cannot tell
+    // which answers which — two `markAttendance` calls with different statuses is the documented
+    // dictated-register case, so this is a wrong register, not a theory.
+    if (new Set(uses.map((u) => u.toolUseId)).size !== uses.length) {
+      throw new LoopError('tool_use_duplicate_id');
+    }
 
     // The assistant turn goes back verbatim, tool-use blocks and all, or the toolResult ids it is
-    // answering have nothing to attach to.
-    messages.push({ role: response.output.message.role ?? 'assistant', content });
+    // answering have nothing to attach to. The *role* is ours, not `output.message.role`: design
+    // §3.1 says a role never leaves our code, and a response carrying `role: 'user'` would build
+    // `['user','user','user']` — which real Converse rejects, surfacing as `agent_unavailable`.
+    messages.push({ role: 'assistant', content });
 
     const results = [];
     for (const toolUse of uses) {

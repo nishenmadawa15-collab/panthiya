@@ -89,18 +89,34 @@ export function credentials(run = awsCli) {
   return creds;
 }
 
-export function send({ method, path, body = '', creds, region }, net = request) {
+/**
+ * How long one request may hang before it is abandoned.
+ *
+ * A preview endpoint that does not resolve is the likeliest outcome of this whole script, and a
+ * probe that sits there forever is indistinguishable from a probe that is thinking about it.
+ */
+export const SEND_TIMEOUT_MS = 15_000;
+
+export function send({ method, path, body = '', creds, region, timeout = SEND_TIMEOUT_MS }, net = request) {
   const host = hostFor(region);
   const headers = {
     ...sign({ method, path, body, creds, host, region }),
     ...(body ? { 'content-length': Buffer.byteLength(body) } : {}),
   };
   return new Promise((resolve, reject) => {
-    const req = net({ host, path, method, headers }, (res) => {
+    const req = net({ host, path, method, headers, timeout }, (res) => {
+      // Decode as UTF-8 here rather than per chunk: `text += chunk` stringifies each Buffer on its
+      // own, so a multi-byte character landing on a chunk boundary arrives as two replacement
+      // characters. The body is the whole verdict, and a mangled denial reads like a different one.
+      res.setEncoding('utf8');
       let text = '';
       res.on('data', (c) => { text += c; });
       res.on('end', () => resolve({ status: res.statusCode, text }));
     });
+    // `timeout` only tells the socket when to fire this event; closing the request is ours to do.
+    req.on('timeout', () => req.destroy(Object.assign(
+      new Error(`no response in ${timeout} ms`), { code: 'ETIMEDOUT' },
+    )));
     req.on('error', reject);
     if (body) req.write(body);
     req.end();
@@ -196,6 +212,40 @@ export function verdict(status, text = '') {
   return { tag: 'UNEXPECTED', lines: ['Not a documented outcome. Paste the status and body into the build log.'] };
 }
 
+/**
+ * The third outcome, and the one the verdicts above must never be allowed to absorb: no answer at
+ * all.
+ *
+ * `bedrock-mantle.<region>.api.aws` is a preview host name, so a DNS failure is an ordinary result
+ * here — and an unhandled rejection printed a stack trace instead of a verdict, which reads like
+ * an account block to anyone who has just spent an evening being denied by Agents Classic. It is
+ * neither verdict. It is a request that never arrived.
+ */
+export function networkFailure(err, region) {
+  const code = err?.code ?? err?.name ?? 'error';
+  const host = hostFor(region);
+  const unresolved = code === 'ENOTFOUND' || code === 'EAI_AGAIN';
+
+  return {
+    tag: 'NO ANSWER — A NETWORK ERROR, NOT A VERDICT',
+    lines: [
+      `Nothing came back from https://${host}: ${code} — ${err?.message ?? err}`,
+      'This is not a denial. It says nothing about our IAM policy and nothing about the account,',
+      'so do not record it as either one.',
+      ...(unresolved ? [
+        `${host} did not resolve. For a preview endpoint the usual causes are a Region that is not`,
+        `serving BMA (the user guide lists ${BMA_REGIONS.join(', ')}), a host name AWS has since`,
+        'changed, or no DNS from this machine at all. Check the user guide before editing this',
+        'script: docs.aws.amazon.com/bedrock/latest/userguide/bedrock-managed-agents-openai.html',
+      ] : [
+        'Check the network, then re-run. If it keeps timing out from one Region, try another of',
+        `the three: ${BMA_REGIONS.join(', ')}.`,
+      ]),
+      'Nothing was created, deleted or spent, and the question is still open.',
+    ],
+  };
+}
+
 export function parseArgs(argv) {
   const value = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
   return {
@@ -257,18 +307,43 @@ Re-run with --yes.`);
     return;
   }
 
-  const models = await send({ method: 'GET', path: MODELS_PATH, creds, region });
+  /** Prints the network-error report and returns true, so a caller can stop without a stack. */
+  const reportNoAnswer = (err, what) => {
+    const { tag, lines } = networkFailure(err, region);
+    console.error(`\n${what} → no response`);
+    console.error(`\n${tag}`);
+    for (const l of lines) console.error(`  ${l}`);
+    process.exitCode = 3;
+    return true;
+  };
+
+  let models;
+  try {
+    models = await send({ method: 'GET', path: MODELS_PATH, creds, region });
+  } catch (err) {
+    reportNoAnswer(err, `GET ${MODELS_PATH}`);
+    return;
+  }
   console.log(`\nGET ${MODELS_PATH} → HTTP ${models.status}`);
   console.log(models.text.slice(0, 2000) || '(empty body)');
 
   if (createProbe) {
     const body = JSON.stringify({ probe: 'panthiya-bma-probe' });
-    const session = await send({ method: 'POST', path: SESSIONS_PATH, body, creds, region });
-    console.log(`\nPOST ${SESSIONS_PATH} (invalid on purpose) → HTTP ${session.status}`);
-    console.log(session.text.slice(0, 2000) || '(empty body)');
-    const { tag, lines } = verdict(session.status, session.text);
-    console.log(`\nVerdict from the create probe: ${tag}`);
-    for (const l of lines) console.log(`  ${l}`);
+    let session;
+    try {
+      session = await send({ method: 'POST', path: SESSIONS_PATH, body, creds, region });
+    } catch (err) {
+      // The read call already answered, so this one failing is not the end of the run.
+      reportNoAnswer(err, `POST ${SESSIONS_PATH}`);
+      session = null;
+    }
+    if (session) {
+      console.log(`\nPOST ${SESSIONS_PATH} (invalid on purpose) → HTTP ${session.status}`);
+      console.log(session.text.slice(0, 2000) || '(empty body)');
+      const { tag, lines } = verdict(session.status, session.text);
+      console.log(`\nVerdict from the create probe: ${tag}`);
+      for (const l of lines) console.log(`  ${l}`);
+    }
   }
 
   const { tag, lines } = verdict(models.status, models.text);
@@ -282,4 +357,12 @@ What this probe cannot answer, and only the challenge's own rules can: whether t
 requires BMA, Agents Classic, or neither. See docs/NEXT-SESSION.md §0a.`);
 }
 
-if (process.argv[1] && process.argv[1].endsWith('bma-probe.mjs')) await main();
+if (process.argv[1] && process.argv[1].endsWith('bma-probe.mjs')) {
+  // The last line of defence against the one failure mode this script must not have: a stack trace
+  // where a verdict should be. Anything that reaches here is this script breaking, not an answer.
+  await main().catch((err) => {
+    console.error(`\nThe probe stopped before it reached a verdict: ${err?.message ?? err}`);
+    console.error('That is a bug in this script, not a verdict about our IAM or about the account.');
+    process.exitCode = 1;
+  });
+}
