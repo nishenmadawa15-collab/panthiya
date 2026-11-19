@@ -150,6 +150,54 @@ invitation email is the only path and it is worth saying so plainly rather than 
 live run and a demo video all still ahead of it, and every one of them behind a sign-in that has not
 happened.
 
+## 0c. Thirteen days, and what has to happen on which one (written 2026-11-19)
+
+Two deadlines, both now citable: **Dec 2, 11:59 PM PT** for *Agents, your rules* (`PANTHIYA_SETUP.md`
+§1 — Dec 3, 1:29 PM in Sri Lanka) and **Dec 4, 2:00 PM PT** for Kiroween (Dec 5, 3:30 AM here, read
+from the official rules). The Bedrock one is the binding one, and it is **thirteen days away**.
+
+This is a plan, not a promise. It exists because the critical path is almost entirely serial — the
+live run cannot start before the deploy, the deploy cannot start before the model is chosen, and the
+model cannot be chosen before the gate runs — so a day lost early is a day lost at the end, and the
+only parallel work left is documentation.
+
+| By | What | Who | Blocked on |
+|---|---|---|---|
+| **Nov 20** | Sign in to AWS and Kiro; `aws configure`; `winget install Amazon.SAM-CLI`; find the challenge on Builder Center and paste the URL | **Nishen** | nothing. Everything below is behind this |
+| **Nov 20** | `node scripts/bma-probe.mjs --yes` (free), then 🚦 the **Sinhala gate** against whichever model the rules and the probe point at | agent runs the probe; **Nishen runs the gate and reads the Sinhala by eye** | the row above |
+| **Nov 21** | The **A/B/C orchestration decision** (§0a), now a reading of the rules rather than of the code. B is built and tested | **Nishen decides** | the challenge URL |
+| **Nov 21** | The **Guardrail** from `backend/agent/guardrail.json`, and the **$10 budget alert before the first deploy** | Nishen, agent guides | credentials |
+| **Nov 22** | 💰 `sam deploy --guided`, then `demo-users.mjs --apply`, then `seed --apply`, in that order | **Nishen approves the deploy**; agent runs the rest | the guardrail and the decision |
+| **Nov 22–23** | The four SWAP POINTs, and the **first live invoke** — the three things flagged as unverifiable offline: that `guardrailConfig` on `Converse` evaluates plain message text, that `guardrail_intervened` is the literal `stopReason`, and that the SDK clients are in the `nodejs20.x` runtime | agent | the deploy |
+| **Nov 23–24** | 🎯 **The 36 cases, live** — the CLI first because it is cheaper and diffable, then the page a judge sees. Fix every leak; add any new bypass as case 37+ | agent | the deploy |
+| **Nov 24–25** | **Verification pass 4, after the live run.** This is the one the two previous passes argue for most: every defect they found sat behind a green suite, and the live run is the first time there will be real behaviour to be wrong about | agent | the live run |
+| **Nov 25** | Merge `feat/m4-student-tutor` into `main`, connect **Amplify Hosting**, confirm the live URL opens on a phone | **Nishen decides the merge**; agent prepares it | the leaks fixed |
+| **Nov 26** | `README.md` final — screenshots and the live URL, the last parts of task 7.1; the live red-team numbers read off the screen rather than estimated | agent | the live URL |
+| **Nov 27** | 🎥 **Record the demo video, under 3 minutes, public on YouTube** | **Nishen** | the live URL |
+| **Nov 28–29** | Both submission drafts finished against what actually exists; the Kiro write-up finished per decision 4 | agent | the video link and the URL |
+| **Nov 30** | **Priority 0 and Priority 1 of `docs/TRANSLATION-REVIEW.md`** at the latest — ideally weeks earlier. The Sinhala and Tamil on screen in the video is the version a judge sees | **Nishen** | nothing. Do it on any evening before this |
+| **Dec 1, 12:00 PT** | ⏰ **Request the 4,000 Kiro credits.** One allotment, no second chance | **Nishen** | nothing |
+| **Dec 1** | Submit to *Agents, your rules* — a day of slack before the real deadline | **Nishen** | everything above |
+| **Dec 3** | Submit to Kiroween — a day of slack before Dec 4, 2:00 PM PT | **Nishen** | the same |
+
+**The slack is deliberate and it is small.** Four days of it, against a plan where the first eight
+days are serial and the first row is a sign-in that has not happened on two consecutive days. If
+Nov 20 slips, everything slips with it.
+
+**Three things would cost days rather than hours, and all three are known now rather than later:**
+
+1. **The Sinhala gate failing on the chosen model.** The fix is a parameter rather than a rewrite —
+   but every prompt-sensitive behaviour has to be re-measured against the replacement, which means
+   the live 36 again. Budget two days if it happens.
+2. **The challenge requiring Agents Classic specifically.** This account cannot create one and
+   there is **no exception process**, so the answer would be that it is ineligible — worth knowing
+   on Nov 20 rather than Dec 1, which is the whole reason the URL is the first row.
+3. **The stack having to stay up until 2027-01-29.** Kiroween requires the project to stay available
+   to judges throughout the judging period, so nothing can be torn down on submission day. The cost
+   model is being re-costed for that window rather than for a demo.
+
+---
+
 ## 0a. Read this first — the blocker may be the wrong blocker (found 2026-11-18)
 
 **The service this project is named after may not be the service that was found to be blocked.**
