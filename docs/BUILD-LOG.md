@@ -334,8 +334,12 @@ rather than a bug.
 - **Second live bug, behind the first.** Teacher reads still 500ed: `AccessDeniedException` on
   `dynamodb:Query` against `panthiya-classes/index/byTeacher`. `ReadFunction`'s role listed every
   table except `classes`, and a teacher's scope is resolved from `classes.byTeacher` before anything
-  else. Granted; pinned by `tests/unit/iam-scope.test.mjs` (red without the grant). 806 pass. **Not
-  yet redeployed.**
+  else. Granted; pinned by `tests/unit/iam-scope.test.mjs` (red without the grant). 806 pass.
+  **Redeployed (Nishen approved). Live, with real demo tokens:** teacher `GET /teacher/audit` 200
+  (41 entries — the seed's 41), `GET /teacher/drafts` 200 (1 draft); parent `GET /parent/inbox` 200
+  (2 approved messages, the draft withheld); student → `/teacher/audit` 403, parent →
+  `/teacher/drafts` 403. **The read path works end to end for all three roles.** `/chat` is untested
+  live: no guardrail and no harness exist yet.
 
 ## Decisions still open
 
