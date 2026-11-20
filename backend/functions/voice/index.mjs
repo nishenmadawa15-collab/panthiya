@@ -18,6 +18,7 @@
 // A transcription that did not work is *not* an error path: it returns 200 with
 // `{ status: 'failed', reason, message }`, because the teacher has to read it (requirement 3.6).
 
+import { fromCaller } from '../../lib/injected.mjs';
 import { DenyError } from '../../lib/auth.mjs';
 import { ROUTES, VoiceError } from './voice.mjs';
 
@@ -115,7 +116,8 @@ async function fetchTranscript(uri) {
  *   import of the SDK would pull it into every test process, and the unit suite deliberately has no
  *   dependencies installed to pull it from.
  */
-export const handler = async (event, provided) => {
+export const handler = async (event, context) => {
+  const provided = fromCaller(context);
   const handle = ROUTES[routeKeyOf(event)];
   if (!handle) return reply(404, { error: 'not_found' });
 

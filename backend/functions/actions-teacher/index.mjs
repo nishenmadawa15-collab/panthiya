@@ -24,6 +24,7 @@
 // works this way, and the two input paths here follow it: reflecting the offending string would
 // hand a prompt-injection payload a second trip through the model.
 
+import { fromCaller } from '../../lib/injected.mjs';
 import { deny, DenyError } from '../../lib/auth.mjs';
 import { ACTIONS } from './actions.mjs';
 import { DRAFT_ACTIONS } from './drafts.mjs';
@@ -147,7 +148,8 @@ async function serveHttp(event, routeKey, deps) {
  *   lazily — a *static* import of it would pull the AWS SDK into every test process, and the unit
  *   suite deliberately has no dependencies installed to pull it from.
  */
-export const handler = async (event, provided) => {
+export const handler = async (event, context) => {
+  const provided = fromCaller(context);
   // An HTTP event carries a route and no `function`; a Bedrock one is the other way round. Checked
   // in this order so a route can never be answered with a Bedrock envelope, which API Gateway would
   // hand back to the browser as a 200.

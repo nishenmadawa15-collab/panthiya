@@ -319,6 +319,17 @@ rather than a bug.
   into `customHttp.yml`. Two drafts tests in `audit-mic-frontend.test.mjs` went red the moment
   `CONFIG` was real — they read the ambient config instead of forcing placeholders, exactly the
   failure `api-swap-frontend.test.mjs` was written to avoid. Fixed the same way.
+- **Demo users + seed (Nishen approved).** Three Cognito users created; password generated into
+  `~/.panthiya/demo-password.txt`, outside the repo, never printed. Seed wrote **105 / 105** (1 class,
+  12 students, 24 attendance, 12 fees, 12 marks, 3 messages, 41 audit) — but only on the second run:
+  on Windows the AWS CLI decodes `file://` params as cp1252 and the first Sinhala name stopped it.
+  `seed.mjs` now sets `AWS_CLI_FILE_ENCODING=UTF-8` itself. Sinhala and Tamil names read back intact.
+- **The first real token found the worst bug yet.** Every *allowed* read returned **500**; every
+  refused one returned a correct 403. Lambda calls `handler(event, context)`, and five handlers
+  (`read`, `actions-parent`, `actions-teacher`, `redteam`, `voice`) did `provided ?? deps()` — so in
+  Lambda the context object was used as the DynamoDB deps. 802 offline tests passed because every
+  one of them injects. Fixed with `backend/lib/injected.mjs#fromCaller`; pinned by
+  `tests/unit/lambda-context.test.mjs`, which goes red with the fix reverted. **Not yet redeployed.**
 
 ## Decisions still open
 

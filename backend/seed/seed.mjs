@@ -21,6 +21,12 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+
+// The request files carry Sinhala and Tamil names. On Windows the AWS CLI decodes `file://` params
+// with the system code page (cp1252), so the first batch with a non-Latin name failed with "text
+// contents could not be decoded" -- found on the first real seed, 2026-11-20. Every `aws` child
+// inherits this, so the fix lives in one line rather than in every caller.
+process.env.AWS_CLI_FILE_ENCODING ||= 'UTF-8';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 

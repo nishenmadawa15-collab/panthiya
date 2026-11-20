@@ -17,6 +17,7 @@
 // prompt-injection payload a second trip through the model, and in this group that string is often
 // another child's name.
 
+import { fromCaller } from '../../lib/injected.mjs';
 import { deny, DenyError } from '../../lib/auth.mjs';
 import { ACTIONS } from './actions.mjs';
 
@@ -52,7 +53,8 @@ const PROMPTS = {
  *   lazily — a *static* import of it would pull the AWS SDK into every test process, and the unit
  *   suite deliberately has no dependencies installed to pull it from.
  */
-export const handler = async (event, provided) => {
+export const handler = async (event, context) => {
+  const provided = fromCaller(context);
   const action = ACTIONS[event?.function];
 
   // An unknown or absent action name is a routing mistake or a probe, not a request. A parent

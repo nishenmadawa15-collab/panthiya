@@ -1,12 +1,12 @@
 // DynamoDB access, kept to one tiny file so every other module can stay AWS-free and testable.
 //
-// Both SDK packages ship inside the nodejs20.x Lambda runtime, so they are imported but never
+// Both SDK packages ship inside the nodejs24.x Lambda runtime, so they are imported but never
 // installed — the repo has no dependencies (see package.json). Nothing under tests/ imports this
 // file: the unit tests inject a fake `{ query, put, tables }` instead, which is why they run
 // offline with no credentials.
 
 // The SDK is imported lazily rather than at the top of the file. Two reasons, both real:
-//   1. It only exists inside the nodejs20.x runtime, so a top-level import makes this module
+//   1. It only exists inside the nodejs24.x runtime, so a top-level import makes this module
 //      impossible to load on a laptop — which meant `tables()` could not be tested offline at all,
 //      and the env-var mismatch below went unnoticed.
 //   2. A cold start that never queries DynamoDB never pays to load it.

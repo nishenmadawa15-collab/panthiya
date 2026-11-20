@@ -13,6 +13,7 @@
 //   404 not_found     a path this function does not serve.
 //   500               a genuine fault. Never a partial list presented as a complete one.
 
+import { fromCaller } from '../../lib/injected.mjs';
 import { DenyError } from '../../lib/auth.mjs';
 import { ROUTES, ReadError } from './handlers.mjs';
 
@@ -41,7 +42,8 @@ export function routeKeyOf(event) {
  *   lazily — a *static* import of it would pull the AWS SDK into every test process, and the unit
  *   suite deliberately has no dependencies installed to pull it from.
  */
-export const handler = async (event, provided) => {
+export const handler = async (event, context) => {
+  const provided = fromCaller(context);
   const handle = ROUTES[routeKeyOf(event)];
   if (!handle) return reply(404, { error: 'not_found' });
 
