@@ -192,7 +192,7 @@ the table as the stack the deploy will make, not as an inventory of a running ac
 | Amazon S3 | Voice-note bucket, lifecycle rule deleting objects after one day |
 | AWS Amplify Hosting | Static front end, security headers from `customHttp.yml` |
 | AWS SAM / CloudFormation | The whole stack except Amplify Hosting |
-| AWS Budgets | A $10/month alert — **to create by hand in the console before the first deploy.** Unlike every other row, this one is not in `backend/template.yaml` at all: there is no `AWS::Budgets` resource, so no deploy will make it |
+| AWS Budgets | A $10/month alert, **created by the stack since 2026-11-19** — `AWS::Budgets::Budget` with the limit as a parameter (default $10, refused above $15) and three notifications: actual at 50% and 80%, forecast at 100%. The email is a parameter with no default, so no address is in this repository. Deliberately not filtered to this stack, because the agent, the guardrail and Amplify all bill outside it |
 
 `TODO(nishen)` — add AgentCore (Runtime, Gateway, Policy) to this table if option A is chosen in §6.
 
@@ -202,16 +202,33 @@ the table as the stack the deploy will make, not as an inventory of a running ac
 
 Target under **US$15** for the whole hackathon. **Spent so far: $0.**
 
-| Item | Assumption | Estimate |
+**Re-costed 2026-11-19 for the duration the rules actually require** — Kiroween obliges the project
+to stay available to judges until 2027-01-29, so the window is about 71 days rather than a demo. All
+twenty-eight resources in `backend/template.yaml` were enumerated by billing shape; the working,
+with each row's price basis and the rows that could not be verified marked as such, is in
+[`docs/COST-MODEL.md`](COST-MODEL.md).
+
+| | Typical | Ceiling |
 |---|---|---|
-| Model inference (Nova Lite class) | ~1,500 turns, ~900 in / 300 out tokens | ~$1.50 |
-| Red-team runs | 36 cases × ~25 full runs | ~$2.00 |
-| DynamoDB on-demand | < 100k requests | < $0.50 |
-| Lambda | < 50k invocations at 256 MB | free tier |
-| API Gateway HTTP API | < 100k requests | ~$0.10 |
-| Amazon Transcribe | ~60 minutes of voice notes | ~$1.45 |
-| S3 + Amplify Hosting | tiny | < $1.00 |
-| **Total** | | **~$7, headroom to $15** |
+| Idle hosting, per month | **$0.01** | $0.26 |
+| Build period (~1,200 turns, 60 min Transcribe) | $1.34 | $5.30 |
+| Judging window (~1,000 judge turns, 30 min) | $1.10 | $3.92 |
+| **Submission → 2027-01-29, all in** | **~$2.50** | **~$9.80** |
+| **Headroom against $15** | **~$12.50** | ~$5.20 |
+
+**Duration was never the risk.** Of those twenty-eight resources, **none bills per hour** — the two
+that were expected to do not: a Cognito prefix domain is not priced at all (billing is per monthly
+active user, and the pool's default tier includes 10,000 free), and there is no NAT gateway because
+the template creates no VPC. The only line that grows with elapsed time alone is CloudWatch Logs,
+at one to seven cents over the window.
+
+**The budget is bound by the model price, and the guardrail is most of it.** A chat turn costs about
+**$0.0011**, of which the guardrail is **70–90%** — all four policy types in
+`backend/agent/guardrail.json` bill per 1,000 text units inbound and again outbound, so layer 2
+costs two to nine times what the model does. It is the largest per-turn line here and it is
+**explicitly not on the cut list.** The three things that would take this over $15 are a NAT gateway
+($77–$95, 5–6× the budget, before any traffic), option C's model (~$27 on inference alone at list
+prices), and a paid host for option C's exec server (~$29).
 
 Held down, in the code as it stands, by **one flat `maxTokens: 1024`** on every turn
 (`backend/functions/chat/index.mjs`), a 2,000-character input limit, a TTL on `redteam_runs`, and the
@@ -224,12 +241,21 @@ matters to this table:
   but the loop we built is single-message — it keeps no history and `invokeAgent` does not take the
   parameter — so the window is not a cost control today. Cheaper, not dearer; it also means cases B7
   and C6 meet a different system than the one documented (`docs/BUILD-LOG.md`).
-- **The $10 budget alert does not exist.** It is a console step to take before the first deploy (§7).
+- **The budget alert exists in the template now** (§7) but is **inert until the first deploy**, and
+  `MONTHLY` guards a monthly rate rather than a project total — the 50% rung, an email at $5, is the
+  useful one.
+- **The throttle is not a spend guard.** `ThrottlingRateLimit: 10` is ten requests per *second* with
+  no daily cap. A daily quota is the line to add if a ceiling is ever needed in a hurry.
+- **The `redteam_runs` TTL was not a cost guard either** — ~900 rows is about 1 MB, $0.00 a month.
+  It was raised from 30 days to 120 on 2026-11-19 because at 30 a run recorded on submission day
+  expired twenty-seven days before judging ends, which would have left a judge an empty scoreboard
+  under a write-up claiming 36 scored cases.
 
-Every row is an estimate against a system that has never run, so these are the design's assumptions
-and not measurements — and with a 1024-token ceiling in place, **~$7 is the optimistic end** rather
-than a midpoint. Option A in §6 prices runtime, memory and gateway as separate consumption lines,
-so the table needs re-checking if A is chosen. `TODO(nishen)` — replace the total with the amount
+Every row is still an estimate against a system that has never run, so these are the design's
+assumptions rather than measurements — which is what the ceiling column is for: it is costed at the
+full 1,024-token output rather than the ~300 the earlier table assumed. Option A in §6 prices
+runtime, memory and gateway as separate consumption lines, so the table needs re-checking if A is
+chosen, and option C is one of the three listed ways to go over budget. `TODO(nishen)` — replace the total with the amount
 actually spent before submitting, from Cost Explorer (task 7.9).
 
 ---

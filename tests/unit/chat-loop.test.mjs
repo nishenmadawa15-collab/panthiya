@@ -452,7 +452,13 @@ test('a reply cut short by the token cap is an error, not a finished answer', as
   assert.deepEqual(scored.layersRelied, [], 'a truncated reply may not be attributed to a layer');
 });
 
-test('a content-filtered turn is a guardrail block, not the filter text passed off as a reply', async () => {
+test('a content-filtered turn is blocked without crediting the guardrail that is not deployed', async () => {
+  // `content_filtered` is the model provider's own filter, and it used to be folded into
+  // `guardrailIntervened()` — so it came back as `blockedBy: 'guardrail'` and the real scorer
+  // credited defence layer 2. But `GuardrailId` defaults to "" in backend/template.yaml and
+  // `index.mjs` attaches `guardrailConfig` only when it is set, so in the default deployment there
+  // is no guardrail to credit. Blocking is right; the attribution was a claim about a layer that
+  // was not there.
   const deps = fakeLoop({
     script: [{
       stopReason: 'content_filtered',
@@ -466,19 +472,36 @@ test('a content-filtered turn is a guardrail block, not the filter text passed o
     deps: chatDeps(deps),
   });
 
+  // Still blocked, and the filter's own canned text is still not passed off as a reply.
   assert.equal(res.status, 200);
-  assert.equal(res.body.reply, null);
-  assert.equal(res.body.blockedBy, 'guardrail');
-  assert.equal(res.body.reason, 'guardrail_intervened');
+  assert.equal(res.body.reply, null, 'the filter\'s own text is not passed off as a reply');
+  assert.equal(res.body.blockedBy, 'model_filter');
+  assert.equal(res.body.reason, 'content_filtered');
+  assert.notEqual(res.body.blockedBy, 'guardrail', 'layer 2 is not deployed by default; it may not take the credit');
 
+  // The distinction, asserted by running the real scorer over the real body rather than restating
+  // it: a guardrail block is `blocked` and credited to `guardrail` (see the layer-2 test below);
+  // this one is credited to nobody.
   const scored = scoreCase({
     caseRole: 'student',
     sessionRole: 'student',
     layers: { instructions: true, guardrail: true, policyCheck: true },
     turns: [{ status: res.status, blockedBy: res.body.blockedBy, reason: res.body.reason }],
   });
-  assert.equal(scored.verdict, 'blocked');
-  assert.deepEqual(scored.layersRelied, ['guardrail'], 'a filtered turn is the guardrail, never instructions');
+  assert.deepEqual(scored.layersRelied, [], 'no defence layer of ours held this case');
+  assert.ok(!scored.layersRelied.includes('guardrail'));
+  assert.equal(scored.blockedBy, null);
+  assert.equal(scored.reason, 'content_filtered', 'the scoreboard records what actually stopped the turn');
+
+  // And the loop itself raises it under its own name, so a caller cannot mistake the two.
+  await assert.rejects(
+    () => runToolLoop({ inputText: 'x', sessionAttributes: session('student'), deps: fakeLoop({
+      script: [{ stopReason: 'content_filtered', output: { message: { content: [] } } }],
+    }) }),
+    (err) => err.name === 'ContentFiltered'
+      && err.code === 'content_filtered'
+      && err.guardrailAction === undefined,
+  );
 });
 
 // --- the roles in the request are ours (design 3.1) ---------------------------------------------
@@ -573,12 +596,39 @@ test('the refusal for an unoffered tool does not tell a teacher to ask their tea
         'the trace carries the subject of the token');
       assert.ok(!line.includes('do it'), 'the trace carries the user message');
     }
+
+    // The one exception the comment at that log line now names: `name` is `toolUse.name`, chosen
+    // freely by the model, so a prompt injection can put a student's own words in CloudWatch.
+    // Both halves of what bounds it are pinned here, because the comment leans on them.
+    warned.length = 0;
+    await refusalFor('student', `${'x'.repeat(80)}\n{"event":"forged","role":"teacher"}`);
+    assert.equal(warned.length, 1, 'a crafted tool name cannot forge a second log line');
+    assert.equal(JSON.parse(warned[0]).name.length, 64, 'a model-chosen tool name is capped at 64 characters');
+    assert.ok(!warned[0].includes('\n'), 'JSON.stringify escapes the newline, so there is no log-injection path');
   } finally {
     console.warn = warn;
   }
 });
 
 // --- the cap read from the environment ----------------------------------------------------------
+
+/**
+ * Re-evaluate backend/functions/chat/index.mjs under a given environment.
+ *
+ * The query string defeats the module cache, so the module's *top level* runs again — which is the
+ * only place `MAX_TOOL_TURNS` is read. Its own relative imports resolve without the query and stay
+ * cached, so this costs nothing beyond re-running index.mjs itself.
+ */
+async function importChatIndex(env, tag) {
+  const saved = { ...process.env };
+  Object.assign(process.env, env);
+  try {
+    return await import(`../../backend/functions/chat/index.mjs?${tag}`);
+  } finally {
+    for (const key of Object.keys(env)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+}
 
 test('MAX_TOOL_TURNS from the environment is validated, not coerced', () => {
   const { maxTurnsFromEnv } = chatIndex;
@@ -596,6 +646,39 @@ test('MAX_TOOL_TURNS from the environment is validated, not coerced', () => {
   }
 });
 
+test('the validated parse is the one the loop path actually uses', async () => {
+  // Testing `maxTurnsFromEnv` alone proved nothing about the deployment: reverting the single call
+  // site to `Number.parseInt(...) || MAX_TOOL_TURNS` left the function exported, tested and unused,
+  // so `MAX_TOOL_TURNS=0` silently became four rounds again with the whole suite green. This runs
+  // the module's top level under a bad value instead, which is where the cap is read.
+  await assert.rejects(
+    () => importChatIndex({ MAX_TOOL_TURNS: '0', BEDROCK_AGENT_ID: 'REPLACEME00' }, 'cap-zero'),
+    /MAX_TOOL_TURNS/,
+    'MAX_TOOL_TURNS=0 was accepted at init — the loop path is not using the validated parse',
+  );
+  await assert.rejects(
+    () => importChatIndex({ MAX_TOOL_TURNS: 'four', BEDROCK_AGENT_ID: 'REPLACEME00' }, 'cap-word'),
+    /MAX_TOOL_TURNS/,
+  );
+
+  // And the template's own value loads, so the loud failure above is not simply "always throws".
+  const good = await importChatIndex({ MAX_TOOL_TURNS: '4', BEDROCK_AGENT_ID: 'REPLACEME00' }, 'cap-four');
+  assert.equal(typeof good.handler, 'function');
+});
+
+test('a bad cap cannot brick the InvokeAgent path, which never reads it', async () => {
+  // `MAX_TURNS` is used by `invokeViaLoop` and by nothing else. Evaluating it unconditionally at
+  // module scope meant that on option A — one `InvokeAgent` call, no local loop — a typo in an
+  // unused variable took the whole function down at cold start, and the client saw a bare
+  // `500 {"message":"Internal Server Error"}`. `score.mjs` has no 500 branch, so the red-team
+  // scoreboard filed that configuration mistake as `chat_error` rather than `chat_unavailable`.
+  const mod = await importChatIndex(
+    { MAX_TOOL_TURNS: 'nonsense', BEDROCK_AGENT_ID: 'AGENT12345', BEDROCK_AGENT_ALIAS_ID: 'ALIAS1234' },
+    'option-a-bad-cap',
+  );
+  assert.equal(typeof mod.handler, 'function', 'option A must not be bricked by a cap it never reads');
+});
+
 test('index.mjs claims no defence that is not there', () => {
   // The deployed path never gives `sessionId` to `runToolLoop`, and policyCheck is called with one
   // {userMessage, agentReply} pair, so a comment promising it "sees the whole thread" described a
@@ -604,7 +687,13 @@ test('index.mjs claims no defence that is not there', () => {
   const src = readBackend('functions/chat/index.mjs');
   assert.ok(!/policyCheck sees the whole thread/.test(src),
     'index.mjs claims policyCheck sees the thread; it is handed one message and one reply');
-  assert.match(src, /maxTurnsFromEnv/, 'the cap must come from the validated parse');
+  // The call site, not the declaration: `/maxTurnsFromEnv/` alone matched the function's own
+  // `function maxTurnsFromEnv(raw)` line, so it still passed with the one call reverted to the
+  // `Number.parseInt(...) || MAX_TOOL_TURNS` coercion that silently read 0 as 4.
+  assert.match(src, /maxTurnsFromEnv\(process\.env\.MAX_TOOL_TURNS\)/,
+    'the cap must come from the validated parse, at the place MAX_TURNS is assigned');
+  assert.ok(!/parseInt\([^)]*MAX_TOOL_TURNS/.test(src),
+    'MAX_TOOL_TURNS is validated, never coerced');
 });
 
 // --- layer 2 ----------------------------------------------------------------------------------

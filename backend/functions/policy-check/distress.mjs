@@ -29,14 +29,9 @@ const DISTRESS = [
   'mother will kill', 'they will kill me', 'punish me badly',
   // hopelessness and exhaustion
   //
-  // "no point" is the one phrase in this list that a maths question owns as much as a hopeless
-  // child does: "there is no point on the graph where x = 3" was sent the 1926 helpline, and an
-  // over-block scores as a pass on the red-team scoreboard, so nothing would have reported it.
-  // Narrowed to the phrasings that are about the student and not about a graph. "in the graph" and
-  // "in that region" are why "no point in" alone is not one of them.
-  'no point in living', 'no point in life', 'no point in anything', 'no point in trying',
-  'no point in going', 'no point in studying', 'no point in me', 'no point anymore',
-  'no point any more', 'no point living', 'no point going on',
+  // "no point" is handled by NO_POINT_GEOMETRY below rather than listed here: a whitelist of the
+  // phrasings a hopeless child uses cannot be written, because the eleven that were tried missed
+  // "there is no point in my life".
   'pointless', 'hopeless', 'give up on everything', 'i give up', 'cannot go on',
   "can't go on", 'cannot take it', "can't take it", 'cannot do this anymore',
   "can't do this anymore", 'too much for me', 'nothing matters', 'nobody cares', 'no one cares',
@@ -56,6 +51,38 @@ const DISTRESS = [
   'பயமா இருக்கு', 'அழுகிறேன்',
 ];
 
+/**
+ * "no point" is the one phrase a maths question owns as much as a hopeless child does: "there is
+ * no point on the graph where x = 3" was sent the 1926 helpline, and an over-block scores as a
+ * *pass* on the red-team scoreboard, so nothing would have reported it.
+ *
+ * Commit 3a6b74a answered that with a whitelist of eleven hopeless phrasings, which is the wrong
+ * shape: a whitelist has to anticipate the child, and that one did not contain "no point in my
+ * life". So "no point" is distress by default, and only the senses below — "no point" as a dot on
+ * a diagram, with a geometric noun to prove it — are exempt. A negative list has to anticipate the
+ * syllabus instead, which is a finite, written-down thing.
+ *
+ * Deliberately *not* exempt, because Sri Lankan English says all three about a person and none of
+ * them about a graph: a bare "no point of" ("no point of studying"), "no point to", and
+ * "no point where". "no point where the curve crosses" is therefore a known over-block; it is the
+ * cheap error, and it is cheaper than "no point of living" reaching a maths tutor.
+ */
+const NO_POINT_GEOMETRY = new RegExp([
+  // "no point on the graph", "no point in the shaded region", "no point of the curve"
+  /no point (?:on|in|at|of|within|inside|outside) (?:the|this|that|a|any|either)(?: \w+){0,2} (?:graph|graphs|curve|curves|line|lines|axis|axes|region|regions|diagram|figure|sketch|plane|triangle|circle|square|rectangle|polygon|quadrant|interval|domain|range|set|area|surface|grid|shape|segment|sector|coordinate|coordinates|locus)\b/,
+  // the named points of a curve, which are the only "no point of X" a student writes about maths
+  /no point of (?:intersection|inflection|inflexion|contact|tangency|concurrency|symmetry)\b/,
+  // "no point lies on both lines"
+  /no point lies\b/,
+].map((pattern) => pattern.source).join('|'), 'g');
+
+/**
+ * True when the message says "no point" in the hopeless sense: every geometric occurrence is
+ * removed first, so a message that contains both senses is still a hit. Erring the other way —
+ * one geometry match suppressing the whole message — is how a missed signal gets built.
+ */
+const hopeless = (text) => text.replace(NO_POINT_GEOMETRY, ' ').includes('no point');
+
 /** Medicine / stimulant questions. A tutor gives none of this: requirement 8.6. */
 const MEDICINE = [
   'medicine', 'medicines', 'tablet', 'tablets', 'pill', 'pills', 'capsule', 'drug', 'drugs',
@@ -65,6 +92,22 @@ const MEDICINE = [
   // 'බෙහෙත්' and 'පෙති' do not contain — this file's own Sinhala reply uses both of those forms.
   'බෙහෙත', 'පෙති', 'පෙත්ත', 'ඖෂධ', 'මාත්‍රා',
   'மருந்து', 'மாத்திரை', 'மருந்துகள்', 'ஊசி',
+];
+
+/**
+ * Medicine words that are a request on their own. Nobody asks what a sleeping pill is for except
+ * to take one the night before a paper, and modafinil is on no O/L syllabus.
+ *
+ * This list exists to make an accident explicit. 'sleeping pill' contains STUDY_CONTEXT's 'sleep'
+ * and 'energy pill' contains its 'energy', so under the proximity gate below those two entries
+ * matched *themselves* at distance zero and fired regardless of the rest of the message — which
+ * was quietly doing much of the work the gate was credited with. `nearby` now requires the two
+ * spans to be disjoint, and the catch is written down here instead.
+ */
+const SELF_MEDICINE = [
+  'sleeping pill', 'sleeping pills', 'sleeping tablet', 'sleeping tablets', 'energy pill',
+  'energy pills', 'caffeine pill', 'caffeine pills', 'study drug', 'study drugs', 'study pill',
+  'adderall', 'modafinil', 'ritalin',
 ];
 
 /**
@@ -79,8 +122,8 @@ const MEDICINE = [
  * caring.
  */
 const SELF_ADVICE = [
-  'help me', 'helps me', 'keep me', 'keeps me', 'make me', 'makes me', 'give me', 'for me',
-  'should i', 'can i', 'could i', 'i take', 'i use',
+  'help me', 'helps me', 'help my', 'helps my', 'keep me', 'keeps me', 'make me', 'makes me',
+  'give me', 'for me', 'should i', 'can i', 'could i', 'i take', 'i use',
   'stay awake', 'staying awake', 'awake all', 'all night',
   'මට', 'මම',
   'எனக்கு', 'நான்',
@@ -93,8 +136,11 @@ const SELF_ADVICE = [
  * it was answered with "I cannot suggest any medicine" — because `drugs` was in one clause and
  * `i need` in the next, and the lists were OR'd across the whole message. Every phrase here is a
  * thing a student says about studying rather than about taking something, so on its own it means
- * nothing: it counts only next to the medicine word, where "what tablet helps my memory" is, and
- * where a sentence about the nervous system is not.
+ * nothing: it counts only next to the medicine word, and only when CURRICULUM_FRAME below has
+ * not already recognised the message as an exam exercise. This is the weakest of the three medical
+ * tiers — "what tablet helps my memory" is now caught by ASK_FOR_SUBSTANCE before it reaches here,
+ * and what is left for this list is the request with no asking verb in it at all:
+ * "my exam is in the morning and i have not finished, strong tablets".
  */
 const STUDY_CONTEXT = [
   'i need', 'i want', 'my exam', 'my paper', 'to study', 'for studying', 'studying',
@@ -104,13 +150,53 @@ const STUDY_CONTEXT = [
 ];
 
 /**
+ * Asking to be *given* or *told* a substance. The syllabus asks what a drug does; only a student
+ * who wants one asks which one, whether there is one, or what it is called.
+ *
+ * This tier is what the 24-character window was standing in for, and it is the better test:
+ * "my memory is very bad for history dates, is there any tablet for that" — the window's own
+ * worked example with one clause in front of it — is 40 characters wide and was being answered by
+ * a maths tutor. Like SELF_ADVICE these count wherever they sit, because a question assembled
+ * across two sentences (cases.json C6) is a red-team shape, not an accident.
+ */
+const ASK_FOR_SUBSTANCE = [
+  'is there any', 'is there a', 'is there some', 'are there any', 'any tablet', 'any medicine',
+  'any pill', 'any syrup', 'any capsule', 'any supplement', 'which tablet', 'which medicine',
+  'which pill', 'which drug', 'what tablet', 'what medicine', 'what pill', 'what drug',
+  'tell me a', 'tell me the', 'tell me which', 'tell me what', 'the name of', 'name of a',
+  'name of some', 'recommend', 'pharmacy', 'medical shop',
+];
+
+/**
+ * An exam exercise *about* a substance, in the words the exercise itself uses.
+ *
+ * This exempts nothing but the weakest tier below. 3a6b74a pinned one Science sentence —
+ * "Explain how drugs affect the nervous system, I need it for my exam" — and six O/L questions
+ * with the same words in a different clause order were still refused with "I cannot suggest any
+ * medicine". A sentence or clause boundary cannot separate them: "For my exam, explain how drugs
+ * affect the nervous system" has both halves in one sentence, and the recovered requests above
+ * span two. What separates them is the verb, so that is what is read.
+ *
+ * Deliberately only the schoolroom imperatives. "tell me how" is a child's words as much as an
+ * examiner's and is not here; neither is a bare "how does".
+ */
+const CURRICULUM_FRAME = [
+  'explain how', 'explain what', 'explain why', 'explain the', 'describe how', 'describe what',
+  'describe the', 'understand how', 'is on how', 'state the function', 'state what',
+  'described in', 'in the passage', 'in the extract', 'in the diagram above',
+  'according to the passage', 'from the passage', 'in the above', 'write an essay',
+];
+
+/**
  * How far apart a MEDICINE phrase and a STUDY_CONTEXT phrase may sit and still be one thought.
  *
- * 24 characters of ordinary Sinhala, Tamil or English prose: about four short words, which is as
- * far as "what tablet helps my memory" ever spreads. The 28 characters between `drugs` and
- * `i need` in the Science question above are a clause boundary, which is the distinction.
+ * About a clause and a half of ordinary Sinhala, Tamil or English prose. It was 24 characters,
+ * sized to "what tablet helps my memory" alone, which lost nine of nineteen realistic requests to
+ * one extra clause in front. It can be this wide now because CURRICULUM_FRAME above, not the
+ * distance, is what keeps a Science question out — and because this is the weakest of the three
+ * tiers: anything genuinely assembled across a message is caught by one of the other two first.
  */
-const MEDICAL_WINDOW = 24;
+const MEDICAL_WINDOW = 60;
 
 const normalise = (text) => text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
 
@@ -125,12 +211,17 @@ const spans = (text, phrases) => phrases.flatMap((phrase) => {
   return found;
 });
 
-/** True when some phrase from each list appears within `window` characters of the other. */
+/**
+ * True when some phrase from each list appears within `window` characters of the other, measured
+ * both ways round, and *not* overlapping: 'sleeping pill' must not satisfy the gate by containing
+ * STUDY_CONTEXT's own 'sleep' (see SELF_MEDICINE). An overlap is not two words near each other,
+ * it is one word counted twice.
+ */
 const nearby = (text, left, right, window) => {
   const rights = spans(text, right);
   return spans(text, left).some(([leftAt, leftEnd]) => rights.some(([rightAt, rightEnd]) => (
-    // Negative when the two overlap, which is as close as they get.
-    (rightAt >= leftEnd ? rightAt - leftEnd : leftAt - rightEnd) <= window
+    rightAt >= leftEnd ? rightAt - leftEnd <= window
+      : rightEnd <= leftAt && leftAt - rightEnd <= window
   )));
 };
 
@@ -145,10 +236,17 @@ export function classify(text) {
   const t = normalise(text);
   if (!t) return { hit: false, kind: null };
 
-  if (hits(t, DISTRESS)) return { hit: true, kind: 'distress' };
-  const medicine = hits(t, MEDICINE);
-  if (medicine && hits(t, SELF_ADVICE)) return { hit: true, kind: 'medical' };
-  if (medicine && nearby(t, MEDICINE, STUDY_CONTEXT, MEDICAL_WINDOW)) return { hit: true, kind: 'medical' };
+  if (hits(t, DISTRESS) || hopeless(t)) return { hit: true, kind: 'distress' };
+  if (!hits(t, MEDICINE)) return { hit: false, kind: null };
+
+  // Four tiers, weakest last. The first three read what the student is *asking for* and count
+  // wherever the words sit; only the last measures distance, and only the last is exempted by the
+  // syllabus frame — so an exam exercise cannot talk its way past "give me" or "which tablet".
+  if (hits(t, SELF_MEDICINE)) return { hit: true, kind: 'medical' };
+  if (hits(t, SELF_ADVICE)) return { hit: true, kind: 'medical' };
+  if (hits(t, ASK_FOR_SUBSTANCE)) return { hit: true, kind: 'medical' };
+  if (hits(t, CURRICULUM_FRAME)) return { hit: false, kind: null };
+  if (nearby(t, MEDICINE, STUDY_CONTEXT, MEDICAL_WINDOW)) return { hit: true, kind: 'medical' };
   return { hit: false, kind: null };
 }
 

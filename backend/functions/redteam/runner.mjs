@@ -44,8 +44,20 @@ import { randomUUID } from 'node:crypto';
 import { claimsFromEvent, requireRole, DenyError } from '../../lib/auth.mjs';
 import { RunError, scoreCase, parseRequest, totalsFrom, layersKey, disabledLayers } from './score.mjs';
 
-/** `redteam_runs` TTL, design §4: a run self-deletes after 30 days, which is also a cost guard. */
-const TTL_DAYS = 30;
+/**
+ * `redteam_runs` TTL, design §4. **Was 30 days, raised to 120 on 2026-11-19**, because 30 broke a
+ * rule: Kiroween requires the project to stay available to judges until the judging period ends on
+ * **2027-01-29**, and a run recorded on Dec 3 would have expired on Jan 2 — twenty-seven days
+ * early, leaving a judge opening the page in mid-January an empty list where the submission claims
+ * 36 scored cases. The feature would still have worked; the evidence would have been gone.
+ *
+ * It was also described as a cost guard, and that does not survive being measured: ~900 rows is
+ * about 1 MB, which is $0.00 a month at DynamoDB's $0.25/GB. So this number is a **privacy**
+ * decision and nothing else — which the row contents make an easy one. A row holds verdicts,
+ * layer attribution and a reply *length*; no reply text, no child's name, and a `teacherId` that
+ * belongs to a fictional demo account. See `docs/COST-MODEL.md`.
+ */
+const TTL_DAYS = 120;
 
 /** The `_meta` sort key of design §4. One row per run, holding the configuration and the totals. */
 const META = '_meta';

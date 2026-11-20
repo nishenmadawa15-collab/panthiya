@@ -248,9 +248,18 @@ Three sequencing facts that each cost an evening if met during the deploy rather
   would be a legitimate request from a parent who really is Dilmi's parent, and the privacy half of
   the red-team suite would be measuring nothing. The seed refuses to write if that is ever untrue.
 
-And one step that belongs **before** that first `sam deploy`: **create the $10/month budget alert by
-hand**, in Billing → Budgets. `backend/template.yaml` holds no `AWS::Budgets` resource, so no deploy
-will create one, and an alert added afterwards says nothing about spend that has already happened.
+The budget alert used to be a console step here. **Since 2026-11-19 the stack creates it**:
+`backend/template.yaml` holds an `AWS::Budgets::Budget` with the limit as a parameter (default $10,
+refused above $15) and three notifications — actual at 50% and 80%, forecast at 100%. `sam deploy
+--guided` will ask for `BudgetAlertEmail`; there is no address in this repository. It is deliberately
+**not** filtered to this stack, because the agent, the guardrail and Amplify all bill outside it.
+
+Two honest limits. It is **inert until the first deploy**, so the deploy is still the moment the
+guard starts — nothing is protected before it. And `MONTHLY` protects a monthly rate rather than a
+project total: three months at $10 each is $30 before the last alert fires, which is why the **50%
+rung matters most** — an email at $5 against a $15 project. Budgets is billing-scoped, so if the
+first deploy rolls back wanting `budgets:ModifyBudget` and `budgets:ViewBudget`, grant those two to
+`panthiya-dev` and redeploy rather than deleting the resource.
 
 ---
 
@@ -258,16 +267,41 @@ will create one, and an alert added afterwards says nothing about spend that has
 
 Target: **under US$15** for the whole hackathon. **Spent so far: $0.**
 
-| Item | Assumption | Estimate |
+**Re-costed 2026-11-19 for the right duration.** Kiroween requires the project to stay available to
+judges until the judging period ends on **2027-01-29**, so the stack cannot come down on submission
+day — it has to stay up for about 71 days. The old table was costed for a demo. Every resource in
+`backend/template.yaml` was then enumerated by billing shape; the working is in
+[`docs/COST-MODEL.md`](docs/COST-MODEL.md), with each row's price basis and the rows that could not
+be verified marked as such.
+
+| | Typical | Ceiling |
 |---|---|---|
-| Model inference (Nova Lite class) | ~1,500 turns, ~900 in / 300 out tokens | ~$1.50 |
-| Red-team runs | 36 cases × ~25 full runs | ~$2.00 |
-| DynamoDB on-demand | < 100k requests | < $0.50 |
-| Lambda | < 50k invocations at 256 MB | free tier |
-| API Gateway HTTP API | < 100k requests | ~$0.10 |
-| Amazon Transcribe | ~60 minutes of voice notes | ~$1.45 |
-| S3 + Amplify Hosting | tiny | < $1.00 |
-| **Total** | | **~$7, headroom to $15** |
+| Idle hosting, per month | **$0.01** | $0.26 |
+| Build period (~1,200 turns, 60 min Transcribe) | $1.34 | $5.30 |
+| Judging window (~1,000 judge turns, 30 min) | $1.10 | $3.92 |
+| **Submission → 2027-01-29, all in** | **~$2.50** | **~$9.80** |
+| **Headroom against $15** | **~$12.50** | ~$5.20 |
+
+**The finding is that duration was never the risk.** The two things this project expected to bill by
+the hour do not: a **Cognito prefix domain is not priced at all** (Cognito bills per monthly active
+user, and the pool defaults to the Essentials tier's 10,000 free MAUs — three demo logins and some
+judges is $0.00), and **there is no NAT gateway**, because the template creates no VPC at all. Of
+twenty-eight resources, **none bills per hour**. The only line that grows with elapsed time alone is
+CloudWatch Logs, whose eight implicit log groups have no retention set — one to seven cents over the
+window.
+
+**What the budget is bound by is the model price.** A chat turn is about **$0.0011**, and the
+**guardrail is 70–90% of it** — layer 2 costs two to nine times what the model does, because all four
+policy types in `backend/agent/guardrail.json` bill per 1,000 text units on the way in and again on
+the way out. It is the largest per-turn line in the project and it is **explicitly not on the cut
+list**: it is a defence layer, and a cheaper scoreboard is not the thing being built.
+
+**Three things would take this over $15, and not one is duration:** any **NAT gateway** ($77–$95 over
+the window, 5–6× the entire budget, before a single request); **option C's model** (a GPT-5-class
+OpenAI model at list prices is ~$0.0125 a turn, about **$27** for the same traffic — over budget on
+inference alone); and a **paid host for option C's exec server** (~$29, or $0 on a laptop that then
+has to stay on for judges, which is a rules problem rather than a cost one). Region is worth cents
+rather than dollars, so §0a's region decision should turn on availability and latency, not price.
 
 What is actually in the code holding this down: **one flat `maxTokens: 1024`** on every turn
 (`backend/functions/chat/index.mjs` — not the 400-tutor / 250-teacher split the design asked for), a 2,000-character input limit, a TTL on `redteam_runs`, and an S3 lifecycle rule deleting voice
@@ -279,16 +313,22 @@ notes after one day. Two things named here before were not true and are worth st
   ends, and `invokeAgent` does not even take the parameter. Costs less, not more — but it also means
   the two multi-message attacks (B7, C6) meet a different system than the one documented, which is
   recorded in [`docs/BUILD-LOG.md`](docs/BUILD-LOG.md).
-- **The $10 budget alert does not exist yet.** There is no `AWS::Budgets` resource in
-  `backend/template.yaml`, and no AWS resources exist at all. **Create it in the console before the
-  first deploy**, not after.
+- **The throttle is not a spend guard.** `ThrottlingRateLimit: 10` is ten requests **per second**
+  with no daily cap, so an hour of it is 36,000 turns. If anything ever needs a ceiling in a hurry,
+  a daily quota is the line to add — the rate limit will not stop a runaway.
+- **The budget alert now exists in the template** (above), but it is **inert until the first
+  deploy**, and the TTL on `redteam_runs` was never the cost guard it was described as: ~900 rows is
+  about 1 MB, which is $0.00 a month. It was raised from 30 days to **120** on 2026-11-19 for a
+  different reason — at 30 days a run recorded on submission day expired on Jan 2, twenty-seven days
+  before judging ends, so a judge opening the scoreboard in mid-January would have found an empty
+  list under a write-up claiming 36 scored cases.
 
-Three honest caveats. **Every row above is an estimate against a system that has never run**, so the
-token counts are the design's assumptions and not measurements. **A 1024-token ceiling is over three
-times the ~300 output tokens the ~$1.50 inference row was costed against**, so treat the ~$7 total as
-optimistic rather than re-forecasting it from the same guesses. And the orchestration decision above can change
-the shape of this table: option A prices runtime, memory and gateway as separate consumption lines,
-so if A is chosen the budget needs re-checking before the first long run.
+Two honest caveats, and the table above is built to survive both. **Every row is still an estimate
+against a system that has never run**, so the token counts are the design's assumptions rather than
+measurements — which is why there is a ceiling column, costed at the full 1,024-token output rather
+than the ~300 the old table assumed. And **the orchestration decision can still change the shape of
+this**: option A prices runtime, memory and gateway as separate consumption lines, and option C is
+one of the three ways listed above to go over budget. Re-check before the first long run, not after.
 `TODO(nishen)` — after the hackathon, record the amount actually spent here (task 7.9).
 
 ---

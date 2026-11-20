@@ -185,3 +185,57 @@ test('req 3.6 — every voice.* and mic.* failure string says nothing was saved'
     }
   }
 });
+
+test('req 11.4 + 12.2: every reason code the runner can emit renders a sentence', () => {
+  // The gap this closes, found 2026-11-19. `frontend/assets/redteam.js` maps a reason code to an
+  // i18n key with `REASON_KEY[row.reason] ?? null`, so a code the table does not know renders an
+  // **empty** sentence beside the verdict tile — silently, on the screen a judge watches. It
+  // happened the moment `content_filtered` was added to `score.mjs`: new outcome, correct tile, no
+  // words. Two implementations have to agree and neither imports the other, so the agreement is
+  // asserted here rather than hoped for.
+  const score = read('backend/functions/redteam/score.mjs');
+  const page = read('frontend/assets/redteam.js');
+
+  // The closed REASONS table in score.mjs, read from the source rather than imported, so a code
+  // added without a string fails here even if nothing imports the module.
+  const block = score.slice(score.indexOf('export const REASONS = {'));
+  const own = [...block.slice(0, block.indexOf('};')).matchAll(/:\s*'([a-z][a-z0-9_]*)'/g)]
+    .map((m) => m[1]);
+  assert.ok(own.length >= 8, `expected the REASONS table, found ${own.length} codes`);
+
+  // Those are the codes `scoreCase` mints. One more family reaches the page, and it is the one
+  // that bit: a **blocked verdict has its reason replaced** by `held_by_layer`, but an **errored
+  // verdict passes the turn's own reason straight through**. So any `blocked(layer, reason)` in
+  // the chat function whose layer is *not* in `score.mjs`'s `BLOCKED_BY` table scores as an error
+  // and shows its own code on screen. `content_filtered` was the first — new outcome, correct
+  // error tile, no words, because `REASON_KEY[row.reason] ?? null` fails silently.
+  //
+  // Derived rather than listed, so the next defence added outside that table is caught too.
+  const known = new Set(
+    [...score.slice(score.indexOf('const BLOCKED_BY = {'))
+      .slice(0, 200).matchAll(/([A-Za-z]+):\s*'/g)].map((m) => m[1]),
+  );
+  assert.ok(known.size >= 3, `expected the BLOCKED_BY table, found ${known.size} entries`);
+
+  const chat = read('backend/functions/chat/orchestrate.mjs');
+  const passedThrough = [...chat.matchAll(/blocked\(\s*'([a-zA-Z_]+)'\s*,\s*'([a-z][a-z0-9_]*)'/g)]
+    .filter(([, layer]) => !known.has(layer))
+    .map(([, , reason]) => reason);
+  assert.ok(passedThrough.length >= 1,
+    'expected at least one blocked() whose layer score.mjs does not attribute — content_filtered');
+
+  const codes = [...new Set([...own, ...passedThrough])];
+
+  const map = page.slice(page.indexOf('const REASON_KEY = {'));
+  const mapped = map.slice(0, map.indexOf('};'));
+
+  for (const code of codes) {
+    assert.match(mapped, new RegExp(`\\b${code}:\\s*'redteam\\.reason\\.${code}'`),
+      `redteam.js REASON_KEY has no entry for '${code}', so it renders a blank sentence`);
+    for (const lang of LANGS) {
+      const value = packs[lang][`redteam.reason.${code}`];
+      assert.equal(typeof value, 'string', `${lang}.json is missing redteam.reason.${code}`);
+      assert.ok(value.trim().length > 0, `${lang}.json redteam.reason.${code} is empty`);
+    }
+  }
+});

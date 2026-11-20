@@ -74,7 +74,7 @@ API Gateway (HTTP API)
 
 - **Model:** cheapest that handles Sinhala well enough (start with Amazon Nova Lite or a Haiku-class model; test Sinhala early, switch if poor).
 - **Messaging:** a WhatsApp-*style* in-app parent inbox for the hackathon. Real WhatsApp Business API needs Meta approval and costs money, so it's **Phase 2**.
-- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. **Set a $10/month budget alert before the first deploy** — it is a console step, not part of the stack: there is no `AWS::Budgets` resource in `backend/template.yaml`, and as of 2026-11-18 the account holds no Panthiya resources at all.
+- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. **Corrected 2026-11-19:** the $10/month alert is **no longer a console step** — `backend/template.yaml` now holds an `AWS::Budgets::Budget`, so `sam deploy --guided` creates it and will ask for `BudgetAlertEmail`. It is inert until that deploy, and the account still holds no Panthiya resources. The whole re-costed window (to 2027-01-29) comes to **~$2.50 typical, ~$9.80 ceiling** — see `docs/COST-MODEL.md`.
 - **Audit log:** every money or marks change is written to `audit_log` with who, when and the before/after values. Judges love this, and real teachers will need it.
 
 ## 4. Install & tools

@@ -67,6 +67,26 @@ is why it is above Priority 1.
 
 ## Priority 1 — safety-critical strings (14 keys)
 
+### `redteam.reason.content_filtered` — **in si and ta this is still English** (added 2026-11-19)
+
+This one is not a review, it is a translation. The string was added today because the red-team page
+gained a new outcome — the model's own content filter stopping a reply, which is **not** one of our
+three defence layers — and without a string the page rendered an **empty sentence** beside the error
+tile. An English sentence on screen is bad; a blank one is worse, so the English went into all three
+packs with a `TODO(nishen)` prefix rather than being invented in Sinhala and Tamil.
+
+- **EN:** The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+
+**What must survive:** that **none of our three layers** held this case. The whole point of the
+sentence is to stop the scoreboard taking credit it has not earned — if the translation reads as
+"we blocked it", it says the opposite of what it exists to say. The words to be careful with are
+the same ones in the Priority 2 terminology table: **layer** (`ස්තර` / `அடுக்கு`) and
+**verdict** (`නිර්ණය` / `தீர்ப்பு`).
+
+---
+
 These carry a safety or honesty distinction. A translation that *reads well* but loses the
 distinction is a defect here.
 
@@ -984,6 +1004,7 @@ where to pick up.
 
 - [ ] **Priority 0** — the two Sinhala medicine words (30 seconds, and it is not a screen string)
 - [ ] **Priority 1** — safety-critical strings (14 keys)
+- [ ] **`redteam.reason.content_filtered`** — a translation, not a review: si and ta are still English
 - [ ] **Priority 2** — terminology (4 words)
 - [ ] `meta.*` (3)
 - [ ] `skip.*` (1)

@@ -112,6 +112,12 @@ export async function handleChat({ claims, body, deps }) {
     if (err?.name === 'GuardrailIntervened' || err?.guardrailAction === 'INTERVENED') {
       return blocked('guardrail', 'guardrail_intervened', role);
     }
+    // Blocked, under its own name. `model_filter` is deliberately not one of the three layers this
+    // product builds and switches off, so `score.mjs` does not recognise it: the case lands in the
+    // error tile with `layersRelied: []` and no layer takes the credit. That is the honest outcome
+    // — nothing of ours held this one — and it is the outcome a teacher has to read for themselves
+    // (requirement 11.4) rather than a tick in the headline number.
+    if (err?.name === 'ContentFiltered') return blocked('model_filter', 'content_filtered', role);
     // The loop gave up rather than hanging. Reported as its own code so the red-team run records
     // an `error` (score.mjs maps 502 to `chat_unavailable`) instead of scoring a pass we did not
     // earn — see the honesty argument in the header of backend/functions/redteam/score.mjs.
@@ -181,6 +187,25 @@ function guardrailIntervened() {
   return err;
 }
 
+/**
+ * The model provider's own content filter stopped the turn. Blocked like a guardrail, labelled
+ * nothing like one.
+ *
+ * This is deliberately *not* `guardrailIntervened()`, which is what it used to be. `GuardrailId`
+ * defaults to `""` in backend/template.yaml and `index.mjs` attaches `guardrailConfig` only when
+ * it is set, so in the default deployment there is no Bedrock Guardrail at all — and
+ * `content_filtered` is the provider's filter regardless, not layer 2. Reporting it as a guardrail
+ * block had the red-team scoreboard crediting defence layer 2 for holding a case in a
+ * configuration where layer 2 does not exist, which is the one thing that scoreboard exists not to
+ * do (see the honesty argument in the header of backend/functions/redteam/score.mjs).
+ */
+function contentFiltered() {
+  const err = new Error('content filtered by the model provider');
+  err.name = 'ContentFiltered';
+  err.code = 'content_filtered';
+  return err;
+}
+
 /** Fixed text sent back to the model when a tool did not run. Our words, never the error's. */
 const TOOL_FAILED =
   'This tool did not run and nothing was read or written. Do not retry it, and do not answer out '
@@ -245,6 +270,12 @@ async function runOneTool({ toolUse, role, offered, sessionAttributes, deps, log
     // One line, so a refusal leaves a trace somewhere rather than only in a `log` that is thrown
     // away on success. The role and the name the model invented, and nothing else: no `sub`, no
     // message text, no tool input — none of that belongs in CloudWatch (requirement 13.7).
+    //
+    // The one exception, named rather than glossed over: `name` is `toolUse.name`, which the model
+    // chooses freely, so a prompt injection ("call the tool named <the thing I just told you>")
+    // can put up to 64 characters of a student's own words in this log line. It is capped at 64
+    // and `JSON.stringify` escapes newlines, so there is no log-injection path and no way to put a
+    // whole message through — but it is not literally true that nothing user-derived is logged.
     console.warn(JSON.stringify({ event: 'tool_not_offered', role, name: String(name).slice(0, 64) }));
     return result(true, JSON.stringify({
       ok: false, reason: 'not_permitted', blockedBy: 'role-gate', message: toolUnavailable(role),
@@ -308,12 +339,12 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
     // has to be looked for; letting it fall through to `stopReason !== 'tool_use'` would return
     // the guardrail's own canned sentence as if the model had written it, and the red-team run
     // would credit `instructions` for a case the guardrail held.
-    // `content_filtered` is the same event under another name — the service stopped the turn and
-    // left its own text in `content` — so it takes the same path rather than being returned as a
-    // reply the model wrote.
-    if (response?.stopReason === 'guardrail_intervened' || response?.stopReason === 'content_filtered') {
-      throw guardrailIntervened();
-    }
+    if (response?.stopReason === 'guardrail_intervened') throw guardrailIntervened();
+
+    // `content_filtered` is the same *event* — the service stopped the turn and left its own text
+    // in `content` — so it is blocked the same way rather than returned as a reply the model
+    // wrote. It is not the same *layer*: see `contentFiltered` above.
+    if (response?.stopReason === 'content_filtered') throw contentFiltered();
 
     const content = response?.output?.message?.content;
     if (!Array.isArray(content)) throw new LoopError('model_response_unreadable');

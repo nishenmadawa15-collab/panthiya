@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Panthiya backend — 8 DynamoDB tables, 8 Lambdas, one HTTP API behind a Cognito
-  JWT authorizer, and an S3 bucket for voice notes.
+  JWT authorizer, an S3 bucket for voice notes, and one account-wide cost budget.
   Implements design.md §4 (data model), §3.3 (per-Lambda IAM), §5 (API surface)
   and requirements 13.1–13.3. Everything scales to zero; nothing here is billed
   hourly (req 13.2). The Bedrock agent and guardrail are created by hand
@@ -54,6 +54,25 @@ Parameters:
     Type: String
     Default: amazon.nova-lite-v1:0
     Description: Model the agent uses. Nova Lite until the day-1 Sinhala test says otherwise (design §2.1).
+
+  BudgetAlertEmail:
+    Type: String
+    Description: >-
+      Where the cost-budget alert emails go (design §10). **No default on purpose**: the owner's
+      address must never be committed to a public repo, so `sam deploy --guided` has to ask for it
+      and stores it in `samconfig.toml`, which `.gitignore` excludes. It is the only place in this
+      template that takes a personal identifier.
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    ConstraintDescription: Must be one email address, e.g. you@example.com.
+
+  BudgetLimitUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 15
+    Description: >-
+      Monthly account-wide cost budget in USD. 10 is the figure design §10 names; MaxValue is the
+      US$15 project target, so CloudFormation itself refuses a budget set above the target.
 
 # ---------------------------------------------------------------------------
 # Globals — shared Lambda config. Table names reach the code only as
@@ -846,6 +865,71 @@ Resources:
       Principal: bedrock.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent/${BedrockAgentId}"
+
+  # =========================================================================
+  # 7. The cost guard design §10 recorded as missing. It is here rather than a
+  #    console step because a budget created by `sam deploy` exists *before*
+  #    the first model call, and an alert added afterwards says nothing about
+  #    spend that has already happened. A budget with no Budgets Action is
+  #    free of charge, so the guard itself cannot eat the budget it guards.
+  #
+  #    Shape checked against the CloudFormation reference for
+  #    AWS::Budgets::Budget (2026-11-19): `Budget` is the only required
+  #    top-level property; `BudgetType` and `TimeUnit` are required inside it;
+  #    `BudgetLimit` is required for a COST budget; `CostFilters` is optional.
+  #
+  #    DEPLOY NOTE: Budgets is billing-scoped, so the deploying identity needs
+  #    `budgets:ModifyBudget` and `budgets:ViewBudget` (older account-level
+  #    policies also gate this behind `aws-portal:ModifyBilling`). If the first
+  #    `sam deploy` rolls back with AccessDenied on one of those, grant them to
+  #    `panthiya-dev` and deploy again — do not delete this resource, because
+  #    then there is no alert at all. Nothing else in the stack needs billing
+  #    permissions.
+  # =========================================================================
+  SpendBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-cost"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitUsd
+          Unit: USD
+        # No CostFilters on purpose: unfiltered means the whole account. The Bedrock agent, the
+        # guardrail and Amplify Hosting are all created outside this stack, so a budget filtered to
+        # this stack's own services would miss most of what can actually overspend.
+      NotificationsWithSubscribers:
+        # ponytail: MONTHLY protects a monthly *rate*, not the US$15 project total — three calendar
+        # months of a $10 budget is $30 before the last alert fires. The 50% rung is what makes it
+        # useful anyway: the first email lands at $5 of a $15 project, which is early enough to act
+        # on. Upgrade path if that is not enough: a second budget with TimeUnit ANNUALLY, or
+        # Budgets Actions to detach the Bedrock permission automatically.
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            ThresholdType: PERCENTAGE
+            Threshold: 50
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            ThresholdType: PERCENTAGE
+            Threshold: 80
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        # Forecasted, so the warning can arrive before the money is gone rather than after.
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            ThresholdType: PERCENTAGE
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
 
 Outputs:
   ApiEndpoint:

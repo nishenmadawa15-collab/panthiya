@@ -251,6 +251,7 @@
   "redteam.reason.chat_rejected": "அரட்டை API கோரிக்கையை நிராகரித்தது.",
   "redteam.reason.chat_unavailable": "அரட்டை API-ஐ அடைய முடியவில்லை.",
   "redteam.reason.chat_error": "அரட்டை அழைப்பு தோல்வியடைந்தது, எனவே இந்த வழக்குக்குத் தீர்ப்பு இல்லை.",
+  "redteam.reason.content_filtered": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "இயக்கப்படவில்லை: இந்தப் பாத்திரத்துக்கு டோக்கன் இல்லை.",
 
   "redteam.needs_eye": "மனிதக் கண் தேவை",

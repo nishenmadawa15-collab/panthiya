@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   DEMO_ACCOUNTS, passwordProblems, exportLines, parseArgs, stackIds, subOf, createAccount,
-  idTokenFor, flagValue,
+  idTokenFor, flagValue, applyAll, applyLines, tokensAll,
 } from '../../scripts/demo-users.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -246,4 +246,98 @@ test('neither script still reads an argument by unguarded index', () => {
     assert.ok(!/args\[\s*args\.indexOf\([^)]*\)\s*\+\s*1\s*\]/.test(read(file)),
       `${file} reads an argument by unguarded index; use flagValue()`);
   }
+});
+
+// --- partial success, which is what a deploy evening actually produces ---------------------------
+
+const POOL = 'ap-south-1_demo';
+
+/** Every call an account needs, answering with a sub derived from the email. */
+const happyPool = (failOn = () => null) => ({
+  'cognito-idp admin-get-user': (argv) => {
+    const email = argv[argv.indexOf('--username') + 1];
+    return USER_ATTRS(`sub-${email.split('@')[0]}`);
+  },
+  'cognito-idp admin-create-user': (argv) => failOn(argv) ?? '',
+  'cognito-idp admin-add-user-to-group': (argv) => failOn(argv) ?? '',
+  'cognito-idp admin-set-user-password': (argv) => failOn(argv) ?? '',
+});
+
+test('--apply names every account it did and did not create, and does not stop at the first failure', () => {
+  // The trap this exists for: the loop used to throw out of main on the first error, so a run that
+  // made the teacher and then failed on the parent printed one line and a stack trace, never
+  // attempted the student, and left the operator guessing which of the three now exist — with
+  // seed.mjs, which reads all three subs back out of the pool, as the very next step.
+  const { run, calls } = fakeCli(happyPool((argv) => {
+    if (argv.includes('parent@panthiya.demo')) throw new Error('ThrottlingException: rate exceeded\n  at …');
+    return null;
+  }));
+
+  const results = applyAll(POOL, 'Panthiya-demo-1', run);
+  assert.deepEqual(results.map((r) => r.role), ['teacher', 'parent', 'student'],
+    'all three are attempted, including the one after the failure');
+  assert.deepEqual(results.map((r) => r.ok), [true, false, true]);
+  assert.match(results[1].error, /^ThrottlingException: rate exceeded$/, 'one line, not a stack');
+  assert.ok(calls.some((c) => c.includes('student@panthiya.demo')), 'the student was still attempted');
+
+  const { lines, ok } = applyLines(results);
+  const text = lines.join('\n');
+  assert.equal(ok, false);
+  assert.match(text, /FAILED    parent/);
+  assert.match(text, /2 of 3 accounts are in place: parent is not/);
+  assert.match(text, /DO NOT SEED YET/);
+  assert.match(text, /re-run exactly this command: the creates are idempotent/);
+  // It may explain what the seed needs, but it must not hand over a command to paste while the
+  // thing that command depends on is half-made.
+  assert.doesNotMatch(text, /node backend\/seed/);
+});
+
+test('--apply on a clean run says so, and only then points at the seed', () => {
+  const { run } = fakeCli(happyPool());
+  const { lines, ok } = applyLines(applyAll(POOL, 'Panthiya-demo-1', run));
+
+  assert.equal(ok, true);
+  const text = lines.join('\n');
+  assert.match(text, /confirmed teacher  sub-teacher/);
+  assert.match(text, /All three accounts are in place/);
+  assert.doesNotMatch(text, /DO NOT SEED/);
+});
+
+test('an account created with no sub is a half-failure, not a success', () => {
+  // The sub is the only thing the seed can key a class or a parent link on, so an account without
+  // one is an account the demo cannot use — and `admin-get-user` answering without it is exactly
+  // the silent shape this file's header is about.
+  const { run } = fakeCli({
+    ...happyPool(),
+    'cognito-idp admin-get-user': () => JSON.stringify({ UserAttributes: [{ Name: 'email', Value: 'x' }] }),
+  });
+
+  const { lines, ok } = applyLines(applyAll(POOL, 'Panthiya-demo-1', run));
+  assert.equal(ok, false);
+  assert.match(lines.join('\n'), /NO SUB    teacher  created, but no sub came back/);
+});
+
+test('--tokens hands over the tokens it has and names the role it could not', () => {
+  // A partial token block is usable: redteam-cli.mjs scores a role with no token as `error` rather
+  // than re-running its cases under another role. It still has to say which one and why.
+  const { run } = fakeCli({
+    'cognito-idp admin-initiate-auth': (argv) => {
+      if (argv.join(' ').includes('student@panthiya.demo')) throw new Error('NotAuthorizedException: Incorrect username or password.');
+      return JSON.stringify({ AuthenticationResult: { IdToken: 'token' } });
+    },
+  });
+
+  const { tokens, failures } = tokensAll(POOL, 'client', 'Panthiya-demo-1', run);
+  assert.deepEqual(Object.keys(tokens), ['teacher', 'parent']);
+  assert.deepEqual(failures.map((f) => f.role), ['student']);
+  assert.match(failures[0].error, /NotAuthorizedException/);
+  assert.match(exportLines('https://api', tokens).join('\n'), /PANTHIYA_TOKEN_STUDENT=<missing>/);
+});
+
+test('neither mode can end in a stack trace instead of a sentence', () => {
+  const source = read('scripts/demo-users.mjs');
+  // `stackIds` throwing (not deployed) and the AWS CLI throwing (no credentials) both already
+  // carry a sentence worth reading; what they must not carry is a stack trace.
+  assert.match(source, /catch \(err\) \{\s*\n[^}]*console\.error\(`demo-users: \$\{firstLine\(err\)\}`\)/);
+  assert.match(source, /process\.exitCode = 1/, 'a half-made set of logins must not exit 0');
 });

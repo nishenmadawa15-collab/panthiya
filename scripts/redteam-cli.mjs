@@ -147,13 +147,35 @@ export async function postChat({ url, token, body }) {
   }
 }
 
-/** The per-turn metadata `score.mjs` accepts. The reply's text is deliberately not part of it. */
-const turnOf = (status, body) => ({
-  status,
-  blockedBy: typeof body?.blockedBy === 'string' ? body.blockedBy : null,
-  reason: typeof body?.reason === 'string' ? body.reason : null,
-  replyLength: typeof body?.reply === 'string' ? body.reply.length : null,
-});
+/**
+ * The per-turn metadata `score.mjs` accepts. The reply's text is deliberately not part of it.
+ *
+ * WHY A 200 CAN BE DOWNGRADED TO 0. `score.mjs` reads a 200 with no `blockedBy` as "a reply came
+ * through and nothing downstream objected", which is layer 1's signature and scores `blocked`.
+ * That is right for a reply, and wrong for a 200 that carries no reply at all: an unparsable body
+ * (`postChat` returns `body: null` for one) or a `{}` would be credited to the role gate although
+ * nobody got an answer. `chat/orchestrate.mjs` already fails closed on an empty or truncated
+ * agent reply by answering 502, so a 200 with nothing in it means something between here and
+ * there broke — a proxy, a partial response, a shape change. It is reported as no answer, which
+ * `score.mjs` turns into `error`: a case whose verdict we do not have.
+ *
+ * `role` is the role `chat/orchestrate.mjs` read from the verified JWT (decision 5 of
+ * docs/NEXT-SESSION.md §4). It is recorded so the verdict can be scored against the role the
+ * server actually saw rather than the one this script assumed — see `runOneCase`.
+ */
+const turnOf = (status, body) => {
+  const blockedBy = typeof body?.blockedBy === 'string' ? body.blockedBy : null;
+  const reply = typeof body?.reply === 'string' ? body.reply : null;
+  const answered = status !== 200 || blockedBy !== null || (reply !== null && reply.trim() !== '');
+
+  return {
+    status: answered ? status : 0,
+    blockedBy,
+    reason: answered ? (typeof body?.reason === 'string' ? body.reason : null) : 'empty_200_body',
+    replyLength: reply === null ? null : reply.length,
+    role: typeof body?.role === 'string' ? body.role : null,
+  };
+};
 
 // --- running ------------------------------------------------------------------------------------
 
@@ -188,20 +210,32 @@ export async function runOneCase({ c, tokens, layers, apiBase, post }) {
         role: c.role,
         body: { message, lang: 'en' },
       });
-      turns.push(turnOf(status, body));
+      const turn = turnOf(status, body);
+      turns.push(turn);
       replies.push(typeof body?.reply === 'string' ? body.reply : null);
       // An errored turn ends the case: the later messages of B7 and C6 only mean anything once
-      // the earlier ones have landed.
-      if (status !== 200) break;
+      // the earlier ones have landed. `turn.status`, not `status`, so a 200 that carried no
+      // answer ends it too.
+      if (turn.status !== 200) break;
     }
   }
+
+  // The role the server says it saw, which is the one the verdict is scored against. The ceiling
+  // named in `score.mjs` — "the runner cannot verify `sessionRole`" — is the expensive one on
+  // deploy evening: paste the teacher's token into PANTHIYA_TOKEN_PARENT and all 18 parent
+  // privacy cases are answered legitimately from a teacher session and scored `blocked`. With
+  // `role` echoed back, `score.mjs` sees the mismatch and scores them `error` instead. A server
+  // that does not echo it (an older deploy) falls back to the assumption, which is what this
+  // script did for every case before.
+  const sessionRole = turns.map((t) => t.role).find((r) => typeof r === 'string') ?? c.role;
 
   return {
     caseId: c.id,
     section: c.section,
     caseRole: c.role,
+    sessionRole,
     noToken: !token,
-    ...scoreCase({ caseRole: c.role, sessionRole: c.role, layers, turns }),
+    ...scoreCase({ caseRole: c.role, sessionRole, layers, turns }),
     // Kept in memory for this process only, printed solely under `--show-replies`, and never
     // written to the recording. See `report`.
     replies,
@@ -241,12 +275,16 @@ export function scoreRecorded({ cases, recorded, layers }) {
   return cases.map((c) => {
     // A case absent from the recording is not a pass. `status: 0` scores it `error`.
     const turns = recorded?.outcomes?.[c.id] ?? [turnOf(0, { reason: 'not_recorded' })];
+    // Scored against the role the recorded run's server reported, for the reason in `runOneCase`:
+    // a dry run that re-scores a token mix-up as `blocked` would hide it rather than preserve it.
+    const sessionRole = turns.map((t) => t?.role).find((r) => typeof r === 'string') ?? c.role;
     return {
       caseId: c.id,
       section: c.section,
       caseRole: c.role,
+      sessionRole,
       noToken: false,
-      ...scoreCase({ caseRole: c.role, sessionRole: c.role, layers, turns }),
+      ...scoreCase({ caseRole: c.role, sessionRole, layers, turns }),
       replies: [],
     };
   });
@@ -301,7 +339,13 @@ export function report({ rows, totals, layers, showReplies = false }) {
   if (by('error').length) {
     lines.push('', '  ERRORED — no verdict, not a pass:');
     for (const r of by('error')) {
-      const why = r.noToken ? `no PANTHIYA_TOKEN_${r.caseRole.toUpperCase()}` : r.reason;
+      const why = r.noToken ? `no PANTHIYA_TOKEN_${r.caseRole.toUpperCase()}`
+        // Name the env var, because this one is a paste error and nothing else: the token used
+        // for a case belonged to a different role, and the run sheet's export block is where it
+        // came from.
+        : r.reason === 'case_role_mismatch'
+          ? `${r.reason} — answered as ${r.sessionRole ?? '?'}; PANTHIYA_TOKEN_${r.caseRole.toUpperCase()} holds the wrong token`
+          : r.reason;
       lines.push(`    ${r.caseId.padEnd(4)}${r.caseRole.padEnd(9)}${why}`);
     }
   }
@@ -393,12 +437,21 @@ async function main(argv) {
     cases, tokens, layers: opts.layers, apiBase, post: postChat, onLine: (l) => console.log(l),
   });
 
-  writeFileSync(opts.recording, JSON.stringify(recordingOf({ rows, layers: opts.layers }), null, 2) + '\n');
+  // The money has already been spent at this point, so a disk that will not take the recording
+  // must not cost the report as well: it is the only place the run's numbers exist.
+  let recorded = true;
+  try {
+    writeFileSync(opts.recording, JSON.stringify(recordingOf({ rows, layers: opts.layers }), null, 2) + '\n');
+  } catch (err) {
+    recorded = false;
+    console.error(`\n  COULD NOT WRITE ${opts.recording}: ${String(err?.message ?? err).split('\n')[0]}`);
+    console.error('  The results below are this run\'s only copy — they cannot be re-scored later.');
+  }
 
   for (const line of report({ rows, totals, layers: opts.layers, showReplies: opts.showReplies })) {
     console.log(line);
   }
-  console.log(`\n  recording: ${opts.recording}  (turn metadata only — no reply text)`);
+  if (recorded) console.log(`\n  recording: ${opts.recording}  (turn metadata only — no reply text)`);
 
   return exitCodeFrom(totals);
 }
@@ -407,5 +460,12 @@ async function main(argv) {
 // `pathToFileURL` rather than string-building a `file://` URL: this repo is developed on Windows,
 // where `C:\…` and `/C:/…` would never compare equal and the suite would silently never run.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(await main(process.argv.slice(2)));
+  // Anything that throws before or around the run — a malformed cases.json, a missing file —
+  // would otherwise reach the top as an unhandled rejection and print a stack trace where the
+  // scoreboard goes. Exit 3 so it cannot be read as "leaked or errored" (1) or "usage" (2).
+  process.exit(await main(process.argv.slice(2)).catch((err) => {
+    console.error(`\nredteam-cli could not run: ${String(err?.message ?? err).split('\n')[0]}`);
+    console.error('No cases were scored. Nothing above is a result.');
+    return 3;
+  }));
 }

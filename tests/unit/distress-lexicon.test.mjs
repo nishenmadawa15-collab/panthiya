@@ -131,3 +131,133 @@ test('the medical gate reads the syllabus words by proximity and "give me" by pr
   // And a medicine word with neither tier near it is a Science question:
   assert.equal(classify('what is in paracetamol tablets').hit, false);
 });
+
+// --- the regression corpus ---------------------------------------------------------------------
+//
+// One table, both directions, holding every phrasing an independent verification pass confirmed by
+// running the real `classify` either side of commit 3a6b74a (which narrowed this module to fix two
+// confirmed over-blocks, and narrowed it too far). The tests above pin four phrasings each way; the
+// pass found eleven more real distress phrasings and nine more real medicine requests that had
+// stopped firing, and six O/L Science questions that still over-block. None of them were visible to
+// any test in this suite, which is why they are written down here as data rather than as prose.
+//
+// Expected `kind`, not just `hit`, because sending E1's helpline reply to E3's question (or the
+// reverse) is the right case answered with the wrong words.
+const CORPUS = [
+  // --- finding 1: hopelessness the 'no point' whitelist dropped. `distress` before 3a6b74a. -----
+  ['there is no point in my life', 'distress'],
+  ['no point in my life', 'distress'],
+  ["there's no point in my life anymore", 'distress'],
+  ['there is no point to anything', 'distress'],
+  ['no point in being here', 'distress'],
+  ['i see no point', 'distress'],
+  ['no point in my future', 'distress'],
+  ['no point in school', 'distress'],
+  ['sir there is no point now', 'distress'],
+  ['no point in continuing', 'distress'],
+  ['no point in waking up', 'distress'],
+  ['no point doing anything', 'distress'],
+
+  // --- the geometry sense of the same two words. The four the suite already pinned... -----------
+  ['Sir, there is no point on the graph where x = 3. Is that right?', null],
+  ['There is no point in the graph in that region', null],
+  ['Explain why there is no point of intersection', null],
+  ['no point on this curve has a negative gradient', null],
+  // ...and the other shapes a maths or physics answer uses, which the negative list has to cover
+  // because the negative list is now the only thing standing between it and an over-block.
+  ['there is no point in the shaded region of the diagram', null],
+  ['no point in the triangle is equidistant from all three vertices', null],
+  ['no point of inflection exists on this curve', null],
+  ['no point lies on both lines', null],
+  ['no point on the line y = 2x is below the x axis', null],
+  ['no point in this circle is further than r from the centre', null],
+
+  // --- finding 2: real medicine requests. `medical` before 3a6b74a, lost to a 24-char window. ---
+  ['my memory is very bad for history dates, is there any tablet for that', 'medical'],
+  ['my memory is terrible, is there any tablet i can buy at the pharmacy for it', 'medical'],
+  ['my exam is tomorrow morning at eight and i still have four chapters left, is there a tablet', 'medical'],
+  ['my paper is tomorrow, i am finished, please just tell me a tablet', 'medical'],
+  ['for exam tomorrow i cannot keep my eyes open, which tablet', 'medical'],
+  ['i need to finish the whole syllabus tonight somehow, tell me a tablet name', 'medical'],
+  ['i need the name of something strong, a tablet maybe', 'medical'],
+  ['studying since 4am and my head is gone, what tablet will fix it', 'medical'],
+  ['i want, if possible, to find out the name of a tablet', 'medical'],
+
+  // --- the two tiers that are not exercised by anything above. Both of these fire through the
+  // --- proximity gate alone, and both were missed before this pass: the first is 50 characters
+  // --- wide (the window was 24), the second says "my" rather than "me" inside a schoolroom verb
+  // --- that exempts the proximity tier on its own.
+  ['my exam is in the morning and i have not finished, strong tablets', 'medical'],
+  ['describe how tablets help my memory', 'medical'],
+
+  // --- finding 6: O/L Science, in the clause orders 3a6b74a's one pinned sentence does not cover.
+  ['For my exam, explain how drugs affect the nervous system', null],
+  ['I need to explain how drugs affect the nervous system for my exam', null],
+  ['my paper is on how drugs affect the nervous system', null],
+  ['I want to understand how drugs affect the nervous system', null],
+  ['describe how the pancreas uses energy and why insulin injection is needed', null],
+  ['what is the focus of the drug trial described in the passage', null],
+];
+
+test('the regression corpus — every confirmed phrasing, in both directions', () => {
+  const wrong = CORPUS
+    .map(([message, kind]) => [message, kind, classify(message).kind])
+    .filter(([, want, got]) => got !== want)
+    .map(([message, want, got]) => `  ${want === null ? 'OVER-BLOCK' : 'MISS      '} `
+      + `want ${String(want)}, got ${String(got)}: ${JSON.stringify(message)}`);
+  assert.deepEqual(wrong, [], `${wrong.length} of ${CORPUS.length} wrong:\n${wrong.join('\n')}\n`);
+});
+
+test('the proximity helpers are pinned from both sides, not just used', () => {
+  // `nearby` and `spans` are the only arithmetic in this module, and two wrong versions of them
+  // used to survive the whole suite: a one-sided distance (which reads as "always near" whenever
+  // the study word comes first, i.e. the pre-fix OR behaviour), and a first-occurrence-only
+  // `spans`. These two messages are synthetic — they exist to tell the right version from the
+  // wrong one, which no realistic phrasing in the corpus above does.
+
+  // The study word comes *first* and sits far away: a one-sided distance makes this a hit.
+  assert.equal(
+    classify('for exam i am drawing the human digestive system diagram with every organ '
+      + 'labelled in order, pills').hit,
+    false,
+    'the window has to be measured both ways round, or every message with a study word is a hit',
+  );
+
+  // The medicine word appears twice: far from the study word, then beside it. Only the second
+  // occurrence is within the window, so a `spans` that stops at the first one misses this.
+  assert.equal(
+    classify('tablets are listed in lesson three of the science book about the human digestive '
+      + 'system and absorption, and my memory for them is gone, tablets').hit,
+    true,
+    'every occurrence of a medicine word counts, not the first one',
+  );
+
+  // And the accident that was doing this gate's work: 'sleeping pill' contains STUDY_CONTEXT's
+  // 'sleep', so it used to satisfy the proximity gate against *itself* at distance zero. `nearby`
+  // now requires the two spans to be disjoint, which means SELF_MEDICINE — not the arithmetic —
+  // is what catches these. Deleting that list must therefore go red here.
+  for (const message of ['the function of a sleeping pill in the body', 'is an energy pill safe',
+    'what does modafinil do']) {
+    assert.deepEqual(classify(message), { hit: true, kind: 'medical' },
+      `${JSON.stringify(message)} names a substance only a student taking it asks about`);
+  }
+});
+
+test('"no point" is distress by default and geometry only by proof', () => {
+  // The whitelist this replaced had eleven entries and still missed "no point in my life", so the
+  // direction is pinned, not the wording: an unrecognised "no point" reaches the helpline.
+  for (const message of ['no point', 'there is really no point left', 'honestly, no point']) {
+    assert.equal(isDistress(message), true, `${JSON.stringify(message)} must reach the helpline`);
+  }
+  // Both senses in one message is a hit: one geometry match must not excuse the whole message.
+  assert.equal(
+    isDistress('there is no point on the graph where x = 3, and no point in my life either'),
+    true,
+    'a geometry match suppressing the rest of the message is how a missed signal gets built',
+  );
+  // ponytail: known ceiling — "no point where the curve crosses" and "no point of the sort" are
+  // over-blocks, because Sri Lankan English says "no point of studying" and "no point where i am
+  // happy" about a person. Narrow them only with evidence that a real student types them; an
+  // over-block costs one kind message, and the alternative cost "no point in my life".
+  assert.equal(isDistress('no point where the two lines meet'), true);
+});

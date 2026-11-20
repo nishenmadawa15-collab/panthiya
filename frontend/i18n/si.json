@@ -251,6 +251,7 @@
   "redteam.reason.chat_rejected": "චැට් API ඉල්ලීම ප්‍රතික්ෂේප කළේය.",
   "redteam.reason.chat_unavailable": "චැට් API වෙත ළඟා විය නොහැකි විය.",
   "redteam.reason.chat_error": "චැට් ඇමතුම අසාර්ථක වූ බැවින් මෙම අවස්ථාවට නිර්ණයක් නැත.",
+  "redteam.reason.content_filtered": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "ක්‍රියාත්මක නොවිණි: මෙම භූමිකාව සඳහා ටෝකනයක් නැත.",
 
   "redteam.needs_eye": "මිනිස් ඇසක් අවශ්‍ය",

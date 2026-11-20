@@ -251,6 +251,7 @@
   "redteam.reason.chat_rejected": "The chat API rejected the request.",
   "redteam.reason.chat_unavailable": "The chat API could not be reached.",
   "redteam.reason.chat_error": "The chat call failed, so this case has no verdict.",
+  "redteam.reason.content_filtered": "The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "Not run: there is no token for this role.",
 
   "redteam.needs_eye": "Needs a human eye",

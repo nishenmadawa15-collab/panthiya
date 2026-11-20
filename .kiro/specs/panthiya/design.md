@@ -397,37 +397,92 @@ in the 2026-11-18 build-log entry, and it needs `brotli`, which this machine doe
 
 ## 10. Cost model (target under US$15)
 
-| Item | Assumption | Estimate |
-|---|---|---|
-| Bedrock agent, Nova Lite | ~1,500 turns over the build, ~900 in + 300 out tokens | ~$1.50 |
-| Red-team runs | 36 cases × ~25 full runs | ~$2.00 |
-| DynamoDB on-demand | < 100k requests | < $0.50 |
-| Lambda | < 50k invocations, 256 MB | free tier |
-| API Gateway HTTP API | < 100k requests | ~$0.10 |
-| Transcribe | ~60 minutes of voice notes | ~$1.45 |
-| S3 + Amplify Hosting | tiny | < $1.00 |
-| **Total** | | **~$7, headroom to $15** |
+**Re-costed 2026-11-19 for the judging window, resource by resource from `backend/template.yaml`.**
+The enumeration, the price basis for every row and the sources are in **`docs/COST-MODEL.md`**;
+this section carries the numbers and the decisions. Nothing is deployed and **$0 has been spent**.
 
-Guards **in the code as it stands**: one flat `maxTokens: 1024` on every turn
+The window the rules impose is **2026-11-19 → 2027-01-29 — 71 days, 1,704 hours** — because
+Kiroween requires the project to stay available to judges *"free of charge and without any
+restriction, for testing, evaluation and use ... until the Judging Period ends"*, and judging runs
+2026-12-16 to 2027-01-29. That answers task 7.9 before anyone asked it: **leave it running.**
+
+| Billing shape | Over the whole 71-day window | Price basis |
+|---|---|---|
+| **Per hour / per month regardless of traffic** | **$0.02 typical, $0.60 ceiling** | See below — the category is nearly empty |
+| Build period to 2026-12-04: ~1,200 turns + ~60 min Transcribe | $1.34 / $5.30 | Nova Lite $0.06/$0.24 per M tokens **[unverified]**; guardrail $0.40/1,000 text units; Transcribe 60 free min/month then ~$0.006/min **[unverified]** |
+| Judging window, 45 days: 1,000 judge turns + ~30 min Transcribe | $1.10 / $3.92 | As above |
+| **Submission → 2027-01-29** | **~$2.50 typical, ~$9.80 ceiling** | |
+| **Idle cost per month** | **$0.01–$0.26** (midpoint ~$0.05) | |
+| **Headroom against US$15** | **~$12.50 typical, ~$5.20 at the ceiling** | |
+
+> **The old warning asked the right question and got the wrong answer.** It said whatever bills per
+> hour — *"the Cognito domain, any NAT gateway, anything provisioned"* — decides the real total.
+> Enumerating all 28 resources found **nothing in this template that bills per hour, per month or
+> per provisioned unit.** The **Cognito prefix domain has no hourly charge in any AWS document**:
+> Cognito bills per monthly active user under the pool's feature plan, which defaults to Essentials
+> and includes **10,000 free MAUs a month**. And there is **no VPC, subnet, NAT gateway, EIP or
+> `VpcConfig` anywhere in the template** — the NAT risk belongs to the supplied AgentCore CDK
+> bundle (`docs/NEXT-SESSION.md` §0a), i.e. to a decision not yet taken. The only line that grows
+> with elapsed time alone is **CloudWatch Logs, which have no `RetentionInDays` and so never
+> expire**, and that is pennies. **Ten weeks of availability is close to free. The budget is not
+> duration-bound — it is model-price-bound.**
+
+**What a turn costs, and the surprise in it.** With the guards actually in the code — flat
+`maxTokens: 1024`, a 2,000-character input limit, `MAX_TOOL_TURNS = 4` — a chat turn is
+**~$0.0011 typical and ~$0.0032 at the ceiling**, of which **the guardrail is 70–90%: layer 2
+costs two to nine times what Nova Lite costs.** That is not a reason to weaken it.
+
+**Three things would take this over $15, and none of them is duration:**
+
+1. **Any NAT gateway** — **$77–$95 over the window, 5–6× the whole budget**, before any traffic.
+2. **Option C's model.** A GPT-5-class OpenAI model on BMA at ~$1.25/M in and ~$10/M out **[list
+   price, unverified for `bedrock-mantle`]** makes a turn ~$0.0125 instead of ~$0.0011, so the same
+   2,200 turns cost **~$27 — over budget on inference alone.**
+3. **A paid host for option C's exec server** — ~$29 for a `t4g.small` over the window; $0 on
+   Nishen's own machine, and then the live URL works only while that machine is on, which is a
+   rules problem rather than a cost one.
+
+In order, the cuts: no VPC and no NAT (take the AgentCore CLI path, not the CDK bundle); keep Nova
+Lite for live judge traffic even if an OpenAI model is used for the video; add a daily request
+quota, because `ThrottlingRateLimit: 10` is per *second* and has no daily cap; cut the red-team
+sweep from 25 runs to 5; set `RetentionInDays: 7` on the log groups. **Explicitly not on the cut
+list: the guardrail policies**, despite being the largest per-turn line. Region changes the total
+by cents, so `ap-south-1` vs `us-east-1` is a latency and availability decision, not a cost one.
+
+**The two deletion rules, read against the availability requirement.** Neither breaks it, and one
+of them is nonetheless a problem. The **S3 lifecycle rule** (voice notes, 1 day) is safe: a voice
+note is transient input to a transcription that finishes in the same request, and the rule is a
+privacy control first. The **`redteam_runs` TTL (30 days)** keeps the feature working — a judge can
+start a fresh run — but **silently deletes the submitted evidence: a run recorded 2026-12-03
+expires 2027-01-02, twenty-seven days before judging ends**, so a judge opening `/redteam` in
+mid-January sees an empty history where the write-up claims 36 scored cases. The fix is one line,
+`TTL_DAYS = 30` → `120` in `backend/functions/redteam/runner.mjs`. And its stated justification
+does not survive the arithmetic: 900 rows is about 1 MB, so **this TTL is worth $0.00/month as a
+cost guard** and should be decided on privacy grounds alone. The one real availability risk on the
+list is not ours: **BMA's public-preview access** could change inside a 45-day judging window.
+
+**Guards in the code as it stands**: one flat `maxTokens: 1024` on every turn
 (`backend/functions/chat/index.mjs` — the 400 tutor / 250 teacher split asked for above was never
 built), a 2000-character input limit, TTL on `redteam_runs`, and the S3 lifecycle rule deleting
 voice notes after 1 day.
 
-Two guards named in earlier drafts are **not in force**. `MAX_HISTORY_TURNS = 6` exists, but the
-tool loop is single-message and `invokeAgent` does not take the parameter, so there is no history
-window at all. And the **$10 budget alert does not exist** — there is no `AWS::Budgets` resource in
-`backend/template.yaml`, so no deploy creates one; it is a console step to take **before** the
-first deploy, because an alert added afterwards says nothing about spend that has already
-happened. With a 1024-token ceiling against the ~300-output-token assumption the inference row was
-costed on, **~$7 is the optimistic end of this table rather than its midpoint**.
-
-> **And the table is costed for the wrong duration.** Kiroween's official rules (read 2026-11-18)
-> put the judging period at **2026-12-16 to 2027-01-29**, and require that the project stay
-> available to judges for testing *until the judging period ends*. So the stack cannot be torn down
-> on submission day: it has to stay up for roughly **ten more weeks** after it. Whatever bills per
-> hour rather than per request — the Cognito domain, any NAT gateway, anything provisioned —
-> decides the real total, and task 7.9 ("tear down or leave running?") is therefore answered for
-> us: leave it running, and cost it for the window rather than for the demo.
+**Guards still not in force.** `MAX_HISTORY_TURNS = 6` exists, but the tool loop is single-message
+and `invokeAgent` does not take the parameter, so **there is no history window at all**. The API
+throttle is per-second with **no daily quota**, so it is not a spend guard. And the budget alert
+**exists in the template now but does not exist in the account**: §10 previously recorded it as a
+console step, and as of 2026-11-19 `backend/template.yaml` carries an `AWS::Budgets::Budget` —
+`COST`, `MONTHLY`, amount from the `BudgetLimitUsd` parameter (default 10, `MaxValue: 15` so no
+deploy can set a budget above the target), with ACTUAL 50%, ACTUAL 80% and FORECASTED 100%
+notifications going to the `BudgetAlertEmail` parameter, which has **no default** so that no
+address is ever committed to a public repo. It is in the template rather than the console because a
+budget created by `sam deploy` exists *before* the first model call. Two honest limits: **it is
+inert until the first deploy**, and `MONTHLY` protects a monthly rate rather than the project total
+— three calendar months of a $10 budget is $30 before the last alert fires, which the 50% rung
+(an email at $5 of a $15 project) is what makes it useful anyway. Budgets without a Budgets Action
+are free, so the guard cannot eat the budget it guards; the deploying identity does need
+`budgets:ModifyBudget` and `budgets:ViewBudget`, and if the first deploy rolls back on that, the
+fix is to grant them, not to delete the resource. `tests/unit/cost-guards.test.mjs` pins all of it,
+including that nothing in the template bills per hour.
 
 ---
 

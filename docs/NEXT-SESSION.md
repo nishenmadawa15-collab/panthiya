@@ -8,8 +8,9 @@ the 18th and 19th; where any two disagree, **the latest dated correction wins**.
 
 ## Where 2026-11-19 ended
 
-**587 tests pass, nothing skipped. 67 of 79 tasks. Nothing deployed, $0 spent — and the branch is
-on `origin`.** No AWS work was possible today: there are still no credentials on this machine, and
+**633 tests pass, nothing skipped — up from 565, and `npm test` is the only number worth quoting,
+because today's lesson is partly about numbers in documents outliving what they described. 67 of 79
+tasks. Nothing deployed, $0 spent — and the branch is on `origin`.** No AWS work was possible today: there are still no credentials on this machine, and
 neither AWS nor Kiro is signed in to the browser the extension sees. Everything below was done
 without either.
 
@@ -17,7 +18,8 @@ without either.
 |---|---|
 | **The push** | `feat/m4-student-tutor` → `origin`, 30 commits. `main` untouched, so the merge decision and Amplify are unchanged |
 | **A second verification pass** | Same brief as the first: assume the claims are ahead of the evidence. **Six defects CONFIRMED by running them**, four lower, six areas reported clean — and **every one of them sat behind the green 565** |
-| **All of them fixed** | Two parallel lanes, seventeen mutations, every guard confirmed **red-then-green**. 565 → 587 tests |
+| **All of them addressed — then a third pass read the fixes, and the fixes were wrong** | Two lanes fixed all six. **Verification pass 3 then pointed at that commit rather than at the code it fixed** and found ten more, six CONFIRMED — including two *misses* the fixes had introduced in `distress.mjs`, and a test that could not fail. All repaired, by lanes that built the corpus **before** touching the code: the distress corpus failed 27 of 37 rows against the then-current code, and the audit-log guard now catches 9 of 9 mutation shapes instead of 4 |
+| **And the four deploy-evening scripts were read for the first time** | Three were carrying a defect that would have reported a false result with money already spent — the worst being that **the Sinhala gate could print `PASS` for a reply that did not exist**. All fixed; the human half is in the table further down |
 | **`docs/TRANSLATION-REVIEW.md`** | The si/ta review surface. 261 keys per pack, the 14 safety-critical strings first, and now a **Priority 0** above them |
 | **`docs/DECISION-KIRO-WRITEUP.md`** | Decision 4 as a choice of letter, with the recommended text drafted in full |
 | **§0b below** | The challenge is on **AWS Builder Center**, not Devpost — which is why five searches found nothing |
@@ -30,11 +32,17 @@ row from the audit log **could not fail**: granting the teacher Lambda `DeleteIt
 *and* `BatchWriteItem` on `audit_log` left it green, because its regex window was 400 characters and
 the real distance was 850.
 
-> Yesterday's lesson was *a passing suite is not evidence that a thing runs.* Today's is the
-> narrower half: **a suite that has never been seen to fail is not evidence that it tests
-> anything.** Every fix today was held to a mutation — break the thing the guard protects, watch it
-> go red, restore it. That is the standard for the live run too, and the live run will have far more
-> to be wrong about.
+> Three lessons, stacked, and the third cost the most to learn. *A passing suite is not evidence
+> that a thing runs* (pass 1). *A suite that has never been seen to fail is not evidence that it
+> tests anything* (pass 2). And **a fix verified only against the case that exposed the bug is not
+> evidence that the bug is gone** (pass 3) — which is how a narrowing written to stop a maths
+> question being answered with the helpline stopped *"there is no point in my life"* being caught
+> at all, and how a test pinning that morning's own fix turned out to match the function's
+> declaration rather than its call site.
+>
+> **The practical rule for tomorrow: every fix gets a corpus, not a case.** Write the inputs the
+> defect is one of, confirm the corpus goes red in the places it should, then fix. That is the
+> standard for the live run too, and the live run will have far more to be wrong about.
 
 **One thing is open for Nishen that was not on yesterday's list**, and it is thirty seconds: the
 wellbeing check's Sinhala medicine words were matching `බෙහෙත්` and `පෙති`, which a student's
@@ -50,7 +58,41 @@ mis-named); the microphone can still be *started* during an open typed send, tho
 no longer race the send; and the full per-turn trace in `runToolLoop` is still discarded on success,
 because where it should go is a privacy-and-cost decision rather than a bug.
 
-**Do not restart any of today's four lanes**, or yesterday's six.
+### What the deploy evening needs to know, from the scripts pass
+
+Four scripts run that evening and three of them were carrying a defect that could have reported a
+false result with money already spent. All fixed; these are the five things that are **not** fixes
+and need a human.
+
+| | |
+|---|---|
+| **Confirm the role echo with one live call, before the headline run** | The red-team CLI now scores against the role the **server** reports rather than the one the environment claims. If the deployed `/chat` is older than that field (decision 5), the CLI falls back to trusting the env var — silently, exactly as before. One `/chat` call that shows `role` in the body settles it |
+| **Name a recording path for the submission run** | A live `--yes` run overwrites `tests/redteam/last-run.local.json`. `--record <path>` exists; use it for the run whose numbers go into the submission |
+| **`test-sinhala.mjs` now exits non-zero** unless a candidate passed every case with every call answered | It used to always exit 0. The printed verdict says the same thing in words, but anything scripted around it should know |
+| **Look at the terminal before the paid gate run** | Sinhala survives the script and the pipe — pinned by a test — but whether *you* see it depends on the console font, and this gate exists to be read by eye. A mangled font makes the verdict worthless |
+| **`demo-users.mjs --apply` now attempts all three accounts** and prints `DO NOT SEED YET` unless all three are in place. If it says that, re-run it — the creates are idempotent — and do not run the seed until it prints the seed command itself |
+
+### Three things named rather than fixed
+
+- **`score.mjs` has no 500 branch.** 502/503/504 map to `chat_unavailable` and everything else to
+  `chat_error`, so a genuine unhandled Lambda throw is filed as `chat_error`. The one cause that was
+  reachable offline (the module-init throw) has been narrowed; the branch itself is still missing.
+- **`cost-guards.test.mjs` parses the template the way the audit-log guard was just rebuilt away
+  from** — by key name and indentation, so a resource whose name contains a hyphen or whose key
+  carries a trailing comment is invisible to it. Its assertions are existence checks rather than
+  absence-of-capability checks, so the failure mode is milder, but it is the same class.
+- **`handleChat`'s guardrail branch fires on `guardrailAction === 'INTERVENED'` from any source**,
+  which is correct for a real guardrail — but on the default deployment (`GuardrailId: ""`) option A
+  has no guardrail either, so the same attribution question exists on that path. Only reachable with
+  a live agent, so it could not be tested offline.
+
+### And one Sinhala and Tamil string that is deliberately English
+
+`redteam.reason.content_filtered` is in all three packs as the English sentence prefixed
+`TODO(nishen)`. The alternative was a blank sentence on the screen a judge watches. It is Priority 1
+in `docs/TRANSLATION-REVIEW.md` with the rest.
+
+**Do not restart any of today's seven lanes**, or yesterday's six.
 
 ---
 
@@ -84,9 +126,10 @@ Found today, and each one changes a decision: **§0a** — the challenge may be 
 nobody had looked at, and guardrails are **not supported** on it, which also couples the model choice
 to defence layer 2 (`openai.gpt-5.4`/`5.5` cannot take a guardrail at all). **`docs/SUBMISSION-
 KIROWEEN.md` §0** — the Kiroween rules, read in full: Dec 4 2:00 PM PT, judging to 2027-01-29 with
-the project required to stay live throughout (so the stack cannot be torn down, and the $7 estimate
-is costed for the wrong duration), a parallel submission is **not** forbidden, and *"insufficient use
-of Kiro will result in disqualification"*.
+the project required to stay live throughout (so the stack cannot be torn down — and the $7 estimate
+was costed for the wrong duration, **re-costed 2026-11-19 to ~$2.50 typical / ~$9.80 ceiling with
+~$12.50 headroom**, because none of the twenty-eight resources bills per hour), a parallel submission
+is **not** forbidden, and *"insufficient use of Kiro will result in disqualification"*.
 
 ### The five things only Nishen can do, in order
 
@@ -703,4 +746,4 @@ Terminology to sanity-check while reviewing: si `ස්තරය` (layer), `ට�
 | **Dec 1** | Submit to Bedrock |
 | **Dec 3** | Submit to Kiroween |
 
-Budget: ~$7 estimated against a $15 target. Spent so far: **$0**.
+Budget: **~$2.50 typical, ~$9.80 ceiling** for everything to 2027-01-29, against a $15 target — re-costed 2026-11-19, working in `docs/COST-MODEL.md`. Spent so far: **$0**.

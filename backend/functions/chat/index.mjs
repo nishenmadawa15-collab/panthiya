@@ -45,8 +45,6 @@ function maxTurnsFromEnv(raw) {
   return turns;
 }
 
-const MAX_TURNS = maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
-
 /**
  * Which orchestrator this deployment uses (docs/NEXT-SESSION.md §0).
  *
@@ -56,6 +54,17 @@ const MAX_TURNS = maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
  * here: the decision is Nishen's, not this file's.
  */
 const USE_AGENT_SERVICE = Boolean(AGENT_ID) && AGENT_ID !== 'REPLACEME00';
+
+/**
+ * The cap, read only on the path that uses it.
+ *
+ * Still at module scope, so a misconfigured cap is loud at cold start rather than wrong-but-serving
+ * — but only on option B. `MAX_TURNS` is read by `invokeViaLoop` and by nothing else, and on option
+ * A a typo in a variable that path never looks at used to brick the function at init: the client
+ * gets a bare `500 {"message":"Internal Server Error"}`, which `score.mjs` has no branch for, so the
+ * scoreboard would file a configuration mistake as `chat_error` instead of `chat_unavailable`.
+ */
+const MAX_TURNS = USE_AGENT_SERVICE ? undefined : maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
 
 /** Colombo is UTC+5:30 with no daylight saving, so "yesterday" is decided here, once, per request. */
 function todayInColombo(now = new Date()) {

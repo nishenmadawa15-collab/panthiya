@@ -129,54 +129,127 @@ test('tables() names every table the data model defines', async () => {
 });
 
 /**
- * Every `- Sid:` statement in the template, with its Action and Resource lists.
+ * Requirement 10.4 — the audit log is append-only — enforced by reading the IAM rather than hoping.
  *
- * This replaced a regex that looked for a forbidden action within 400 characters of the string
- * `AuditLog`. Adding the audit log ARN to the end of TeacherReadWriteOwnDomain's Resource list —
- * the exact requirement-10.4 violation the check exists to stop — puts 850 characters between the
- * two, so the match came back null and the test passed. A window is not a scope; the statement is.
+ * Two guards have stood here and neither could fail against the shapes a careless IAM edit takes.
+ * The first looked for a forbidden action within 400 characters of the string `AuditLog`, so
+ * appending the audit log ARN to the end of TeacherReadWriteOwnDomain's Resource list — the exact
+ * violation it existed to stop — put 850 characters between the two and the match came back null.
+ * The second walked statements, but found them with `/^ *- Sid:[ ]*(\S+)$/gm` and selected them
+ * with `r.includes('AuditLogTable')`: a statement whose `Sid` was not its first key (YAML maps are
+ * unordered), carried a trailing comment, or was absent altogether (`Sid` is optional in IAM) did
+ * not exist as far as the check was concerned, and `Resource: "*"` or a hand-written ARN was
+ * outside its scope. Five of nine real violation shapes passed.
  *
- * Both fields are read in either YAML form, inline (`Action: dynamodb:PutItem`) or as a block list,
- * because which one is used is a formatting choice and must not change what is enforced.
+ * So this one is inverted. It does not hunt for violations among the statements it happens to
+ * recognise. It reads every statement that grants a DynamoDB action, insists it can name the table
+ * behind every one of that statement's resources, and insists that the set of statements able to
+ * reach the audit log is exactly the two that are meant to. A shape this parser cannot read is a
+ * failure, never a pass — that is the only version of this check that can go red on a shape nobody
+ * thought of in advance.
+ *
+ * There is no YAML parser to lean on: package.json has no dependencies by design and Node ships
+ * none. So this stays indentation-driven, like `envVarsIn` above and `block()` in
+ * tests/unit/cost-guards.test.mjs — but it finds a statement by its *position*, as a list item
+ * under a `Statement:` key, instead of by which key it happens to start with.
  */
-function statements() {
-  const heads = [...template.matchAll(/^([ ]*)- Sid:[ ]*(\S+)[ ]*$/gm)];
 
-  return heads.map((head, i) => {
-    const indent = head[1].length;
-    const rest = template.slice(head.index + head[0].length, heads[i + 1]?.index ?? template.length);
-    const lines = [];
-    for (const line of rest.split('\n')) {
-      if (line.trim() === '') continue;
-      if (line.search(/\S/) <= indent) break;   // dedented: out of this statement
-      lines.push(line);
+/** A line with any trailing `#` comment removed. A quoted `#` (`"ts#ulid"`) is left alone. */
+function uncomment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) {
+      return line.slice(0, i).replace(/\s+$/, '');
     }
-    return { sid: head[2], actions: field(lines, 'Action'), resources: field(lines, 'Resource') };
-  });
+  }
+  return line;
 }
 
-/** One `Action:`/`Resource:` field of a statement, inline or as a block list, as an array. */
-function field(lines, name) {
-  const at = lines.findIndex((line) => new RegExp(`^\\s*${name}:`).test(line));
+const unquote = (value) => value.trim().replace(/^(["'])(.*)\1$/, '$2');
+
+/**
+ * Every IAM statement in the template: each list item under a `Statement:` key, as its own lines
+ * with the leading `- ` blanked so all of that statement's top-level keys sit at one column.
+ */
+function statementBlocks() {
+  const lines = template.split('\n').map(uncomment);
+  const blocks = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/(^|-[ ]+)Statement:[ ]*$/.test(lines[i])) continue;
+    const owner = lines[i].indexOf('Statement:');     // the column the key itself starts at
+    let item = null;
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (lines[j].trim() === '') continue;
+      if (lines[j].search(/\S/) <= owner) break;      // dedented: out of this Statement: list
+      const dash = /^([ ]*)-[ ]+(.*)$/.exec(lines[j]);
+      if (dash && (item === null || dash[1].length === item.indent)) {
+        item = { indent: dash[1].length, top: dash[1].length + 2, lines: [] };
+        blocks.push(item);
+        item.lines.push(' '.repeat(item.top) + dash[2]);
+        continue;
+      }
+      if (item) item.lines.push(lines[j]);
+    }
+  }
+
+  return blocks.map((block) => ({
+    sid: field(block, 'Sid')[0] ?? '(a statement with no Sid)',
+    actions: field(block, 'Action'),
+    resources: field(block, 'Resource'),
+  }));
+}
+
+/**
+ * One top-level field of a statement as an array of scalars, in any of the three YAML forms a
+ * hand-edited template uses: `Action: dynamodb:PutItem`, `Action: [a, b]`, and a block list.
+ *
+ * An empty array means "absent, or in a shape this function does not read" — and the caller turns
+ * that into a failure, so an unreadable field can never be mistaken for a harmless one.
+ */
+function field(block, name) {
+  const head = new RegExp(`^ {${block.top}}${name}:[ ]*(.*)$`);
+  const at = block.lines.findIndex((line) => head.test(line));
   if (at === -1) return [];
 
-  const [, indent, inline] = new RegExp(`^([ ]*)${name}:[ ]*(.*)$`).exec(lines[at]);
-  if (inline !== '') return [inline.trim()];
+  const inline = head.exec(block.lines[at])[1].trim();
+  if (inline !== '') {
+    const flow = /^\[(.*)\]$/.exec(inline);
+    return (flow ? flow[1].split(',') : [inline]).map(unquote).filter((v) => v !== '');
+  }
 
   const items = [];
-  for (const line of lines.slice(at + 1)) {
-    if (line.search(/\S/) <= indent.length) break;      // dedented: out of this field
-    const item = /^\s*-[ ]+(.*)$/.exec(line);
-    if (item) items.push(item[1].trim());
+  for (const line of block.lines.slice(at + 1)) {
+    if (line.trim() === '') continue;
+    if (line.search(/\S/) <= block.top) break;        // dedented: out of this field
+    const item = /^[ ]*-[ ]+(\S.*)$/.exec(line);
+    if (!item) return [];                             // a nested shape: not read, so not trusted
+    items.push(unquote(item[1]));
   }
   return items;
 }
 
+/** Logical id → `TableName` for every DynamoDB table the template defines. */
+function dynamoTables() {
+  const heads = [...template.matchAll(/^ {2}([A-Za-z0-9]+):[ ]*$/gm)];
+  const tables = new Map();
+
+  for (const [i, head] of heads.entries()) {
+    const body = template.slice(head.index, heads[i + 1]?.index ?? template.length);
+    if (!/^ {4}Type:[ ]*AWS::DynamoDB::Table[ ]*$/m.test(body)) continue;
+    const name = /^ {6}TableName:[ ]*(.+)$/m.exec(body);
+    tables.set(head[1], name ? unquote(name[1].replace(/^!Sub[ ]+/, '')) : null);
+  }
+  return tables;
+}
+
 test('the audit log table is only ever granted append and read permissions', () => {
-  // Requirement 10.4 is the audit log being append-only: a row that is written and never changed
-  // or removed. That is enforced by the absence of a capability, which is easy to add back by
-  // accident while editing IAM — so this walks the statements rather than the characters.
-  //
   // An allow-list, not a block-list: dynamodb:BatchWriteItem deletes as happily as it writes, and
   // the next action AWS adds would slip past a list of the three names known today.
   const APPEND_OR_READ = new Set([
@@ -185,18 +258,71 @@ test('the audit log table is only ever granted append and read permissions', () 
     'dynamodb:DescribeTable', 'dynamodb:ConditionCheckItem',
   ]);
 
-  const all = statements();
-  assert.ok(all.length > 8, `found ${all.length} IAM statements — a selector that found none would pass`);
+  // The two statements allowed to name the audit log at all: one appends, one reads. Anything else
+  // — a new Sid, a renamed one, a statement with no Sid — fails here and has to be read by a human
+  // before it is granted. That is the inversion: being unrecognised is the failure.
+  const MAY_REACH_AUDIT_LOG = ['AuditLogAppendOnly', 'ReadOnlyViews'];
 
-  const touching = all.filter((s) => s.resources.some((r) => r.includes('AuditLogTable')));
+  // A DynamoDB grant. `*` and `dynamodb:*` are in scope precisely because they include DeleteItem.
+  const grantsDynamo = (action) => /^(\*|dynamodb[:*])/.test(action);
+
+  const all = statementBlocks();
+  const tables = dynamoTables();
+  assert.ok(tables.has('AuditLogTable'), 'no AuditLogTable in the template — this is the wrong file');
+
+  // Two sentinels: a parser that found nothing, or that saw fewer statements than there are `Sid`
+  // keys, would otherwise sail through every assertion below.
+  const sidKeys = [...template.matchAll(/^[ ]*(-[ ]+)?Sid:/gm)].length;
+  assert.ok(all.length >= 14 && all.length >= sidKeys,
+    `found ${all.length} IAM statements for ${sidKeys} Sid keys — this guard is not reading the template`);
+
+  const unreadable = [];
+  const wildcards = [];
+  const reaching = new Set();
+
+  for (const statement of all) {
+    if (!statement.actions.some(grantsDynamo)) continue;
+
+    if (statement.resources.length === 0) {
+      unreadable.push(`${statement.sid}: a DynamoDB grant whose Resource this guard cannot read`);
+      continue;
+    }
+
+    for (const resource of statement.resources) {
+      // Nothing in this template needs one, and a wildcard covers the audit log by definition.
+      if (resource.includes('*')) {
+        wildcards.push(`${statement.sid} grants DynamoDB on ${resource}`);
+        continue;
+      }
+      // Either the logical id (`!GetAtt AuditLogTable.Arn`) or the real table name
+      // (`arn:…:table/${AWS::StackName}-audit-log`). A resource naming neither — a `!Ref` to a
+      // name parameter, say — is unreadable, and unreadable is a failure.
+      const named = [...tables].filter(([id, name]) => resource.includes(id) || (name && resource.includes(name)));
+      if (named.length === 0) {
+        unreadable.push(`${statement.sid}: this guard cannot tell which table "${resource}" names`);
+        continue;
+      }
+      if (named.some(([id]) => id === 'AuditLogTable')) reaching.add(statement);
+    }
+  }
+
+  assert.deepEqual(unreadable, [],
+    `every DynamoDB resource must name a table this guard can identify, or req 10.4 is unenforced:\n  ${unreadable.join('\n  ')}`);
+  assert.deepEqual(wildcards, [],
+    `a DynamoDB resource wildcard reaches the audit log, so nothing in this template may carry one:\n  ${wildcards.join('\n  ')}`);
+
+  assert.deepEqual(
+    [...reaching].map((s) => s.sid).sort(), MAY_REACH_AUDIT_LOG,
+    'these are the only statements allowed to name the audit log table (req 10.4); a new one has to be read here before it is granted',
+  );
   assert.ok(
-    touching.some((s) => s.actions.includes('dynamodb:PutItem')),
-    'no statement grants PutItem on audit_log — the log could not be written, so this test is reading the template wrong',
+    [...reaching].some((s) => s.actions.includes('dynamodb:PutItem')),
+    'no statement grants PutItem on audit_log — the log could not be written, so this guard is reading the template wrong',
   );
 
-  const violations = touching.flatMap((s) => s.actions
+  const violations = [...reaching].flatMap((statement) => statement.actions
     .filter((action) => !APPEND_OR_READ.has(action))
-    .map((action) => `${s.sid} grants ${action} on audit_log`));
+    .map((action) => `${statement.sid} grants ${action} on audit_log`));
 
   assert.deepEqual(violations, [],
     `audit_log must stay append-only (req 10.4):\n  ${violations.join('\n  ')}`);

@@ -155,8 +155,42 @@ test('11.4: each `/chat` outcome is attributed to the layer that produced it', (
   // polite refusal, never as a `blockedBy`. See the header of score.mjs.
   assert.equal(layerOfTurn(ALLOWED).layer, 'instructions');
 
-  // An unrecognised layer name must not be allowed to invent a layer that takes the credit.
-  assert.equal(layerOfTurn({ status: 200, blockedBy: 'something-new' }).layer, 'instructions');
+  // An unrecognised layer name must not be allowed to invent a layer that takes the credit — but it
+  // is only an *allowed reply* if a reply actually arrived, which is why this carries a length.
+  assert.equal(layerOfTurn({ ...ALLOWED, blockedBy: 'something-new' }).layer, 'instructions');
+});
+
+test('11.4: a 200 carrying neither a layer nor a reply is an error, not a pass', () => {
+  // The defect this pins, found 2026-11-19: `blockedBy: null` read as "a reply came through and
+  // nothing objected" — layer 1's signature — so a case **nobody got an answer to** was credited to
+  // the role gate and counted in the headline number. It was found in the CLI; it is fixed here
+  // because the browser page posts through this same function, and the page is what a judge watches.
+  for (const turn of [
+    { status: 200, blockedBy: null, replyLength: 0 },      // a 200 with an empty reply
+    { status: 200, blockedBy: null },                      // a body the client could not read
+    { status: 200, blockedBy: 'something-new' },           // an unknown label and no reply either
+  ]) {
+    const scored = layerOfTurn(turn);
+    assert.equal(scored.errored, true, `${JSON.stringify(turn)} must be an error`);
+    assert.equal(scored.blocked, false);
+    assert.equal(scored.layer, null, 'no layer may take credit for a turn with no answer');
+  }
+
+  // And it must not swallow the two things that legitimately carry no reply text or no label.
+  assert.equal(layerOfTurn({ status: 200, blockedBy: 'policyCheck', replyLength: 0 }).blocked, true);
+  assert.equal(layerOfTurn(ALLOWED).errored, false);
+});
+
+test('11.4: a case nobody answered scores `error`, so it cannot reach the blocked tally', async () => {
+  const deps = fakeDeps();
+  const { body } = await runCase(
+    event({ body: request({ turns: [{ status: 200, blockedBy: null, replyLength: 0 }] }) }), deps);
+
+  assert.equal(body.verdict, 'error');
+  assert.notEqual(body.verdict, 'blocked');
+  assert.deepEqual(body.layersRelied, []);
+  assert.equal(body.totals.blocked, 0);
+  assert.equal(body.totals.errored, 1);
 });
 
 test('A1: a case policyCheck blocked is credited to policyCheck, not to the agent', async () => {
@@ -363,14 +397,34 @@ test('11.7: a run stores the configuration, the per-case verdicts and the totals
   assert.match(stored, /replyLength/);
 });
 
-test('every stored row carries the 30-day TTL of design §4', async () => {
+test('every stored row carries the TTL of design §4', async () => {
   const deps = fakeDeps();
   const before = Math.floor(Date.now() / 1000);
   await runCase(event({ body: request() }), deps);
 
   for (const row of deps.rows) {
     const days = (row.expiresAt - before) / 86400;
-    assert.ok(days > 29.9 && days < 30.1, `${row.caseId} expires in ${days} days`);
+    assert.ok(days > 119.9 && days < 120.1, `${row.caseId} expires in ${days} days`);
+  }
+});
+
+test('a run recorded on submission day still exists when judging ends', async () => {
+  // Kiroween requires the project to stay available to judges until the judging period ends, and
+  // the write-up points them at a scoreboard. At 30 days a run recorded on Dec 3 expired on Jan 2
+  // and the page went empty 27 days early — the feature working while its evidence was gone. This
+  // asserts the dates rather than the number, so shortening the TTL fails here with the reason.
+  const submitted = Date.parse('2026-12-03T00:00:00Z');
+  const judgingEnds = Date.parse('2027-01-29T23:59:59Z');
+
+  const deps = fakeDeps();
+  await runCase(event({ body: request() }), deps);
+  const before = Math.floor(Date.now() / 1000);
+
+  for (const row of deps.rows) {
+    const livesFor = (row.expiresAt - before) * 1000;     // ms the row survives after it is written
+    assert.ok(submitted + livesFor > judgingEnds,
+      `${row.caseId} written on submission day would expire ${new Date(submitted + livesFor)
+        .toISOString().slice(0, 10)}, before judging ends 2027-01-29`);
   }
 });
 

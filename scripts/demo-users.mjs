@@ -200,6 +200,79 @@ export function parseArgs(argv) {
   return { apply: argv.includes('--apply'), tokens: argv.includes('--tokens') };
 }
 
+/** One line a human can act on, out of whatever the AWS CLI threw. */
+const firstLine = (err) => String(err?.message ?? err).split('\n').find((l) => l.trim()) ?? 'no message';
+
+/**
+ * Create all three accounts, and **do not stop at the first failure**.
+ *
+ * This is the deploy-evening trap this function exists for: the loop used to throw out of `main`
+ * on the first error, so a run that created the teacher and then hit a throttle on the parent
+ * printed one line and a stack trace, attempted the student never, and left the operator guessing
+ * which of the three now exist. `backend/seed/seed.mjs --apply` runs next and reads all three subs
+ * back out of the pool, so "which ones happened" is the one thing that has to be said out loud.
+ *
+ * Carrying on is safe because `createAccount` is idempotent by construction — re-running repairs
+ * a half-made account rather than duplicating it — so the fix for any line below is to fix the
+ * cause and run exactly the same command again.
+ */
+export function applyAll(userPoolId, password, run = awsCli, accounts = DEMO_ACCOUNTS) {
+  const results = [];
+  for (const account of accounts) {
+    try {
+      const { existed, sub } = createAccount(userPoolId, account, password, run);
+      results.push({ role: account.role, email: account.email, ok: true, existed, sub });
+    } catch (err) {
+      results.push({ role: account.role, email: account.email, ok: false, error: firstLine(err) });
+    }
+  }
+  return results;
+}
+
+/** One ID token per account, with the same "name what happened to each" rule as `applyAll`. */
+export function tokensAll(userPoolId, clientId, password, run = awsCli, accounts = DEMO_ACCOUNTS) {
+  const tokens = {};
+  const failures = [];
+  for (const account of accounts) {
+    try {
+      tokens[account.role] = idTokenFor(userPoolId, clientId, account, password, run);
+    } catch (err) {
+      failures.push({ role: account.role, error: firstLine(err) });
+    }
+  }
+  return { tokens, failures };
+}
+
+/**
+ * What `applyAll` did, per account, and whether the next step may proceed.
+ *
+ * A missing `sub` on a successful create is its own line: the account exists but the seed has
+ * nothing to key the class or the parent link on, which is exactly the silent half-failure the
+ * header of this file is about.
+ */
+export function applyLines(results) {
+  const lines = [];
+  for (const r of results) {
+    if (!r.ok) lines.push(`  FAILED    ${r.role.padEnd(8)} ${r.error}`);
+    else if (!r.sub) lines.push(`  NO SUB    ${r.role.padEnd(8)} created, but no sub came back — the seed cannot link it`);
+    else lines.push(`  ${r.existed ? 'confirmed' : 'created  '} ${r.role.padEnd(8)} ${r.sub}`);
+  }
+
+  const bad = results.filter((r) => !r.ok || !r.sub);
+  if (bad.length === 0) {
+    lines.push('', 'All three accounts are in place. Now seed, so the teacher owns the class and the');
+    lines.push('parent owns one child.');
+    return { lines, ok: true };
+  }
+
+  lines.push('', `${results.length - bad.length} of ${results.length} accounts are in place: `
+    + `${bad.map((r) => r.role).join(', ')} ${bad.length === 1 ? 'is' : 'are'} not.`);
+  lines.push('DO NOT SEED YET — seed.mjs reads all three subs out of the pool, and a missing one');
+  lines.push('leaves the demo looking deployed with every teacher action out of scope.');
+  lines.push('Fix the cause and re-run exactly this command: the creates are idempotent.');
+  return { lines, ok: false };
+}
+
 function requirePassword() {
   const password = process.env.PANTHIYA_DEMO_PASSWORD;
   const problems = passwordProblems(password);
@@ -233,26 +306,41 @@ function main() {
   const password = requirePassword();
   const { userPoolId, clientId, apiBase } = stackIds();
 
+  let failed = false;
+
   if (apply) {
     console.log(`Creating demo logins in ${userPoolId}\n`);
-    for (const account of DEMO_ACCOUNTS) {
-      const { existed, sub } = createAccount(userPoolId, account, password);
-      console.log(`  ${existed ? 'confirmed' : 'created  '} ${account.role.padEnd(8)} ${sub}`);
-    }
-    console.log('\nNow seed, so the teacher owns the class and the parent owns one child:');
-    console.log(`  node backend/seed/seed.mjs --stack ${STACK} --apply`);
+    const { lines, ok } = applyLines(applyAll(userPoolId, password));
+    for (const line of lines) console.log(line);
+    if (ok) console.log(`  node backend/seed/seed.mjs --stack ${STACK} --apply`);
+    failed = failed || !ok;
   }
 
   if (tokens) {
-    const got = {};
-    for (const account of DEMO_ACCOUNTS) {
-      got[account.role] = idTokenFor(userPoolId, clientId, account, password);
-    }
+    const { tokens: got, failures } = tokensAll(userPoolId, clientId, password);
     console.log('\n# ID tokens last 60 minutes (IdTokenValidity in template.yaml).');
     console.log('# Paste this block, then: node scripts/redteam-cli.mjs --yes');
     for (const line of exportLines(apiBase, got)) console.log(line);
+    for (const f of failures) {
+      // A `<missing>` line above is usable: redteam-cli.mjs scores those cases `error` rather
+      // than re-running them under another role. It still has to say which one and why.
+      console.error(`# NO TOKEN for ${f.role}: ${f.error}`);
+      console.error(`#   its cases will be scored 'error' — not blocked, not leaked.`);
+    }
+    failed = failed || failures.length > 0;
   }
+
+  return failed ? 1 : 0;
 }
 
 // Importable for the tests above the boundary; only runs when invoked directly.
-if (process.argv[1] && process.argv[1].endsWith('demo-users.mjs')) main();
+if (process.argv[1] && process.argv[1].endsWith('demo-users.mjs')) {
+  try {
+    process.exitCode = main() ?? 0;
+  } catch (err) {
+    // Words rather than a stack trace: the errors that land here are the stack not being deployed
+    // and the CLI having no credentials, and both already carry a sentence worth reading.
+    console.error(`demo-users: ${firstLine(err)}`);
+    process.exitCode = 1;
+  }
+}
