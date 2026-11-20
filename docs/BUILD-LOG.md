@@ -299,7 +299,14 @@ rather than a bug.
   `REACHABLE`. The account is not blocked from BMA.
 - `aws bedrock list-foundation-models --by-provider anthropic` in `ap-south-1` lists Claude models
   (Haiku 4.5 through Opus 5.5). The `bedrock-agentcore-control` CLI namespace is present.
-- Still missing: SAM CLI, and a non-root identity to deploy with.
+- IAM user `panthiya-dev` created (Nishen approved), with the eight managed policies from
+  `NISHEN-ACTIONS.md` 1.1. Those eight do **not** cover the template: no S3 (voice bucket + SAM
+  artifact bucket), no Budgets, no `bedrock-agentcore`, no Amplify. Added inline policy
+  `panthiya-deploy-extra` = `docs/iam/panthiya-dev-extra.json`, which also **explicitly denies**
+  `InvokeAgentRuntimeCommand` / `InvokeAgentRuntimeCommandShell`. Simulated: `InvokeHarness`
+  allowed, `InvokeAgentRuntimeCommand` explicitDeny. S3 is scoped to `panthiya*` and
+  `aws-sam-cli-managed-*`, so **the stack name must start with `panthiya`**.
+- Still missing: SAM CLI, and the access key (Nishen creates it in the console; never pasted here).
 
 ## Decisions still open
 

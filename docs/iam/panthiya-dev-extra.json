@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "S3ProjectAndSamBuckets", "Effect": "Allow", "Action": "s3:*",
+     "Resource": ["arn:aws:s3:::panthiya*", "arn:aws:s3:::panthiya*/*",
+                  "arn:aws:s3:::aws-sam-cli-managed-*", "arn:aws:s3:::aws-sam-cli-managed-*/*"]},
+    {"Sid": "S3List", "Effect": "Allow", "Action": "s3:ListAllMyBuckets", "Resource": "*"},
+    {"Sid": "Budgets", "Effect": "Allow", "Action": "budgets:*", "Resource": "*"},
+    {"Sid": "AgentCore", "Effect": "Allow", "Action": "bedrock-agentcore:*", "Resource": "*"},
+    {"Sid": "NeverDirectCommandExecution", "Effect": "Deny",
+     "Action": ["bedrock-agentcore:InvokeAgentRuntimeCommand", "bedrock-agentcore:InvokeAgentRuntimeCommandShell"],
+     "Resource": "*"},
+    {"Sid": "Amplify", "Effect": "Allow", "Action": "amplify:*", "Resource": "*"},
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:*"], "Resource": "*"}
+  ]
+}
