@@ -33,7 +33,7 @@ customHeaders:
           style-src 'self';
           img-src 'self' data:;
           font-src 'self';
-          connect-src 'self';
+          connect-src 'self' https://j00w1rv0l0.execute-api.ap-south-1.amazonaws.com https://panthiya-477013660512.auth.ap-south-1.amazoncognito.com https://panthiya-voicebucket-honuqhuglqzj.s3.ap-south-1.amazonaws.com;
           manifest-src 'self';
           base-uri 'none';
           form-action 'none';

@@ -306,7 +306,19 @@ rather than a bug.
   `InvokeAgentRuntimeCommand` / `InvokeAgentRuntimeCommandShell`. Simulated: `InvokeHarness`
   allowed, `InvokeAgentRuntimeCommand` explicitDeny. S3 is scoped to `panthiya*` and
   `aws-sam-cli-managed-*`, so **the stack name must start with `panthiya`**.
-- Still missing: SAM CLI, and the access key (Nishen creates it in the console; never pasted here).
+- **Change of plan (Nishen): no access key, ever.** `panthiya-dev` got console access and
+  `SignInLocalDevelopmentAccess`; credentials come from `aws login` as that user
+  (`arn:aws:iam::477013660512:user/panthiya-dev`, verified). SAM 1.174.0 reads them unchanged.
+- `sam validate --lint` flagged `nodejs20.x` (deprecated 2026-04-30) → all eight functions moved to
+  `nodejs24.x`.
+- **First deploy (Nishen approved): stack `panthiya`, `ap-south-1`, `CREATE_COMPLETE`.** API
+  `https://j00w1rv0l0.execute-api.ap-south-1.amazonaws.com/dev`; user pool `ap-south-1_fFjzA9aL0`;
+  budget `panthiya-cost` $10. Unauthenticated `POST /chat` and `GET /parent/inbox` both return
+  **401** from the authorizer. Not yet: guardrail, harness, demo users, seed, Amplify.
+- Stack outputs pasted into `frontend/assets/auth.js` `CONFIG` and the three `connect-src` origins
+  into `customHttp.yml`. Two drafts tests in `audit-mic-frontend.test.mjs` went red the moment
+  `CONFIG` was real — they read the ambient config instead of forcing placeholders, exactly the
+  failure `api-swap-frontend.test.mjs` was written to avoid. Fixed the same way.
 
 ## Decisions still open
 

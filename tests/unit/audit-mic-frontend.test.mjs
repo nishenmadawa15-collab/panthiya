@@ -21,8 +21,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  auditLines, tombstone, micView, transcriptFailure, loadDrafts, approveDraft,
+  auditLines, tombstone, micView, transcriptFailure,
 } from '../../frontend/assets/teacher.js';
+import { CONFIG, configured } from '../../frontend/assets/auth.js';
+
+// The drafts tests exercise the mock, so they import a copy of the page built with CONFIG forced to
+// placeholders -- the same pattern as api-swap-frontend.test.mjs. Without this they pass only until
+// the deploy outputs are pasted in, and go red on deploy evening while proving nothing.
+const realConfig = { ...CONFIG };
+Object.assign(CONFIG, {
+  domain: 'REPLACE_AFTER_DEPLOY.auth.ap-south-1.amazoncognito.com', clientId: 'REPLACE_AFTER_DEPLOY',
+  userPoolId: 'REPLACE_AFTER_DEPLOY', apiBase: 'https://REPLACE_AFTER_DEPLOY.execute-api.ap-south-1.amazonaws.com/dev',
+});
+assert.equal(configured(), false);
+const { loadDrafts, approveDraft } = await import('../../frontend/assets/teacher.js?drafts-mocking');
+Object.assign(CONFIG, realConfig);
 
 const ROOT = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');

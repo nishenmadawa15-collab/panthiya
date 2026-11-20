@@ -49,10 +49,10 @@ import { t, setText, onLang } from './i18n.js';
 // swap points at once. Nothing to remember at one in the morning, and no half-taken swap where a
 // page scores mock answers against real tokens.
 export const CONFIG = {
-  domain: 'REPLACE_AFTER_DEPLOY.auth.ap-south-1.amazoncognito.com', // Cognito::UserPoolDomain
-  clientId: 'REPLACE_AFTER_DEPLOY',                                 // stack output UserPoolClientId
-  userPoolId: 'REPLACE_AFTER_DEPLOY',                               // stack output UserPoolId
-  apiBase: 'https://REPLACE_AFTER_DEPLOY.execute-api.ap-south-1.amazonaws.com/dev', // ApiEndpoint
+  domain: 'panthiya-477013660512.auth.ap-south-1.amazoncognito.com', // Cognito::UserPoolDomain
+  clientId: '2n93ff5shisu40hcqppe5ds860',                               // stack output UserPoolClientId
+  userPoolId: 'ap-south-1_fFjzA9aL0',                               // stack output UserPoolId
+  apiBase: 'https://j00w1rv0l0.execute-api.ap-south-1.amazonaws.com/dev', // ApiEndpoint
 };
 
 const PLACEHOLDER = 'REPLACE_AFTER_DEPLOY';
