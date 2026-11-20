@@ -102,8 +102,8 @@ requirement 1 is actually asking for (see the draft framing in §3):
 > tutoring — under eight rules it is not allowed to break, with each rule enforced in three
 > independent places and tested against 36 documented attacks.
 
-`TODO(nishen)` — pick one of the three. The third is the safest against the pass/fail
-qualification check; the first is the best line of English.
+**Chosen 2026-11-20 (Nishen): the third** goes in the submission's tagline field, because the
+qualification check is pass/fail; the first stays the product's own line.
 
 ---
 
@@ -127,12 +127,6 @@ Panthiya is therefore built rules-first, and the demo is an attack demo.
 
 ## 3. What it does
 
-> **⚠️ DRAFT, awaiting Nishen's approval — written 2026-11-20. Qualification requirement 1
-> asks for an agent doing *one defined job*, and the table below, read cold, looks like three jobs.**
-> It is one. The paragraph is drafted here so that what is left is approving words rather than
-> writing them. Change it freely — but **something** saying this has to be in the submission,
-> because the check is pass/fail and the build is already right; only the sentence was missing.
->
 > **The one job: Panthiya runs a tuition class — its attendance, its fees, its marks, its parent
 > updates and its past-paper tutoring — under eight rules it is not allowed to break.**
 >

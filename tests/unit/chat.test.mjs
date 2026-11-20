@@ -23,11 +23,11 @@ function fakeDeps(overrides = {}) {
 
 const teacher = { sub: 'u-1', role: 'teacher' };
 
-test('a session with no role, or an unknown role, is rejected before any model call', async () => {
-  for (const claims of [null, {}, { sub: 'u-1' }, { sub: 'u-1', role: 'admin' }, { role: 'teacher' }]) {
+test('req 1.4: no identity is a 401, a verified identity with no usable role is a 403, before any model call', async () => {
+  for (const [claims, status] of [[null, 401], [{}, 401], [{ role: 'teacher' }, 401], [{ sub: 'u-1' }, 403], [{ sub: 'u-1', role: 'admin' }, 403]]) {
     const deps = fakeDeps();
     const res = await handleChat({ claims, body: { message: 'hello' }, deps });
-    assert.equal(res.status, 401, `claims ${JSON.stringify(claims)} should be rejected`);
+    assert.equal(res.status, status, `claims ${JSON.stringify(claims)} should be ${status}`);
     assert.equal(deps.calls.length, 0, 'the model must not be called for an unauthenticated request');
   }
 });

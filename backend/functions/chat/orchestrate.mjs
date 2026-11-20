@@ -62,7 +62,9 @@ const fail = (status, error) => ({ status, body: { error } });
 export async function handleChat({ claims, body, deps }) {
   // --- identity -------------------------------------------------------------------------------
   const { sub, role } = claims ?? {};
-  if (!sub || !ROLES.has(role)) return fail(401, 'unauthenticated');
+  // Requirement 1.4: no verified identity is a 401; a verified identity with no usable role is a 403.
+  if (!sub) return fail(401, 'unauthenticated');
+  if (!ROLES.has(role)) return fail(403, 'denied');
 
   // --- input ----------------------------------------------------------------------------------
   const message = typeof body?.message === 'string' ? body.message.trim() : '';

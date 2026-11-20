@@ -40,7 +40,7 @@ allowed to do, so that no one can act as a role they do not hold.
 
 1.3 WHEN a request body, query string, header or chat message asserts a role THE SYSTEM SHALL ignore that assertion and use only the role claim from the verified token.
 
-1.4 IF a token is missing, expired, malformed or carries no recognised role THEN THE SYSTEM SHALL respond `401` and perform no read or write.
+1.4 IF a token is missing, expired or malformed THEN THE SYSTEM SHALL respond `401`; IF a verified token carries no recognised role, or a role not allowed on the route, THEN THE SYSTEM SHALL respond `403`. In both cases it SHALL perform no read or write. *(Amended 2026-11-20, approved by Nishen: a verified but role-less caller is a 403 — "I know who you are, you may not do this" — which is what four of five functions already returned.)*
 
 1.5 WHEN a session has role R THE SYSTEM SHALL expose to the Bedrock agent only the action group belonging to R, so that a Parent session has no callable path to a Teacher action even if the model attempts one.
 
@@ -181,7 +181,7 @@ I can solve the next one without help.
 
 8.2 WHEN a worked example is given THE SYSTEM SHALL use a **different** problem with different numbers from the one asked, and SHALL say so.
 
-8.3 THE SYSTEM SHALL NOT output the final answer to the asked question, and SHALL NOT confirm or deny a final answer the student proposes. Instead it SHALL tell the student how to verify it themselves.
+8.3 THE SYSTEM SHALL NOT output the final answer to the asked question, SHALL NOT confirm a final answer the student proposes, and SHALL NOT deny one in a way that carries the answer (`No, it's 7`) or that lets repeated guesses narrow it down. Instead it SHALL tell the student how to verify it themselves. A plain "that's not right, check your method" is permitted: it is what a tutor is for. *(Narrowed 2026-11-20, approved by Nishen. The binary-search clause is a ceiling — see `docs/TRACEABILITY.md` §3.1.)*
 
 8.4 IF a request for the final answer is framed as role-play, a poem, a translation, a marking scheme, a split across several messages, a claim of being a teacher, or an emotional plea THEN THE SYSTEM SHALL still give hints only, and SHALL remain kind.
 

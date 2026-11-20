@@ -117,7 +117,7 @@ AWS-managed long-term memory.
 `memory: {"disabled": {}}` — but that is a **data-retention decision about minors**, which is
 yours to make, not mine to assume.
 
-- [ ] **Off — approved** / **On, because: ______**
+- [x] **Off — approved** (2026-11-20)
 
 ### 2.2 Approve the §3 "one job" paragraph
 
@@ -135,8 +135,8 @@ way to fail: every checkbox green, and the qualification check is pass/fail.
 **I have written the paragraph** into §3, marked `⚠️ DRAFT, awaiting Nishen's approval`. §1 also
 has a **third** tagline option that names the job.
 
-- [ ] **Read and approved** / **Change it like this: ______**
-- [ ] Tagline: **1** (best English) / **3** (safest against the qualification check)
+- [x] **Read and approved** (2026-11-20)
+- [x] Tagline: **3** for the submission (safest against the pass/fail check); 1 stays the product line (2026-11-20)
 
 ### 2.3 Requirement 8.3 — the *"nor deny"* clause
 
@@ -156,7 +156,7 @@ the product.
 denial that **carries the answer** (`No, it's 7`) or that can be used as a **binary search**. Then
 record it as a ceiling in `docs/TRACEABILITY.md`.
 
-- [ ] **Narrow the requirement (recommended)** / **Enforce it as written**
+- [x] **Narrow the requirement** — done in `requirements.md` 8.3 (2026-11-20)
 
 ### 2.4 `401` or `403`
 
@@ -168,7 +168,7 @@ this"* = **`403`**. `401` means *"I don't know who you are"*.
 
 **My recommendation: the code is right, move the requirement.**
 
-- [ ] **Change the requirement to `403` (recommended)** / **Change the code to `401`**
+- [x] **Change the requirement to `403`** — done in `requirements.md` 1.4 (2026-11-20)
 
 ---
 
