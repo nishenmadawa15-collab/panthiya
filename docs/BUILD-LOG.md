@@ -329,7 +329,13 @@ rather than a bug.
   (`read`, `actions-parent`, `actions-teacher`, `redteam`, `voice`) did `provided ?? deps()` — so in
   Lambda the context object was used as the DynamoDB deps. 802 offline tests passed because every
   one of them injects. Fixed with `backend/lib/injected.mjs#fromCaller`; pinned by
-  `tests/unit/lambda-context.test.mjs`, which goes red with the fix reverted. **Not yet redeployed.**
+  `tests/unit/lambda-context.test.mjs`, which goes red with the fix reverted. **Redeployed (Nishen
+  approved):** `GET /parent/inbox` as the demo parent now returns **200**.
+- **Second live bug, behind the first.** Teacher reads still 500ed: `AccessDeniedException` on
+  `dynamodb:Query` against `panthiya-classes/index/byTeacher`. `ReadFunction`'s role listed every
+  table except `classes`, and a teacher's scope is resolved from `classes.byTeacher` before anything
+  else. Granted; pinned by `tests/unit/iam-scope.test.mjs` (red without the grant). 806 pass. **Not
+  yet redeployed.**
 
 ## Decisions still open
 

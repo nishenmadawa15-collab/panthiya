@@ -782,6 +782,8 @@ Resources:
                 - dynamodb:BatchGetItem
                 - dynamodb:Query
               Resource:
+                - !GetAtt ClassesTable.Arn
+                - !Sub "${ClassesTable.Arn}/index/byTeacher"
                 - !GetAtt StudentsTable.Arn
                 - !Sub "${StudentsTable.Arn}/index/byClass"
                 - !Sub "${StudentsTable.Arn}/index/byParent"
