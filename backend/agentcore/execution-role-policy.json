@@ -1,0 +1,91 @@
+{
+  "PLACEHOLDERS": {
+    "region": "ap-south-1",
+    "accountId": "REPLACE_ACCOUNT_ID",
+    "guardrailId": "REPLACE_GUARDRAIL_ID",
+    "modelId": "apac.amazon.nova-lite-v1:0",
+    "harnessId": "REPLACE_HARNESS_ID"
+  },
+
+  "NOTE": "Reviewed by a human before it is applied. backend/agentcore/README.md marks every property name as VERIFIED or UNVERIFIED against a docs URL. The striking thing about HarnessExecutionRole below is what is NOT in it: no lambda:InvokeFunction, no dynamodb:*, no s3:*. The harness never reaches our data, because our tools are inline functions handed back to our own chat Lambda rather than invoked by AWS.",
+
+  "HarnessExecutionRole": {
+    "TrustPolicy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "AgentCoreAssumesThisRole",
+          "Effect": "Allow",
+          "Principal": { "Service": "bedrock-agentcore.amazonaws.com" },
+          "Action": "sts:AssumeRole",
+          "Condition": {
+            "StringEquals": { "aws:SourceAccount": "REPLACE_ACCOUNT_ID" },
+            "ArnLike": {
+              "aws:SourceArn": "arn:aws:bedrock-agentcore:ap-south-1:REPLACE_ACCOUNT_ID:*"
+            }
+          }
+        }
+      ]
+    },
+
+    "PermissionsPolicy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "TheModelAndNothingElse",
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:InvokeModel",
+            "bedrock:InvokeModelWithResponseStream"
+          ],
+          "Resource": [
+            "arn:aws:bedrock:ap-south-1::foundation-model/amazon.nova-lite-v1:0",
+            "arn:aws:bedrock:ap-south-1:REPLACE_ACCOUNT_ID:inference-profile/apac.amazon.nova-lite-v1:0"
+          ]
+        },
+        {
+          "Sid": "Layer2",
+          "Effect": "Allow",
+          "Action": "bedrock:ApplyGuardrail",
+          "Resource": "arn:aws:bedrock:ap-south-1:REPLACE_ACCOUNT_ID:guardrail/REPLACE_GUARDRAIL_ID"
+        },
+        {
+          "Sid": "ObservabilityOnly",
+          "Effect": "Allow",
+          "Action": [
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+            "logs:DescribeLogStreams"
+          ],
+          "Resource": "arn:aws:logs:ap-south-1:REPLACE_ACCOUNT_ID:log-group:/aws/bedrock-agentcore/*"
+        },
+        {
+          "Sid": "Tracing",
+          "Effect": "Allow",
+          "Action": [
+            "xray:PutTraceSegments",
+            "xray:PutTelemetryRecords"
+          ],
+          "Resource": "*"
+        }
+      ]
+    }
+  },
+
+  "ChatLambdaAdditions": {
+    "NOTE": "Statements to ADD to the existing PanthiyaChatFunction role in backend/template.yaml. This lane does not own that file; the change is reported in docs/AGENTCORE-PLAN.md §10. On Track A the chat Lambda's bedrock:InvokeModel and bedrock:ApplyGuardrail statements become unnecessary, because the harness execution role makes the model call instead.",
+    "Statement": [
+      {
+        "Sid": "InvokeTheHarness",
+        "Effect": "Allow",
+        "Action": "bedrock-agentcore:InvokeHarness",
+        "Resource": "arn:aws:bedrock-agentcore:ap-south-1:REPLACE_ACCOUNT_ID:harness/REPLACE_HARNESS_ID"
+      }
+    ],
+    "DELIBERATELY_ABSENT": {
+      "bedrock-agentcore:InvokeAgentRuntimeCommand": "AWS: 'allowedTools scopes LLM tool selection during InvokeHarness only. It does not affect InvokeAgentRuntimeCommand, which is a separate API with its own IAM action that executes commands directly without passing through the LLM. To prevent direct command execution, do not grant bedrock-agentcore:InvokeAgentRuntimeCommand in your IAM policies.' Granting it would route around every tool restriction in harness-config.mjs.",
+      "bedrock-agentcore:InvokeAgentRuntimeCommandShell": "The interactive-shell form of the same bypass.",
+      "iam:PassRole": "Not needed. The execution role is named on CreateHarness, which is a deploy-time action, not a runtime one."
+    }
+  }
+}

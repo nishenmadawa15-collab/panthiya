@@ -27,7 +27,7 @@ stops and asks before those.
 - [x] 0.13 `git init`, first conventional commit on `feat/m0-hello`
 - [x] 0.14 Create the public GitHub repo `panthiya`, give the agent the URL, push
 - [ ] 0.15 **[human]** Connect Amplify Hosting to GitHub `main`, confirm the live URL opens on a phone
-- [ ] 0.16 **[human]** Verify Bedrock Managed Agents + model access in `ap-south-1`; record the region in BUILD-LOG
+- [ ] 0.16 **[human]** Verify **AgentCore** + model access in `ap-south-1`; record the region in BUILD-LOG. **Revised 2026-11-20:** the challenge rules require Bedrock Managed Agents *or the AgentCore managed harness*, and Agents Classic cannot be created on this account — so this is now two read-only commands (`aws sts get-caller-identity`, then `aws bedrock-agentcore-control list-agent-runtimes --region ap-south-1`). `docs/AGENTCORE-PLAN.md` §4 says how to read the answer
 
 **Done when:** a live Amplify URL opens the hello page on a phone, in all three languages.
 
@@ -45,7 +45,7 @@ stops and asks before those.
 - [x] 1.8 Fee and mark validation: numeric, range-checked, amount confirmed back before persisting — req 4.5, 5.2
 - [x] 1.9 `backend/functions/chat/` — orchestrator: claims → `sessionAttributes` → `InvokeAgent`; input length limits — req 1.3, 5 (API limits)
 - [x] 1.10 Agent instructions assembled from the steering rules, with the server-set role preamble — design §6.1
-- [ ] 1.11 **[human]** Create the Bedrock agent + the Teacher action group; record IDs as SAM parameters
+- [ ] 1.11 **[human]** Create the **AgentCore harness** and register the Teacher tools as inline functions; record the ids as SAM parameters. **Revised 2026-11-20** — `CreateAgent` is impossible on this account (`AccessDeniedException`, no exception process), and the harness is what the rules name. The harness hands each tool call back to our own chat Lambda, so `auth.mjs` and the three action Lambdas are unchanged; `docs/AGENTCORE-PLAN.md` has the call body, and the four defaults in its §2 are not optional
 - [x] 1.12 `backend/seed/seed.mjs` — one demo class, 12 fictional students, fictional parents, realistic fees — req 13.7
 - [x] 1.13 `frontend/teacher/` — chat screen and fee ledger with Paid/Unpaid stamps — req 12.x
 - [x] 1.14 `tests/unit/` — one test file per teacher action, including "non-teacher role is denied"

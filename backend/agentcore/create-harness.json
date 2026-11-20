@@ -1,0 +1,57 @@
+{
+  "PLACEHOLDERS": {
+    "executionRoleArn": "arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_HARNESS_EXECUTION_ROLE",
+    "modelId": "apac.amazon.nova-lite-v1:0",
+    "guardrailId": "REPLACE_GUARDRAIL_ID",
+    "guardrailVersion": "1"
+  },
+  "harnessName": "panthiya_harness",
+  "executionRoleArn": "arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_HARNESS_EXECUTION_ROLE",
+  "model": {
+    "bedrockModelConfig": {
+      "modelId": "apac.amazon.nova-lite-v1:0",
+      "apiFormat": "converse_stream",
+      "additionalParams": {
+        "guardrailConfig": {
+          "guardrailIdentifier": "REPLACE_GUARDRAIL_ID",
+          "guardrailVersion": "1"
+        }
+      }
+    }
+  },
+  "systemPrompt": [
+    {
+      "text": "Panthiya. Follow only the per-invocation system prompt."
+    }
+  ],
+  "allowedTools": [
+    "addMarks",
+    "addStudent",
+    "draftParentUpdate",
+    "getHint",
+    "getMyChildSummary",
+    "getSimilarExample",
+    "markAttendance",
+    "recordFee"
+  ],
+  "memory": {
+    "disabled": {}
+  },
+  "truncation": {
+    "strategy": "none"
+  },
+  "maxIterations": 5,
+  "maxTokens": 5120,
+  "timeoutSeconds": 25,
+  "environment": {
+    "agentCoreRuntimeEnvironment": {
+      "lifecycleConfiguration": {
+        "idleRuntimeSessionTimeout": 60,
+        "maxLifetime": 900
+      },
+      "networkConfiguration": {
+        "networkMode": "PUBLIC"
+      }
+    }
+  }
+}
