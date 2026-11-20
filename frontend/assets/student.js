@@ -15,7 +15,8 @@
 // pass, the title, document.lang, the language buttons and the textContent-only rule; this file
 // registers a re-render with onLang() so a language switch redraws the hints in place.
 
-import { init, t, setText, onLang } from './i18n.js';
+import { init, t, setText, onLang, currentLang } from './i18n.js';
+import { apiBase, authHeaderOrThrow, bodyOrThrow, configured, serverSentence } from './auth.js';
 
 /* ================================================================================================
    1. The reply splitter — the only part of this screen with a rule it must get exactly right.
@@ -72,11 +73,15 @@ export function splitReply(reply) {
    2. Data access — the only part of this screen that knows where a reply comes from.
    ================================================================================================ */
 
-// ponytail: SWAP POINT. No backend exists yet. askTutor() below is the entire data surface of this
-// screen. When POST /chat lands (design.md §5), replace its body with a fetch() carrying the
-// Cognito ID token, delete MOCK and mockReply(), and drop `mock` from the rendered entries — a
-// real reply arrives as one block of text with the delimiters already inside it. Nothing else in
-// this file, student/index.html or styles.css has to change.
+// ponytail: SWAP POINT — taken. askTutor() below is the entire data surface of this screen and the
+// real `POST /chat` (design.md §5) is its implementation; MOCK and mockReply() are the fallback it
+// uses while the stack is down. `MOCKING` is `configured()` from auth.js — the same "are the four
+// deploy outputs pasted in" check the sign-in panel uses — so there is nothing to edit here on
+// deploy evening: paste the four stack outputs into `CONFIG` in assets/auth.js and this screen is
+// live. A real reply arrives as one block of text with the `[[EXAMPLE]]` delimiters already inside
+// it, which is what `reply` carries and `mock` does not.
+const MOCKING = !configured();
+
 const MOCK = { latencyMs: 400 };
 
 // The mock has no model behind it, so it answers with pack keys instead of a server string. The
@@ -92,14 +97,32 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * POST /chat → `{reply, blockedBy}` for a student asking about a question they are stuck on.
- * Mocked: returns which mock shape to render instead of a reply string.
+ *
+ * The length check is this side's half of design.md §5: the server answers a longer message with
+ * 400 before any model call, and refusing it here as well costs a child no round-trip. The limit
+ * is the only thing checked — the question itself is sent exactly as typed.
+ *
+ * Mocked while `CONFIG` is placeholders: returns which mock shape to render instead of a reply.
  */
-async function askTutor(text) {
+export async function askTutor(text) {
   if (typeof text !== 'string' || text.trim() === '') throw new Error('empty question');
   if (text.length > MAX_MESSAGE) throw new Error('question too long');
-  await sleep(MOCK.latencyMs);
-  mockTurn += 1;
-  return { mock: mockTurn > 1 ? 'example' : 'hint', blockedBy: null };
+
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    mockTurn += 1;
+    return { mock: mockTurn > 1 ? 'example' : 'hint', blockedBy: null };
+  }
+
+  // `lang` so a refusal and a wellbeing reply come back in the language the student is reading.
+  // Never a retry: a second send is a second message in the same session, and a student in
+  // difficulty must not be answered twice (chat/orchestrate.mjs checks distress before anything).
+  const auth = authHeaderOrThrow();
+  return bodyOrThrow(await fetch(`${apiBase()}/chat`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ message: text, lang: currentLang() }),
+  }));
 }
 
 /**
@@ -125,6 +148,10 @@ function mockReply(shape) {
 const state = {
   turns: [],        // {side: 'student', text} | {side: 'tutor', reply?, mock?, blockedBy?}
   statusKey: '',
+  // A failed send shows the server's own sentence when it sent one, and our `student.error` when
+  // it did not. Never both, and never one of ours written over the top of one of theirs — the same
+  // rule the voice note follows in teacher.js (requirement 3.6).
+  statusMessage: '',
   sending: false,   // a /chat round-trip is open; the send button says so with aria-disabled
 };
 
@@ -196,7 +223,11 @@ function reply(entry) {
     return wrap;
   }
 
-  const segments = splitReply(entry.reply ?? mockReply(entry.mock));
+  // `mock` is set only by the mock, so a live reply can never reach mockReply(): a 200 that somehow
+  // carried neither a reply nor a `blockedBy` would otherwise draw the demo hint as if a tutor had
+  // written it, which is the one thing a page running live must not do. It falls through to the
+  // notice below instead.
+  const segments = splitReply(entry.reply ?? (entry.mock ? mockReply(entry.mock) : ''));
 
   // Nothing left after splitting means the reply was empty or was only a stray delimiter. Saying
   // so beats an empty card that looks like a page still loading.
@@ -220,7 +251,7 @@ function render() {
   }
 
   dom.empty.hidden = state.turns.length > 0;
-  setText(dom.status, state.statusKey ? t(state.statusKey) : '');
+  setText(dom.status, state.statusMessage || (state.statusKey ? t(state.statusKey) : ''));
   // `aria-disabled`, not `disabled`: disabling the button the student has just pressed drops focus
   // to <body> for the whole Bedrock round-trip, so the keyboard loses its place and the next Tab
   // restarts at the top of the page. This keeps it focusable; submit() ignores the press.
@@ -245,6 +276,7 @@ async function submit(event) {
   dom.input.value = '';
   state.turns.push({ side: 'student', text });
   state.statusKey = 'student.sending';
+  state.statusMessage = '';
   state.sending = true;
   render();
 
@@ -255,6 +287,7 @@ async function submit(event) {
   } catch (err) {
     console.error(err);
     state.statusKey = 'student.error';
+    state.statusMessage = serverSentence(err);   // the server's words when it sent any, as-is
   } finally {
     state.sending = false;
     // No focus() here: it existed to undo the focus `disabled` had just thrown away. Nothing is

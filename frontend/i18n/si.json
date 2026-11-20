@@ -50,7 +50,7 @@
   "nav.home": "මුල් පිටුව",
 
   "teacher.heading": "ගුරු පිටුව",
-  "teacher.note": "නිදර්ශන දත්ත පමණි. පසුපෙළ ගොඩනඟා පරීක්ෂා කර ඇත, නමුත් තවම කිසිවක් යෙදවා නැත. එබැවින් මෙම තිරය නියෝජිත දත්ත මත ක්‍රියා කරයි, ඔබ ලියන දේ සුරැකෙන්නේ නැත.",
+  "teacher.note": "TODO(nishen) — retranslate, see docs/TRANSLATION-REVIEW.md: Demo data only. Every student, fee and mark on this screen is fictional, and the fee ledger below is a stand-in.",
 
   "chat.heading": "චැට්",
   "chat.empty_heading": "මෙසේ ලියා බලන්න",
@@ -65,6 +65,7 @@
   "chat.sender_teacher": "ඔබ",
   "chat.sender_panthiya": "පන්තිය",
   "chat.sending": "යවමින්\u2026",
+  "chat.blocked": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: Panthiya did not answer that one, and nothing was recorded. Please try asking it a different way.",
   "chat.error": "පණිවිඩය පන්තියට ගියේ නැහැ. නැවත උත්සාහ කරන්න.",
   "chat.mock_reply": "සටහන් කර ගත්තා. පසුපෙළ ගොඩනඟා පරීක්ෂා කර ඇත, නමුත් තවම deploy කර නැත — එබැවින් මෙය ආදේශකයකි. ඔබේ පන්තියේ සුරැකී නැත, විගණන සටහනට ලියවී ද නැත.",
 
@@ -163,7 +164,7 @@
   "parent.ask.mock_answer": "මට කියන්න පුළුවන් {name} ගැන ගුරුතුමා සටහන් කර ඇති දේ පමණයි; වෙනත් දරුවෙක් ගැන කිසිවක් කියන්න බැහැ. පන්තියේ සටහන් තවම සම්බන්ධ කර නැති නිසා බලන්න කිසිවක් නැත — මෙය නිදර්ශන පිළිතුරක්. M4 සමඟ ඔබේ ප්‍රශ්නයට {name}ගේ පැමිණීම, ගාස්තු සහ ලකුණු සටහන් වලින් පමණක් පිළිතුරු ලැබේ.",
 
   "student.heading": "ඉඟියක් ඉල්ලන්න",
-  "student.note": "නිදර්ශනය පමණි. උපදේශකයාගේ නීති ගොඩනඟා පරීක්ෂා කර ඇත, නමුත් තවම කිසිවක් යෙදවා නැත සහ ආකෘතියක් පිළිතුරු දෙන්නේ ද නැත, එබැවින් පහත ඇති ඉඟි සැබෑ පන්තියක පන්තිය පවසන දේවල උදාහරණ පමණි.",
+  "student.note": "TODO(nishen) — retranslate, see docs/TRANSLATION-REVIEW.md: Demo only — a practice account rather than a real class.",
   "student.promise": "පන්තිය ඔබට සංකල්පය, මීළඟ පියවර සහ සිතා බැලීමට ප්‍රශ්නයක් දෙයි — ඔබේ ප්‍රශ්නයට අවසාන පිළිතුර කිසිදා නොදෙයි. විසඳා පෙන්වන උදාහරණය සැමවිටම වෙනස් ගණන් සහිත වෙනස් ප්‍රශ්නයකි.",
   "student.tutor.heading": "ඔබට අමාරු වූ ප්‍රශ්නය ගැන අසන්න",
   "student.empty_heading": "මෙවැනි දෙයක් අසා බලන්න",
@@ -251,6 +252,7 @@
   "redteam.reason.chat_rejected": "චැට් API ඉල්ලීම ප්‍රතික්ෂේප කළේය.",
   "redteam.reason.chat_unavailable": "චැට් API වෙත ළඟා විය නොහැකි විය.",
   "redteam.reason.chat_error": "චැට් ඇමතුම අසාර්ථක වූ බැවින් මෙම අවස්ථාවට නිර්ණයක් නැත.",
+  "redteam.reason.chat_crashed": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The chat function itself failed, so this case has no verdict. Its CloudWatch log has the throw.",
   "redteam.reason.content_filtered": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "ක්‍රියාත්මක නොවිණි: මෙම භූමිකාව සඳහා ටෝකනයක් නැත.",
 

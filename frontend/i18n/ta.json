@@ -50,7 +50,7 @@
   "nav.home": "முதற் பக்கம்",
 
   "teacher.heading": "ஆசிரியர் பக்கம்",
-  "teacher.note": "மாதிரித் தரவு மட்டும். பின்தளம் உருவாக்கப்பட்டு சோதிக்கப்பட்டுள்ளது, ஆனால் இன்னும் எதுவும் நிறுவப்படவில்லை. எனவே இந்தத் திரை மாற்றுத் தரவில் இயங்குகிறது, நீங்கள் இங்கே எழுதுவது சேமிக்கப்படாது.",
+  "teacher.note": "TODO(nishen) — retranslate, see docs/TRANSLATION-REVIEW.md: Demo data only. Every student, fee and mark on this screen is fictional, and the fee ledger below is a stand-in.",
 
   "chat.heading": "அரட்டை",
   "chat.empty_heading": "இப்படி எழுதிப் பார்க்கலாம்",
@@ -65,6 +65,7 @@
   "chat.sender_teacher": "நீங்கள்",
   "chat.sender_panthiya": "பந்தியா",
   "chat.sending": "அனுப்பப்படுகிறது\u2026",
+  "chat.blocked": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: Panthiya did not answer that one, and nothing was recorded. Please try asking it a different way.",
   "chat.error": "செய்தி பந்தியாவுக்குச் சேரவில்லை. மீண்டும் முயலுங்கள்.",
   "chat.mock_reply": "குறித்துக் கொண்டேன். பின்தளம் கட்டப்பட்டு சோதிக்கப்பட்டது, ஆனால் இன்னும் deploy செய்யப்படவில்லை — எனவே இது ஒரு இடைநிலை பதில். உங்கள் வகுப்பில் சேமிக்கப்படவில்லை, தணிக்கைப் பதிவிலும் எழுதப்படவில்லை.",
 
@@ -163,7 +164,7 @@
   "parent.ask.mock_answer": "{name} பற்றி ஆசிரியர் பதிவு செய்ததை மட்டுமே நான் சொல்ல முடியும்; வேறு எந்தப் பிள்ளை பற்றியும் எதுவும் சொல்ல முடியாது. வகுப்புப் பதிவுகள் இன்னும் இணைக்கப்படவில்லை, எனவே பார்ப்பதற்கு எதுவும் இல்லை — இது ஒரு மாதிரிப் பதில். M4 இல் உங்கள் கேள்விக்கு {name} இன் சொந்த வருகை, கட்டணம் மற்றும் மதிப்பெண் பதிவுகளில் இருந்து மட்டுமே பதில் கிடைக்கும்.",
 
   "student.heading": "ஒரு துப்பு கேளுங்கள்",
-  "student.note": "மாதிரி மட்டும். பயிற்றுவிப்பானின் விதிகள் உருவாக்கப்பட்டு சோதிக்கப்பட்டுள்ளன, ஆனால் இன்னும் எதுவும் நிறுவப்படவில்லை, எந்த மாதிரியும் பதில் சொல்லவில்லை, எனவே கீழே உள்ள துப்புகள் உண்மையான வகுப்பில் பந்தியா சொல்லப் போவதற்கான எடுத்துக்காட்டுகள் மட்டுமே.",
+  "student.note": "TODO(nishen) — retranslate, see docs/TRANSLATION-REVIEW.md: Demo only — a practice account rather than a real class.",
   "student.promise": "பந்தியா உங்களுக்குக் கருத்தையும், அடுத்த படியையும், சிந்திக்க ஒரு கேள்வியையும் தரும் — உங்கள் கேள்விக்கான இறுதி விடையை ஒருபோதும் தராது. செய்து காட்டப்படும் எடுத்துக்காட்டு எப்போதும் வேறு எண்களுடைய வேறு ஒரு கணக்காகவே இருக்கும்.",
   "student.tutor.heading": "நீங்கள் சிக்கிக்கொண்ட கேள்வியைப் பற்றிக் கேளுங்கள்",
   "student.empty_heading": "இது போன்று கேட்டுப் பாருங்கள்",
@@ -251,6 +252,7 @@
   "redteam.reason.chat_rejected": "அரட்டை API கோரிக்கையை நிராகரித்தது.",
   "redteam.reason.chat_unavailable": "அரட்டை API-ஐ அடைய முடியவில்லை.",
   "redteam.reason.chat_error": "அரட்டை அழைப்பு தோல்வியடைந்தது, எனவே இந்த வழக்குக்குத் தீர்ப்பு இல்லை.",
+  "redteam.reason.chat_crashed": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The chat function itself failed, so this case has no verdict. Its CloudWatch log has the throw.",
   "redteam.reason.content_filtered": "TODO(nishen) — untranslated, see docs/TRANSLATION-REVIEW.md: The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "இயக்கப்படவில்லை: இந்தப் பாத்திரத்துக்கு டோக்கன் இல்லை.",
 

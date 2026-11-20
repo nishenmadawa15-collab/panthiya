@@ -42,7 +42,12 @@ import { t, setText, onLang } from './i18n.js';
 
 // ponytail: four constants in a file, not a fetched /config.json. They change once, on the day of
 // the deploy, and a fetch would add a round-trip and an await to every page for three strings.
-// A8 in docs/NEXT-SESSION.md already edits two asset files by hand; this is the third.
+//
+// THESE FOUR VALUES ARE THE WHOLE OF THE DEPLOY-EVENING EDIT (A8 in docs/NEXT-SESSION.md). Every
+// page's real call is already the implementation and `configured()` below is what picks the mock
+// instead, so pasting the stack outputs here — and nothing else, in no other file — takes all four
+// swap points at once. Nothing to remember at one in the morning, and no half-taken swap where a
+// page scores mock answers against real tokens.
 export const CONFIG = {
   domain: 'REPLACE_AFTER_DEPLOY.auth.ap-south-1.amazoncognito.com', // Cognito::UserPoolDomain
   clientId: 'REPLACE_AFTER_DEPLOY',                                 // stack output UserPoolClientId
@@ -229,14 +234,50 @@ export function authHeader() {
  * with a plain sentence. Never a silent failure, and never a retry — the authorizer rejected the
  * token, so the same token will be rejected again.
  *
- * For the SWAP POINTs in `redteam.js` and `student.js`, the whole contract is three lines:
- *
- *   const auth = authHeader();
- *   if (!auth) { handleUnauthorized(); return { status: 401, body: {} }; }   // not signed in
- *   const res = await fetch(`${apiBase()}/chat`, { method: 'POST', headers: { ...auth, ... } });
- *   if (res.status === 401) handleUnauthorized();
+ * Every page's calls reach it through `bodyOrThrow()` below rather than checking 401 themselves.
  */
 export const handleUnauthorized = () => clearSession('auth.unauthorized');
+
+/** A failed API call. Its `message` is the server's own sentence, or `''` when it sent none. */
+export class ApiError extends Error {}
+
+/**
+ * The header every API call needs, or a throw — never a call made without one.
+ *
+ * "Not signed in" and "the hour is up" are the same thing here and get the same answer: the panel
+ * is put back into its signed-out state with a sentence on it, and the request is not sent. The
+ * caller shows its own "could not load" line, which is the truth of it.
+ */
+export function authHeaderOrThrow() {
+  const auth = authHeader();
+  if (auth) return auth;
+  handleUnauthorized();
+  throw new ApiError('');
+}
+
+/**
+ * An API response → its parsed body, or an `ApiError` carrying the server's own words.
+ *
+ * Requirement 1.4 lives here instead of in every caller: a 401 drops the session, and nothing is
+ * ever retried — the authorizer rejected this token, so it would reject it again.
+ *
+ * A failure is reported with the sentence the **server** wrote, unchanged. `voice/voice.mjs` and
+ * API Gateway both send one and both write it in the reader's own language, so rewording it here
+ * would replace a true sentence with a guess. Everything else answers `{error, reason}` codes and
+ * carries no sentence at all, which is what the empty message means: the page then shows its own
+ * string for that surface. That is the same rule `transcriptFailure()` in teacher.js follows.
+ */
+export async function bodyOrThrow(res) {
+  // A proxy's HTML error page and a 204 are both "not JSON", and neither is a reason to throw
+  // something unreadable at the user.
+  const body = await res.json().catch(() => null);
+  if (res.status === 401) handleUnauthorized();
+  if (!res.ok) throw new ApiError(typeof body?.message === 'string' ? body.message.trim() : '');
+  return body;
+}
+
+/** A failed call's own sentence from the server, or `''`. Never one of our internal error texts. */
+export const serverSentence = (err) => (err instanceof ApiError ? err.message : '');
 
 function clearSession(messageKey = '') {
   session = null;

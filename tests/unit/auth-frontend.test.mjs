@@ -22,6 +22,7 @@ import {
   acceptRoleToken,
   authorizeUrl,
   claimsOf,
+  CONFIG,
   configured,
   expiresAt,
   isExpired,
@@ -226,9 +227,38 @@ test('the issuer is derived from the pool id, so there is one fewer value to pas
   );
 });
 
-test('configured() is false until the deploy outputs are pasted in', () => {
-  // This is what keeps a pre-deploy page showing a sentence instead of a dead button.
-  assert.equal(configured(), false);
+test('configured() is false until all four deploy outputs are pasted in', () => {
+  // What keeps a pre-deploy page showing a sentence instead of a dead button — and, since the swap
+  // points were taken, the one value that decides whether every page calls the API or its mock.
+  //
+  // Driven rather than observed. Asserting `configured() === false` against whatever is in the file
+  // right now passes today and fails on deploy evening, the moment somebody pastes the real values
+  // in: a red suite at one in the morning, saying nothing. The corpus is what actually matters —
+  // **any** field still carrying the sentinel is "not configured", because three real values and
+  // one placeholder is a page that would call a host that does not exist.
+  const real = {
+    domain: 'panthiya.auth.ap-south-1.amazoncognito.com',
+    clientId: 'client-abc123',
+    userPoolId: 'ap-south-1_AbCd1234',
+    apiBase: 'https://api123.execute-api.ap-south-1.amazonaws.com/dev',
+  };
+  const saved = { ...CONFIG };
+
+  try {
+    Object.assign(CONFIG, real);
+    assert.equal(configured(), true, 'four real values are not enough to switch the pages on');
+
+    for (const field of Object.keys(real)) {
+      Object.assign(CONFIG, real, { [field]: `REPLACE_AFTER_DEPLOY.${field}` });
+      assert.equal(configured(), false, `a placeholder left in \`${field}\` reads as configured`);
+    }
+
+    // And the state the repo ships in, whatever it is, is the state the pages were written for.
+    Object.assign(CONFIG, saved);
+    assert.equal(typeof configured(), 'boolean');
+  } finally {
+    Object.assign(CONFIG, saved);
+  }
 });
 
 /* ---------------------------------------------------------------------------------------------

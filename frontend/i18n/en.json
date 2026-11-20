@@ -50,7 +50,7 @@
   "nav.home": "Home",
 
   "teacher.heading": "Teacher",
-  "teacher.note": "Demo data only. The backend is built and tested, but nothing is deployed yet, so this screen runs on a stand-in and nothing you type here is saved.",
+  "teacher.note": "Demo data only. Every student, fee and mark on this screen is fictional, and the fee ledger below is a stand-in.",
 
   "chat.heading": "Chat",
   "chat.empty_heading": "Try typing something like this",
@@ -65,6 +65,7 @@
   "chat.sender_teacher": "You",
   "chat.sender_panthiya": "Panthiya",
   "chat.sending": "Sending\u2026",
+  "chat.blocked": "Panthiya did not answer that one, and nothing was recorded. Please try asking it a different way.",
   "chat.error": "That did not reach Panthiya. Please try again.",
   "chat.mock_reply": "Noted. The backend is built and tested, but nothing is deployed yet, so this is a stand-in — it has not been saved to your class or written to the audit log.",
 
@@ -163,7 +164,7 @@
   "parent.ask.mock_answer": "I can only answer from what the teacher has recorded about {name}, and I cannot tell you anything about another child. The class records are not connected yet, so I have nothing to look up — this is a demo answer. From M4 your question will be answered from {name}'s own attendance, fee and mark records.",
 
   "student.heading": "Ask for a hint",
-  "student.note": "Demo only. The tutor's rules are built and tested, but nothing is deployed and no model is answering yet, so the hints below are examples of what Panthiya will say in a real class.",
+  "student.note": "Demo only — a practice account rather than a real class.",
   "student.promise": "Panthiya gives you the concept, the next step and a question to think about — never the final answer to your own question. A worked example is always a different problem with different numbers.",
   "student.tutor.heading": "Ask about a question you are stuck on",
   "student.empty_heading": "Try asking something like this",
@@ -251,6 +252,7 @@
   "redteam.reason.chat_rejected": "The chat API rejected the request.",
   "redteam.reason.chat_unavailable": "The chat API could not be reached.",
   "redteam.reason.chat_error": "The chat call failed, so this case has no verdict.",
+  "redteam.reason.chat_crashed": "The chat function itself failed, so this case has no verdict. Its CloudWatch log has the throw.",
   "redteam.reason.content_filtered": "The model's own filter stopped this reply. No defence layer of ours held it, so this case has no verdict.",
   "redteam.reason.no_token": "Not run: there is no token for this role.",
 

@@ -23,37 +23,37 @@
 // registers a re-render with onLang() so a language switch redraws dynamic content in place.
 
 import { init, t, setText, onLang, currentLang } from './i18n.js';
+import {
+  ApiError, apiBase, authHeaderOrThrow, bodyOrThrow, configured, ready, serverSentence,
+} from './auth.js';
 
 /* ================================================================================================
    1. Data access — the only part of this screen that knows where data comes from.
    ================================================================================================ */
 
-// ponytail: SWAP POINT. Nothing is deployed yet, so MOCK stands in for every call this screen
-// makes. The six functions below are its entire data surface. When the stack is up (design.md §5)
-// replace their bodies with fetch() calls and delete MOCK; nothing else in this file,
-// teacher/index.html or styles.css has to change.
+// ponytail: SWAP POINT — taken. The six functions below are this screen's entire data surface, and
+// five of them are the real call (design.md §5); MOCK is the fallback they use while the stack is
+// down. `MOCKING` is `configured()` from auth.js — the same "are the four deploy outputs pasted in"
+// check the sign-in panel already uses — so nothing here is edited on deploy evening: paste the
+// four stack outputs into `CONFIG` in assets/auth.js and this screen is live.
 //
-// Every call carries the ID token the same way, which auth.js documents in three lines:
-//
-//   import { authHeader, handleUnauthorized, apiBase } from './auth.js';
-//   const auth = authHeader();
-//   if (!auth) { handleUnauthorized(); return; }                  // not signed in: say so, do not call
-//   const res = await fetch(`${apiBase()}/…`, { headers: { ...auth } });
-//   if (res.status === 401) handleUnauthorized();                 // requirement 1.4, never a retry
-//
-//   sendMessage(text)     → POST /chat {message, lang} → {reply, blockedBy}. Drop `replyKey`.
-//   loadLedger()          → the teacher ledger read → {month, students[]}.
+//   sendMessage(text)     → POST /chat {message, lang} → {reply, blockedBy}
+//   loadLedger()          → **still the mock, and not a swap point**: the API serves no ledger
+//                           read. See its own note below; this is the one thing on this screen
+//                           that `CONFIG` cannot make live.
 //   loadAudit()           → GET /teacher/audit → {entries[]}, already newest-first and already
-//                           scoped to this teacher's own classes. Render the array as given: a
-//                           sort or a filter here would be a second, weaker copy of a rule the
-//                           server holds (requirement 10.3).
-//   voiceUploadUrl(blob)  → POST /voice/upload-url {bytes, format} → {key, url, contentType}.
+//                           scoped to this teacher's own classes. Rendered as given: a sort or a
+//                           filter here would be a second, weaker copy of a rule the server holds
+//                           (requirement 10.3).
+//   voiceUploadUrl(blob)  → POST /voice/upload-url {bytes, format} → {key, url, contentType}
 //   putAudio(slot, blob)  → PUT the blob to `slot.url` with `Content-Type: slot.contentType` and
 //                           NO Authorization header: the presigned URL is the capability, and the
 //                           signed length is the blob's own size.
 //   voiceTranscript(body) → POST /voice/transcript, twice over: `{key, lang}` starts the job and
 //                           `{jobName, lang}` polls it, which is why the poll loop below is the
 //                           client's and not the Lambda's.
+const MOCKING = !configured();
+
 const MOCK = {
   // The same fictional class as backend/seed/demo-class.json — IDs, names and amounts must stay in
   // step with that file, or the demo shows one set of students on screen and another in DynamoDB.
@@ -158,49 +158,115 @@ const MAX_MESSAGE = 2000; // design.md §5 rejects a longer message with 400 bef
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** POST /chat → {reply}. Mocked: resolves `replyKey` from the current pack instead. */
-async function sendMessage(text) {
-  if (typeof text !== 'string' || text.trim() === '') throw new Error('empty message');
-  if (text.length > MAX_MESSAGE) throw new Error('message too long');
-  await sleep(MOCK.latencyMs);
-  return { replyKey: MOCK.replyKey };
+/**
+ * One authenticated call to this stack's API → the parsed body.
+ *
+ * ponytail: one local function rather than the same four lines in five callers. The token header,
+ * the not-signed-in case and requirement 1.4 are one rule each, and five copies of a rule is how
+ * five copies come to disagree — which is the defect this lane was called in to fix elsewhere on
+ * this screen. It is not a transport layer: no retry, no queue, no interceptor, no cache. A
+ * failure arrives as an `ApiError` carrying the server's own sentence (auth.js).
+ */
+async function api(path, { method = 'GET', body } = {}) {
+  const auth = authHeaderOrThrow();
+  return bodyOrThrow(await fetch(`${apiBase()}${path}`, {
+    method,
+    headers: body === undefined ? auth : { ...auth, 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }));
 }
 
-/** GET the teacher's ledger → {month, students[]}. Mocked. */
-async function loadLedger() {
+/** 'audio/webm;codecs=opus' → 'webm'. The container token, which is all voice.mjs asks for. */
+const formatOf = (blob) => String(blob?.type ?? '').split(';')[0].split('/')[1] || 'webm';
+
+/** POST /chat → {reply, blockedBy}. Mocked: resolves `replyKey` from the current pack instead. */
+export async function sendMessage(text) {
+  if (typeof text !== 'string' || text.trim() === '') throw new Error('empty message');
+  if (text.length > MAX_MESSAGE) throw new Error('message too long');
+
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return { replyKey: MOCK.replyKey };
+  }
+  return api('/chat', { method: 'POST', body: { message: text, lang: currentLang() } });
+}
+
+/**
+ * The month's fee ledger → {month, students[]}.
+ *
+ * ponytail: the one call on this screen that is **still the mock**, because there is nothing to
+ * call. `backend/template.yaml` serves `/chat`, `/teacher/drafts`, `/teacher/audit`,
+ * `/teacher/students/{id}/export`, the two voice routes and the red-team routes — and no ledger
+ * read; `read/handlers.mjs` has no handler for one either. Ceiling, and it is a visible one: the
+ * fees on this screen are demo data however `CONFIG` is set. A fetch to an invented path would
+ * turn that into an unexplained empty table on demo day, which is worse. Upgrade path: when a
+ * ledger read exists this body is `return api('/teacher/ledger');` and MOCK.ledger goes with it.
+ */
+export async function loadLedger() {
   await sleep(MOCK.latencyMs);
   return structuredClone(MOCK.ledger);
 }
 
-/** GET /teacher/audit → {entries[]}, newest first and this teacher's classes only. Mocked. */
-async function loadAudit() {
-  await sleep(MOCK.latencyMs);
-  return structuredClone(MOCK.audit);
+/** GET /teacher/audit → {entries[]}, newest first and this teacher's classes only. */
+export async function loadAudit() {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return structuredClone(MOCK.audit);
+  }
+  return api('/teacher/audit');
 }
 
-/** POST /voice/upload-url → the one object this caller may write. Mocked. */
-async function voiceUploadUrl(blob) {
-  await sleep(MOCK.latencyMs);
-  return { key: 'voice/MOCK/mock.webm', url: '', contentType: blob.type || 'audio/webm', bytes: blob.size };
+/** POST /voice/upload-url → the one object this caller may write. */
+export async function voiceUploadUrl(blob) {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return { key: 'voice/MOCK/mock.webm', url: '', contentType: blob.type || 'audio/webm', bytes: blob.size };
+  }
+  // `bytes` is signed into the URL, so the capability is one key, one method and one exact length.
+  // `format` is the recorder's own container token, sent as it is: voice.mjs refuses one it has not
+  // been tested against (`format_unsupported`) rather than defaulting it to webm and failing the
+  // job later, and a visible 400 is the outcome it asks for.
+  return api('/voice/upload-url', { method: 'POST', body: { bytes: blob.size, format: formatOf(blob) } });
 }
 
-/** PUT the recording to the presigned URL. Mocked: the bytes go nowhere. */
-async function putAudio(slot, blob) {
-  await sleep(MOCK.latencyMs);
+/** PUT the recording to the presigned URL. */
+export async function putAudio(slot, blob) {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return { ok: true, bytes: blob.size, key: slot.key };
+  }
+  // The one request on this screen that does not go to our API, so it does not go through api():
+  // the presigned URL *is* the capability, and an Authorization header on it would be a token sent
+  // to a URL that has no use for one. A 403 here is an expired URL rather than a rejected
+  // sign-in, so the session is left alone; S3 answers in XML, so there is no sentence to show and
+  // the caller's `mic.error` is the honest line. Said once, never retried (requirement 3.6).
+  const res = await fetch(slot.url, {
+    method: 'PUT',
+    headers: { 'content-type': slot.contentType },
+    body: blob,
+  });
+  if (!res.ok) throw new ApiError('');
   return { ok: true, bytes: blob.size, key: slot.key };
 }
 
 /**
- * POST /voice/transcript → `{status: 'in_progress'|'done'|'failed', …}`. Mocked.
+ * POST /voice/transcript → `{status: 'in_progress'|'done'|'failed', …}`.
+ *
+ * A `failed` arrives as a 200 carrying the teacher's own sentence (voice.mjs writes it in their
+ * language), so it is a body to read rather than an error to throw: `transcriptFailure()` below
+ * shows that sentence unchanged.
  *
  * The mock answers `in_progress` to the start call and `done` to the first poll, so the page's
  * poll loop is exercised rather than skipped. It never answers `failed`: a mock that invented a
  * failure message would be the one string on this screen that no server wrote.
  */
-async function voiceTranscript(body) {
-  await sleep(MOCK.latencyMs);
-  if (body.jobName) return { status: 'done', jobName: body.jobName, transcript: t(MOCK.transcriptKey) };
-  return { status: 'in_progress', jobName: 'panthiya-MOCK-job' };
+export async function voiceTranscript(body) {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    if (body.jobName) return { status: 'done', jobName: body.jobName, transcript: t(MOCK.transcriptKey) };
+    return { status: 'in_progress', jobName: 'panthiya-MOCK-job' };
+  }
+  return api('/voice/transcript', { method: 'POST', body });
 }
 
 
@@ -215,9 +281,14 @@ const state = {
   ledger: null,        // {month, students[]} once loaded
   audit: null,         // [entry, …] in the order the server gave them, once loaded
   chatStatusKey: '',   // pack key, or '' for no status line
+  // The server's own sentence for a failed call, shown unedited and in preference to our key for
+  // that surface — the same rule as the mic's `message` below, and for the same reason: a server
+  // that said why is already saying it in the teacher's language (requirement 3.6).
+  chatStatusMessage: '',
   sending: false,      // a /chat round-trip is open; the send button says so with aria-disabled
   ledgerStatusKey: '',
   auditStatusKey: '',
+  auditStatusMessage: '',
   // `message` is a server string shown unedited; `messageKey` is one of ours. Never both.
   mic: { phase: 'idle', message: '', messageKey: '' },
 };
@@ -286,7 +357,7 @@ function renderChat() {
   for (const message of state.messages) dom.messages.append(bubble(message));
 
   dom.empty.hidden = state.messages.length > 0;
-  setText(dom.status, state.chatStatusKey ? t(state.chatStatusKey) : '');
+  setText(dom.status, state.chatStatusMessage || (state.chatStatusKey ? t(state.chatStatusKey) : ''));
   // `aria-disabled`, not `disabled`, for the same reason as the microphone below: disabling the
   // button the teacher has just pressed drops focus to <body> for the whole Bedrock round-trip.
   // This keeps it focusable; the submit handler ignores the press.
@@ -294,6 +365,37 @@ function renderChat() {
 
   // Keep the newest message in view without moving focus.
   dom.log.scrollTop = dom.log.scrollHeight;
+}
+
+/**
+ * A `POST /chat` answer → the log entry it draws, or `null` for "that was not a message".
+ *
+ * Three outcomes, and keeping them apart is the point of this function existing:
+ *
+ *   a reply        → the server's own words, unedited. A `distress` reply arrives this way too —
+ *                    it carries both text and a `blockedBy`, and the kind words are what the
+ *                    teacher should read, not a line of ours about it (chat/orchestrate.mjs).
+ *   a layer, no    → `chat.blocked`. It reached Panthiya and was **held on purpose**: a guardrail
+ *   reply            or policyCheck block answers 200 with `reply: null` and a `blockedBy`.
+ *                    `chat.error` would be the wrong sentence here — "that did not reach Panthiya"
+ *                    about a message that reached it and was refused is a worse lie than silence,
+ *                    which is why this string was asked for rather than that one reused.
+ *   neither        → `null`, and the caller takes the error path. Not a block and not a message:
+ *                    `handleChat` fails closed with a 502 on an empty agent reply, so a 200 with
+ *                    nothing in it means something between here and there broke — exactly what
+ *                    `scripts/redteam-cli.mjs` records as `empty_200_body` rather than as a pass.
+ *                    `chat.error` is true of it.
+ *
+ * `replyKey` is the mock's way of answering in the current language and is checked last, so a real
+ * reply or a real block is always told apart first.
+ *
+ * Exported for tests/unit/api-swap-frontend.test.mjs.
+ */
+export function replyEntry({ reply, replyKey, blockedBy } = {}) {
+  if (typeof reply === 'string' && reply.trim() !== '') return { side: 'panthiya', text: reply };
+  if (typeof blockedBy === 'string' && blockedBy !== '') return { side: 'panthiya', key: 'chat.blocked' };
+  if (typeof replyKey === 'string' && replyKey !== '') return { side: 'panthiya', key: replyKey };
+  return null;
 }
 
 /**
@@ -312,22 +414,33 @@ async function submitMessage(text) {
 
   state.messages.push({ side: 'teacher', text });
   state.chatStatusKey = 'chat.sending';
+  state.chatStatusMessage = '';
   state.sending = true;
+  // renderMic() as well as renderChat(), here and in the `finally`: `state.sending` is half of
+  // what `micBlocked()` reads, so the microphone has to be redrawn whenever it moves or the button
+  // would say it is available throughout a send it will refuse to start during.
   renderChat();
+  renderMic();
 
   try {
-    const { reply, replyKey } = await sendMessage(text);
-    state.messages.push({ side: 'panthiya', text: reply, key: replyKey });
+    const entry = replyEntry(await sendMessage(text));
+    // Nothing came back at all: not a message, so it takes the error path below rather than being
+    // drawn as a blank bubble. `replyEntry()` above is where the three outcomes are told apart.
+    if (!entry) throw new Error('chat answered with neither a reply nor a layer');
+
+    state.messages.push(entry);
     state.chatStatusKey = '';
   } catch (err) {
     console.error(err);
     state.chatStatusKey = 'chat.error';
+    state.chatStatusMessage = serverSentence(err);   // the server's words when it sent any, as-is
   } finally {
     state.sending = false;
     // No focus() here. It existed to undo the focus `disabled` had just thrown away; now that
     // nothing is dropped, calling it would instead yank the teacher back from wherever they moved
     // during the request — the ledger, the mic, the language picker (2.4.3, 3.2.5).
     renderChat();
+    renderMic();
   }
   return true;
 }
@@ -521,7 +634,7 @@ function auditEntry(entry) {
 }
 
 function renderAudit() {
-  setText(dom.auditStatus, state.auditStatusKey ? t(state.auditStatusKey) : '');
+  setText(dom.auditStatus, state.auditStatusMessage || (state.auditStatusKey ? t(state.auditStatusKey) : ''));
   dom.auditList.replaceChildren();
 
   // In the order the server gave them, which is newest-first (requirement 10.3). No sort here.
@@ -549,6 +662,25 @@ const MIC = {
 };
 
 export const micView = (phase) => MIC[phase] ?? MIC.idle;
+
+/**
+ * May a recording be **started** right now?
+ *
+ * `startRecording()` reads this, so the rule lives at the one door into the recorder rather than in
+ * the button handler that happens to be the only caller today. The defect it closes: the mic could
+ * be started while a typed send was still open, and the transcript that came back minutes later
+ * found `submitMessage()` busy and landed in the typed box instead — a recording the teacher made
+ * to avoid typing, handed back to be typed. The phases the recorder is already using were guarded;
+ * a send on the other path was not.
+ *
+ * `recording` is deliberately never blocked, in either direction: a teacher who presses send while
+ * recording must still be able to press stop, or they are left holding a live microphone with no
+ * way to end it but reloading the page.
+ *
+ * Exported for tests/unit/chat-busy-frontend.test.mjs, whose corpus is phase × sending.
+ */
+export const micBlocked = (phase, sending) =>
+  phase !== 'recording' && (micView(phase).busy || Boolean(sending));
 
 /**
  * What to show when `/voice/transcript` answers `status: 'failed'`.
@@ -588,7 +720,11 @@ function renderMic() {
   // `aria-disabled`, not `disabled`: disabling the button the teacher has just pressed drops focus
   // to <body>, so a keyboard user loses their place for the whole upload and the next Tab starts
   // at the top of the page. This keeps the button focusable; the click handler ignores the press.
-  dom.mic.setAttribute('aria-disabled', String(view.busy));
+  //
+  // The same `micBlocked()` the recorder itself reads, so what the button says and what pressing it
+  // does cannot disagree — including during a typed send, when the button would otherwise look
+  // available for a recording that startRecording() will refuse.
+  dom.mic.setAttribute('aria-disabled', String(micBlocked(state.mic.phase, state.sending)));
   dom.mic.classList.toggle('mic-live', view.pressed);
   setText(dom.micStatus, micText());
 }
@@ -612,6 +748,13 @@ function failMic({ message = '', messageKey = '' }) {
 }
 
 async function startRecording() {
+  // The one door into the recorder, so the guard is here and not in the caller: the button is the
+  // only way in today, and a second one — a shortcut key, a "record again" link — would otherwise
+  // have to remember the rule. Silent on purpose: the button is already `aria-disabled` and says
+  // so to a screen reader, and a status line about a press that did nothing would be noise over
+  // the "Sending…" the teacher is already reading.
+  if (micBlocked(state.mic.phase, state.sending)) return;
+
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     return failMic({ messageKey: 'mic.unsupported' });
   }
@@ -733,7 +876,10 @@ async function start() {
   // is keyboard-operable for free (requirement 12.4) — which is exactly what a press-and-hold
   // gesture would not be, since `pointerdown`/`pointerup` have no keyboard equivalent.
   dom.mic.addEventListener('click', () => {
-    // What `disabled` used to do, without taking the focus away to do it.
+    // What `disabled` used to do, without taking the focus away to do it (requirement 12.4). It is
+    // not the busy *rule* — that is `micBlocked()`, read by startRecording() itself — only the
+    // half of `aria-disabled` a browser does not do for us: ignore the press. Stopping is reached
+    // before it either way, because `recording` is not a busy phase.
     if (micView(state.mic.phase).busy) return;
     if (state.mic.phase === 'recording') stopRecording();
     else void startRecording();
@@ -746,6 +892,13 @@ async function start() {
   state.auditStatusKey = 'audit.loading';
   renderLedger();
   renderAudit();
+
+  // The sign-in is still finishing when this page loads: arriving from the hosted UI means a
+  // `?code=` to exchange for the token (auth.js), and `authHeader()` is null until that lands. The
+  // audit read below would otherwise fail with "could not load" a quarter of a second before the
+  // session it needed arrived — on a page that then sat there looking signed in. `ready` is the
+  // promise auth.js exports for exactly this, and on an unconfigured page it is already resolved.
+  await ready;
 
   try {
     const ledger = await loadLedger();
@@ -764,6 +917,7 @@ async function start() {
   } catch (err) {
     console.error(err);
     state.auditStatusKey = 'audit.error';
+    state.auditStatusMessage = serverSentence(err);   // the server's words when it sent any, as-is
   }
   renderAudit();
 }

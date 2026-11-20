@@ -64,14 +64,25 @@ test('req 10.4 — the page says in words that the log cannot be changed, in all
     'audit.immutable does not deny editing and deleting specifically');
 });
 
-test('req 10.4 — no write verb anywhere in the teacher script', () => {
-  // There is no API to call, so the absence is checked rather than described. `loadAudit()` is a
-  // read, and this page has no other business with the log.
+test('req 10.4 — no write verb reaches the API from the teacher script', () => {
+  // The calls are real now, so this is no longer "there is no API to call". It is the same rule
+  // checked one step further in: `loadAudit()` is a GET, and nothing on this screen writes to the
+  // log — there is no endpoint that could, and this page must not be the first to look for one.
   const code = JS.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const verb of ['DELETE', 'PATCH', 'PUT']) {
+
+  for (const verb of ['DELETE', 'PATCH']) {
     assert.ok(!new RegExp(`method:\\s*['"\`]${verb}`, 'i').test(code),
-      `teacher.js issues a ${verb}; the audit log has no such API`);
+      `teacher.js issues a ${verb}; no audit API accepts one`);
   }
+
+  // The one PUT on this screen is the voice recording, and it goes to the presigned S3 URL the
+  // server handed back — never to our own API, which has no PUT route at all.
+  const puts = [...code.matchAll(/fetch\(([^,]+),\s*\{\s*\n?\s*method: 'PUT'/g)].map((m) => m[1].trim());
+  assert.deepEqual(puts, ['slot.url'], 'a PUT goes somewhere other than the presigned upload URL');
+
+  // And the audit read is a read: `api()` defaults to GET and this call passes no method.
+  assert.match(code, /api\('\/teacher\/audit'\)/, 'the audit log is no longer read with a plain GET');
+  assert.ok(!/\/teacher\/audit'[^)]*method/.test(code), 'the audit call carries a method other than GET');
 });
 
 test('req 10.4 — a deletion is an appended entry with a tally, not an absence', () => {
@@ -266,19 +277,30 @@ test('req 3.5 — a finished transcript goes to the chat exactly as it arrived',
 
 /* --- the mock, and the one swap point it hides behind ----------------------------------------- */
 
-test('both screens run on one clearly-marked mock, with a single SWAP POINT', () => {
-  // Nothing is deployed, so every call this page makes is a stand-in. One marker, so taking it out
-  // is one edit and cannot be half-done (the same discipline as redteam.js and student.js).
+test('the real call is the implementation and the mock is the fallback, chosen by one value', () => {
+  // This used to assert the opposite — that every call was a stand-in and `fetch(` appeared
+  // nowhere — because taking the swap point was a hand edit at deploy time. It is a paste now:
+  // `configured()` in auth.js is false until the four stack outputs are in `CONFIG`, and that one
+  // value picks the mock. What is still worth pinning is that there is exactly ONE such value, so
+  // the swap cannot be half-taken and leave this screen mixing live calls with demo data.
   assert.equal((JS.match(/SWAP POINT/g) ?? []).length, 1, 'teacher.js has no single SWAP POINT marker');
   assert.ok(JS.indexOf('const MOCK') > JS.indexOf('SWAP POINT'), 'MOCK is not under the SWAP POINT');
 
   for (const fn of ['loadAudit', 'voiceUploadUrl', 'putAudio', 'voiceTranscript']) {
     assert.ok(JS.includes(`function ${fn}`), `${fn}() is missing from the data surface`);
   }
-  // Comments stripped first: the SWAP POINT comment spells out the fetch() calls that replace the
-  // mock, which is a description of one and not a use of one.
+
   const code = JS.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.ok(!/fetch\(/.test(code), 'teacher.js already calls fetch(); the SWAP POINT comment is now stale');
+  assert.deepEqual(code.match(/^const MOCKING = .*$/gm), ['const MOCKING = !configured();'],
+    'the mock is switched by something other than the one `configured()` check, or by two things');
+  assert.ok(/fetch\(/.test(code), 'teacher.js makes no request at all; the swap point is not taken');
+
+  // Every mock answer sits behind that value, so a configured page cannot serve one — with the one
+  // exception the ledger note explains, which has no endpoint to call and says so.
+  const mockBranches = (code.match(/if \(MOCKING\)/g) ?? []).length;
+  assert.equal(mockBranches, 5, 'a mock answer is reachable with CONFIG real, or a real call is unreachable');
+  assert.match(code, /export async function loadLedger\(\) \{\s*await sleep/,
+    'loadLedger() is the documented exception: if it is real now, this test and its note are stale');
 
   // The mock's audit entries carry the real field names, so the renderer is exercised by the shape
   // it will really be handed — and no real person's name (requirement 13.7).
