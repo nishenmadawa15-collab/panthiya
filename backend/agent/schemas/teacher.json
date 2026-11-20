@@ -270,6 +270,51 @@
           }
         }
       }
+    },
+    "/approveParentUpdate": {
+      "post": {
+        "operationId": "approveParentUpdate",
+        "summary": "Approve one drafted parent update so the parents can see it",
+        "description": "Turn one draft the teacher already has from 'draft' into 'approved'. This is the only way anything ever reaches a parent, so call it only when the teacher has said plainly that this one draft is to be approved: never approve a draft to be helpful, never approve more than one in a call, and never approve a draft the teacher has not read back. The wording cannot be changed here — the stored draft is approved exactly as it stands, and a teacher who wants different words asks for a new draft instead. A draft that was already approved is reported as alreadyApproved and nothing is written. Tell the teacher it is approved and that the parents can now see it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["draftId"],
+                "properties": {
+                  "draftId": {
+                    "type": "string",
+                    "description": "The id of the one draft to approve, exactly as draftParentUpdate returned it as draftId or as the teacher's drafts list shows it. Never invent, complete or guess an id; if the teacher has not said which draft, ask them which one."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result of the approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draftId": { "type": "string", "description": "Id of the draft as stored" },
+                    "status": { "type": "string", "description": "Always 'approved' on success, or 'denied'" },
+                    "alreadyApproved": { "type": "boolean", "description": "True when this draft was approved before this call, in which case nothing was written. Say so plainly rather than reporting a new approval." },
+                    "approvedText": { "type": "string", "description": "The text that was approved, as stored. Show it unchanged." },
+                    "approvedAt": { "type": "string", "description": "When it was approved, as stored" },
+                    "visibleToParent": { "type": "boolean", "description": "False when no parent account is linked to this student yet: the update is approved but nobody can read it. Tell the teacher that." },
+                    "message": { "type": "string", "description": "Short note to pass on to the teacher. If status is denied, state the reason given here and nothing more." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -101,6 +101,7 @@ const mocked = {
   teacher: await import('../../frontend/assets/teacher.js?mocking'),
   student: await import('../../frontend/assets/student.js?mocking'),
   redteam: await import('../../frontend/assets/redteam.js?mocking'),
+  parent: await import('../../frontend/assets/parent.js?mocking'),
 };
 
 Object.assign(CONFIG, {
@@ -115,6 +116,7 @@ const live = {
   teacher: await import('../../frontend/assets/teacher.js?live'),
   student: await import('../../frontend/assets/student.js?live'),
   redteam: await import('../../frontend/assets/redteam.js?live'),
+  parent: await import('../../frontend/assets/parent.js?live'),
 };
 
 const API = 'https://api123.execute-api.ap-south-1.amazonaws.com/dev';
@@ -135,6 +137,18 @@ const surface = (mods) => [
   { what: 'teacher voiceTranscript (start)', session: true, call: () => mods.teacher.voiceTranscript({ key: 'voice/k/u.webm', lang: 'en' }) },
   { what: 'teacher voiceTranscript (poll)', session: true, call: () => mods.teacher.voiceTranscript({ jobName: 'panthiya-k-u', lang: 'en' }) },
   { what: 'student askTutor', session: true, call: () => mods.student.askTutor('I am stuck on 2x + 5 = 17') },
+  // Added 2026-11-20. `parent.js` was still entirely on its mock -- no `fetch` at all -- while
+  // BUILD-LOG claimed the real fetch was the implementation on every page. Listing the two calls
+  // here is the whole fix for the test side: every property this file already proves (the mock
+  // answers while CONFIG is placeholders, nothing is sent, a configured build really sends, the
+  // token is never stored, no retry on failure, the endpoint agrees with template.yaml) now
+  // applies to the page a PARENT reads about their own child -- the most sensitive screen here.
+  { what: 'parent loadInbox', session: true, call: () => mods.parent.loadInbox() },
+  { what: 'parent askQuestion', session: true, call: () => mods.parent.askQuestion('Did Kasun pay for November?') },
+  // The approval gate's two calls, reachable since the same day. They are covered for behaviour
+  // in audit-mic-frontend.test.mjs; they are listed here for the transport properties above.
+  { what: 'teacher loadDrafts', session: true, call: () => mods.teacher.loadDrafts() },
+  { what: 'teacher approveDraft', session: true, call: () => mods.teacher.approveDraft('d1') },
   { what: 'redteam postRun', session: true, call: () => mods.redteam.postRun({ layers: {}, case: { id: 'A1', role: 'parent' }, sessionRole: 'parent', turns: [{ status: 200 }] }) },
   { what: 'teacher putAudio', session: false, call: () => mods.teacher.putAudio({ key: 'voice/k/u.webm', url: 'https://bucket.s3.ap-south-1.amazonaws.com/voice/k/u.webm?X-Amz-Signature=x', contentType: 'audio/webm' }, new Blob(['x'])) },
   { what: 'redteam postChat', session: false, call: () => mods.redteam.postChat({ testCase: { id: 'A1', section: 'A', role: 'parent' }, message: 'x', token: 'tok-parent', lang: 'en', last: true }) },

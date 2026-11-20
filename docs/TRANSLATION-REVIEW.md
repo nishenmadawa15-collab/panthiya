@@ -65,7 +65,7 @@ is why it is above Priority 1.
 
 ---
 
-## Priority 1 — safety-critical strings (14 keys, plus two awaiting translation)
+## Priority 1 — safety-critical strings (14 keys, plus fifteen awaiting translation)
 
 ### `redteam.reason.content_filtered` — **in si and ta this is still English** (added 2026-11-19)
 
@@ -105,6 +105,77 @@ English with a `TODO(nishen)` prefix went into si and ta rather than an invented
 **What must survive:** that the failure is **ours** and not the student's, not the attack's, and not
 a verdict. It says where to look — the CloudWatch log — which is the only actionable half of the
 sentence. **verdict** is `නිර්ණය` / `தீர்ப்பு` as everywhere else.
+
+---
+
+### `drafts.*` — the thirteen strings of the approval screen, **in si and ta still English** (added 2026-11-20)
+
+The teacher's drafts view was built today, and it is the screen requirement 6 rests on: a drafted
+parent update is invisible to the parent it is about until the teacher presses the one button on
+this screen, and until today there was no screen and no button, so **no parent update could ever
+send**. Thirteen new strings went into all three packs in English with a `TODO(nishen)` prefix
+rather than being invented in Sinhala and Tamil. The fourteenth, `drafts.fact`
+(`{table} {key}: {value}`), holds only placeholders and a colon — _identical, nothing to translate._
+
+These are Priority 1 rather than Priority 3 because three of them are the whole of the gate in
+words, and a translation that reads well but loses the distinction sends something to a parent that
+the teacher did not stand behind.
+
+- **EN (`drafts.heading`):** Parent updates awaiting your approval
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.intro`):** Nothing here has been sent. A parent sees an update only after you approve it. The words cannot be changed on this screen — every sentence was built from your own stored records, so if an update should say something else, ask Panthiya for a new draft.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.loading`):** Loading the updates awaiting your approval…
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.error`):** The updates awaiting your approval could not load. Nothing was sent. Please try again.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.empty`):** No parent updates are waiting for your approval.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.student`):** About student {id}
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.based_on`):** Built only from these stored records
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.mismatch`):** This does not match your records: {claimed} was stated, and the stored record is {stored}. The draft uses the stored record.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.approve`):** Approve and send
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.approve_case`):** Approve and send the update about student {id}
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.approving`):** Approving…
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.approved`):** Approved. The parents can see it now.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **EN (`drafts.approve_error`):** That update could not be approved. Nothing was sent to the parents.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+
+**What must survive:**
+
+1. `drafts.intro` must keep **all three** of its claims: nothing here has been sent; a parent sees
+   it only after the teacher approves it; and the wording cannot be changed on this screen. The
+   third is the one a fluent translation tends to drop, and it is the reason there is no text field
+   on the screen — ask for a new draft, do not retype the old one.
+2. `drafts.approve_case` is the button's accessible name and **must begin with the exact words of
+   `drafts.approve`** (WCAG 2.5.3: a voice-control user says what the button says). Translate
+   `drafts.approve` first, then start `drafts.approve_case` with that same phrase.
+3. `drafts.mismatch` must keep which figure is which: `{claimed}` is what the **teacher said** and
+   `{stored}` is what the **record holds**, and the draft used the record. Reversed, it tells a
+   teacher the system has the wrong number.
+4. `drafts.approve_error` must say **nothing was sent to the parents** — the same promise the
+   `mic.*` failures make, and for the same reason: a teacher who is not told that nothing went out
+   has to guess whether a parent is reading it.
 
 ---
 

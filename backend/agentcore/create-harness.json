@@ -27,6 +27,7 @@
   "allowedTools": [
     "addMarks",
     "addStudent",
+    "approveParentUpdate",
     "draftParentUpdate",
     "getHint",
     "getMyChildSummary",

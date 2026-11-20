@@ -12,10 +12,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { handler } from '../../backend/functions/actions-teacher/index.mjs';
-import { draftParentUpdate, approveParentUpdate }
+import { ACTIONS } from '../../backend/functions/actions-teacher/actions.mjs';
+import { draftParentUpdate, approveParentUpdate, DRAFT_ACTIONS }
   from '../../backend/functions/actions-teacher/drafts.mjs';
+import { toolNamesFor } from '../../backend/functions/chat/toolspecs.mjs';
 import { parentInbox, teacherDrafts } from '../../backend/functions/read/handlers.mjs';
 import { InputError } from '../../backend/functions/actions-teacher/validate.mjs';
 import { DenyError } from '../../backend/lib/auth.mjs';
@@ -527,6 +530,82 @@ test('the HTTP route shape is gated on the role in the claims, not on the path',
 });
 
 // --- 4. dispatch (design §6.2) -----------------------------------------------------------------
+
+/**
+ * The guard the 2026-11-20 defect asks for, and the one that was missing.
+ *
+ * `approveParentUpdate` was implemented here in full, tested below in full, and routed in
+ * `actions-teacher/index.mjs` — and it was absent from `backend/agent/schemas/teacher.json`, which
+ * is the file `chat/toolspecs.mjs` derives the model's tool list from and `agentcore/
+ * harness-config.mjs` derives the harness's inline functions from. So the model was never told the
+ * tool existed, could never call it, and no parent update could ever send. Every test in this file
+ * passed throughout, because every one of them calls the function directly.
+ *
+ * The two halves have to be checked separately, because they fail in opposite directions:
+ *
+ *   a name the SCHEMA has and the dispatch table does not → the model is offered a tool whose call
+ *   comes back as the same refusal a wrong role gets;
+ *
+ *   a name the DISPATCH TABLE has and the schema does not → exactly today's defect: a working,
+ *   audited, authorised write that nothing can ever ask for.
+ *
+ * `deleteStudent` is deliberately in neither: it is HTTP-only (`HTTP_ONLY_ACTIONS`), so no agent
+ * can be argued into erasing a child. If it ever appears in `teacher.json`, this test fails, and
+ * that is the correct outcome rather than a nuisance.
+ */
+test('the teacher schema and the handler\'s dispatch table name exactly the same actions', async () => {
+  const offered = [...toolNamesFor('teacher')].sort();
+  const dispatched = [...Object.keys(ACTIONS), ...Object.keys(DRAFT_ACTIONS)].sort();
+
+  assert.deepEqual(offered, dispatched,
+    'a teacher action is offered to the model with no handler behind it, or implemented with no way to ask for it');
+  assert.ok(offered.includes('approveParentUpdate'), 'the approval gate is unreachable by the model again');
+  assert.ok(!offered.includes('deleteStudent'), 'deleteStudent must stay HTTP-only; no agent may erase a child');
+
+  // And reachability for real, through the deployed boundary rather than through the table: each
+  // offered name is sent to `handler` exactly as Bedrock would send it. An unknown action is
+  // refused by `deny('not_permitted')`, which is the one answer none of these may get. Empty
+  // params are on purpose — what is being tested is that the call ROUTES, and a routed call
+  // answers with its own validation code instead.
+  for (const name of offered) {
+    const body = bodyOf(await handler(teacherEvent(name, {}), fakeDeps(world())));
+    assert.notEqual(body.blockedBy, 'role-gate',
+      `${name} is offered to the model and then refused by the handler as if it did not exist`);
+    assert.notEqual(body.reason, 'not_permitted', `${name} does not dispatch`);
+  }
+});
+
+test('the teacher schema declares approveParentUpdate with the parameter the handler reads', async () => {
+  // The names are the contract, not the shapes: `approveParentUpdate` reads `draftId` out of
+  // `modelParams(event)`, so a schema that called it `id` or `messageId` would hand the model a
+  // parameter the handler ignores — and the handler would then refuse every approval the model
+  // tried to make, with `draft_id_required`, for the rest of the product's life.
+  const schema = JSON.parse(readFileSync(new URL('../../backend/agent/schemas/teacher.json', import.meta.url), 'utf8'));
+  const op = schema.paths['/approveParentUpdate']?.post;
+  assert.ok(op, '/approveParentUpdate is missing from teacher.json: the model cannot approve a draft');
+  assert.equal(op.operationId, 'approveParentUpdate');
+
+  const json = op.requestBody.content['application/json'].schema;
+  assert.deepEqual(Object.keys(json.properties), ['draftId'],
+    'the approval takes a parameter other than, or as well as, the draft id');
+  assert.deepEqual(json.required, ['draftId']);
+
+  // Requirement 6.1: no parameter here may carry text. An approval that could supply its own
+  // wording would be a hole straight through "every sentence came from a stored row", and the
+  // handler has no code to accept one — so the hole would be in the schema, in front of the model.
+  for (const [name, spec] of Object.entries(json.properties)) {
+    assert.ok(!/text|body|message|wording|note/i.test(name), `${name} could carry wording into an approval`);
+    assert.equal(spec.type, 'string');
+  }
+
+  // The parameter name the schema offers is the one the handler actually reads. Asserted against
+  // the handler's behaviour rather than against its source: an approval sent under the schema's
+  // own name must approve, and that is the whole contract.
+  const deps = fakeDeps(world());
+  const draft = await draftParentUpdate(teacherEvent('draftParentUpdate', { studentName: 'Dilmi' }), deps);
+  const sent = bodyOf(await handler(teacherEvent('approveParentUpdate', { draftId: draft.draftId }), deps));
+  assert.equal(sent.status, 'approved', 'the schema\'s parameter name is not the one the handler reads');
+});
 
 test('the teacher action group dispatches both new actions', async () => {
   const deps = fakeDeps(world());

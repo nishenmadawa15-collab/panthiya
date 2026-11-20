@@ -165,7 +165,7 @@ test('the model is offered exactly its own role\'s tools, and the teacher tools 
   // same function that built it asserted `toolsFor(role) === toolsFor(role)`, which no change to
   // any schema could ever fail.
   const expected = {
-    teacher: ['addStudent', 'markAttendance', 'recordFee', 'addMarks', 'draftParentUpdate'],
+    teacher: ['addStudent', 'markAttendance', 'recordFee', 'addMarks', 'draftParentUpdate', 'approveParentUpdate'],
     parent: ['getMyChildSummary'],
     student: ['getHint', 'getSimilarExample'],
   };

@@ -683,10 +683,10 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 787 tests pass, nothing skipped. Nothing has been deployed and nothing has
-been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 787/787, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
+**67 of 79 tasks done. 802 tests pass, nothing skipped. Nothing has been deployed and nothing has
+been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 802/802, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
 because every remaining task is behind the credentials gate or behind Nishen; the test count moved
-**587 → 787** in the same two days.
+**587 → 802** in the same two days.
 
 > **Verification pass 4 ran at the end of the day: 41 mutations against production files, 38 red,
 > one surviving — and the surviving one was the *fourth* instance of this repo's signature

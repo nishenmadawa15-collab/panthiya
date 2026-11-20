@@ -12,16 +12,32 @@
 // registers a re-render with onLang() so a language switch redraws dynamic content in place.
 
 import { init, t, setText, onLang, currentLang } from './i18n.js';
+import {
+  ApiError, apiBase, authHeaderOrThrow, bodyOrThrow, configured, ready, serverSentence,
+} from './auth.js';
 
 /* ================================================================================================
    1. Data access — the only part of this screen that knows where data comes from.
    ================================================================================================ */
 
-// ponytail: SWAP POINT. No backend exists yet. loadInbox() and askQuestion() below are the entire
-// data surface of this screen; MOCK is their stand-in. When GET /parent/inbox and POST /chat land
-// (design.md §5), replace the two function bodies with fetch() calls carrying the Cognito ID token,
-// delete MOCK, and drop `key`/`answerKey` from the rendered messages — real messages arrive as
-// text. Nothing else in this file, parent/index.html or styles.css has to change.
+// ponytail: SWAP POINT — taken. loadInbox() and askQuestion() below are this screen's entire data
+// surface and the real calls (design.md §5) are their implementation; MOCK is the fallback they use
+// while the stack is down. `MOCKING` is `configured()` from auth.js — the same "are the four deploy
+// outputs pasted in" check the sign-in panel already uses — so nothing here is edited on deploy
+// evening: paste the four stack outputs into `CONFIG` in assets/auth.js and this screen is live.
+//
+//   loadInbox()       → GET /parent/inbox → {messages[]}, newest first, already approved-only and
+//                       already this parent's own children. Rendered as given.
+//   askQuestion(text) → POST /chat {message, lang} → {reply, blockedBy}
+//
+// NEITHER CALL NAMES A ROLE, A CHILD OR A CLASS, and there is no field for one. The role and the
+// child scope are resolved server-side from the caller's own verified Cognito `sub`
+// (read/handlers.mjs#parentInbox → session() → resolveScope()), so a browser that asked for another
+// family's child would be refused rather than answered. The mock below carries a child and a
+// teacher name because it has no `sub` to resolve; the live response carries neither, and the
+// header lines for them are hidden rather than filled from something the browser chose.
+const MOCKING = !configured();
+
 const MOCK = {
   // The same fictional class as backend/seed/demo-class.json. This parent is the parent of
   // Kasun Perera (stu-01), so every message below matches Kasun's seeded records exactly:
@@ -57,30 +73,74 @@ const MAX_MESSAGE = 2000; // design.md §5 rejects a longer message with 400 bef
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * GET /parent/inbox → {child, teacher, messages[]}. Mocked.
- * Approved messages only (requirement 7.1). The filter stays after the swap: an unapproved draft
- * reaching this screen is the one bug on this page that would break a promise to a parent.
+ * One row of `/parent/inbox` → what the thread draws.
+ *
+ * `body` is the text the teacher approved, shown as written. There is no `approved` flag to
+ * re-check and deliberately no client-side filter standing in for one: the handler has three
+ * independent reasons a draft cannot be in this list (the `begins_with` on `byParent`, the status
+ * check, and the teacher-only writer of `approved#…`), and a fourth copy here would be a weaker
+ * version of a rule the server holds — the same reason loadAudit() renders what it is given.
  */
-async function loadInbox() {
-  await sleep(MOCK.latencyMs);
-  const inbox = structuredClone(MOCK);
-  return {
-    child: inbox.child,
-    teacher: inbox.teacher,
-    messages: inbox.messages.filter((m) => m.approved === true),
-  };
+const inboxMessage = (m) => ({
+  id: m?.messageId,
+  at: m?.approvedAt ?? m?.createdAt ?? '',
+  text: typeof m?.body === 'string' ? m.body : '',
+});
+
+/**
+ * The approved thread about this parent's own children → {child?, teacher?, messages[]}.
+ *
+ * Mocked while `CONFIG` is placeholders, and the mock keeps its own approval filter because its
+ * rows are a plain array with drafts in it — the filter is doing real work there, not decorating.
+ */
+export async function loadInbox() {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    const inbox = structuredClone(MOCK);
+    return {
+      child: inbox.child,
+      teacher: inbox.teacher,
+      messages: inbox.messages.filter((m) => m.approved === true),
+    };
+  }
+
+  const auth = authHeaderOrThrow();
+  const body = await bodyOrThrow(await fetch(`${apiBase()}/parent/inbox`, { headers: auth }));
+  // No `studentId` query parameter: this parent has one inbox and the server already knows whose.
+  // The live response carries no child or teacher name, so neither is invented here.
+  return { messages: (body?.messages ?? []).map(inboxMessage) };
 }
 
 /**
- * POST /chat → {reply}, for a parent asking about their own child. Mocked: resolves `answerKey`
- * from the current pack instead. The answer is never an approved update, so it is rendered in the
- * ask area only — renderAsk() is the only thing that can draw it.
+ * POST /chat → {reply, blockedBy}, for a parent asking about their own child.
+ *
+ * The answer is never an approved update, so it is rendered in the ask area only — renderAsk() is
+ * the only thing that can draw it.
+ *
+ * The length check is this side's half of design.md §5: the server answers a longer message with
+ * 400 before any model call, and refusing it here costs no round-trip. The limit is the only thing
+ * checked — the question is sent exactly as typed.
+ *
+ * Mocked while `CONFIG` is placeholders: resolves `answerKey` from the current pack instead.
  */
-async function askQuestion(text) {
+export async function askQuestion(text) {
   if (typeof text !== 'string' || text.trim() === '') throw new Error('empty question');
   if (text.length > MAX_MESSAGE) throw new Error('question too long');
-  await sleep(MOCK.latencyMs);
-  return { answerKey: MOCK.answerKey };
+
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return { answerKey: MOCK.answerKey };
+  }
+
+  // `lang` so a refusal and a wellbeing reply come back in the language the parent is reading.
+  // Never a retry: a second send is a second message in the same session, and the server has
+  // already recorded this one (chat/orchestrate.mjs).
+  const auth = authHeaderOrThrow();
+  return bodyOrThrow(await fetch(`${apiBase()}/chat`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ message: text, lang: currentLang() }),
+  }));
 }
 
 
@@ -95,26 +155,18 @@ const state = {
   asked: [],            // {side: 'parent'|'assistant', text?: string, key?: string}
   threadStatusKey: 'parent.thread.loading',
   askStatusKey: '',
+  // A failed call shows the server's own sentence when it sent one, and our own key when it did
+  // not. Never both, and never ours written over the top of theirs (requirement 3.6) — a parent
+  // reads an API Gateway or voice.mjs sentence in their own language, and rewording it here would
+  // replace a true sentence with a guess. Never a status code, never a stack, never a raw error.
+  threadStatusMessage: '',
+  askStatusMessage: '',
   asking: false,        // a /chat round-trip is open; the send button says so with aria-disabled
 };
 
-const el = (id) => document.getElementById(id);
-
-const dom = {
-  child: el('parent-child'),
-  teacher: el('parent-teacher'),
-  thread: el('thread'),
-  threadEmpty: el('thread-empty'),
-  threadMessages: el('thread-messages'),
-  threadStatus: el('thread-status'),
-  askLog: el('ask-log'),
-  askEmpty: el('ask-empty'),
-  askMessages: el('ask-messages'),
-  askStatus: el('ask-status'),
-  askForm: el('ask-form'),
-  askInput: el('ask-input'),
-  askSend: el('ask-send'),
-};
+// Built in start() rather than at module scope so that tests/unit/api-swap-frontend.test.mjs can
+// import loadInbox() and askQuestion() in Node, where there is no document to look things up in.
+let dom = null;
 
 /* ================================================================================================
    4. Formatting
@@ -226,10 +278,14 @@ function note(message) {
 
 function renderThread() {
   dom.threadMessages.replaceChildren();
-  setText(dom.threadStatus, state.threadStatusKey ? t(state.threadStatusKey) : '');
+  setText(dom.threadStatus, state.threadStatusMessage || (state.threadStatusKey ? t(state.threadStatusKey) : ''));
 
+  // `/parent/inbox` answers with messages and nothing else, so a live page has no name to show
+  // here. A label with a blank beside it reads as a page that failed; the whole line goes instead.
   setText(dom.child, state.inbox?.child?.name ?? '');
   setText(dom.teacher, state.inbox?.teacher?.name ?? '');
+  dom.childLine.hidden = !state.inbox?.child?.name;
+  dom.teacherLine.hidden = !state.inbox?.teacher?.name;
 
   // The API returns newest first (requirement 7.1); a thread reads oldest first, so sort back.
   const messages = [...(state.inbox?.messages ?? [])].sort((a, b) => String(a.at).localeCompare(String(b.at)));
@@ -305,7 +361,8 @@ function renderAsk() {
   dom.askLog.scrollTop = dom.askLog.scrollHeight;
 }
 
-dom.askForm.addEventListener('submit', async (event) => {
+function wireAskForm() {
+  dom.askForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   // What `disabled` used to do, without taking the focus away to do it.
   if (state.asking) return;
@@ -333,13 +390,15 @@ dom.askForm.addEventListener('submit', async (event) => {
     // they had moved to while waiting (2.4.3, 3.2.5).
     renderAsk();
   }
-});
+  });
+}
 
 /* ================================================================================================
    7. Wiring
    ================================================================================================ */
 
 async function start() {
+  wireAskForm();
   onLang(() => { renderThread(); renderAsk(); });
   await init({ titleKey: 'parent.heading' });
 
@@ -354,4 +413,9 @@ async function start() {
   renderThread();
 }
 
-start();
+// type="module" defers, so the DOM is ready by now. The guard is for Node: the unit test imports
+// this file for `loadInbox`/`askQuestion` and must not boot a page that has no document. Without
+// it, `dom.askForm.addEventListener` ran at module scope and threw `Cannot read properties of null`
+// the moment api-swap-frontend.test.mjs tried to cover this page at all -- which is how a page
+// stays uncovered: the test that would have found the gap could not import the file.
+if (typeof document !== 'undefined') start();

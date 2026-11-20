@@ -111,7 +111,7 @@ Verdict key: **A** asserted · **PA** partly asserted · **EU** enforced but unt
 |---|---|---|---|
 | 6.1 | Draft only from stored records | A | `tests/unit/drafts.test.mjs:234` deep-equals the four source facts the draft was built from. Residual: the teacher's chat reply *about* the draft is model text, and `coreChecks` runs only two checks for a teacher role |
 | 6.2 | Draft stored, invisible in any parent inbox | A | `tests/unit/drafts.test.mjs:348` — asserted through the **real** `parentInbox` handler, not the writer. Mechanism not pinned: two redundant guards exist (`handlers.mjs:104` and `:112`) and removing either alone leaves the suite green |
-| 6.3 | Only explicit approval flips to approved and visible | PA | "Only when" strongly asserted — `approveParentUpdate` is absent from the offered tool list (`tests/unit/chat-loop.test.mjs:168`), so the model cannot approve. **But no teacher can either**: absent from `teacher.json` and no drafts view or approve control in `frontend/teacher/index.html` — see §3.3 |
+| 6.3 | Only explicit approval flips to approved and visible | **A** (was PA) | ✅ **Closed 2026-11-20, hours after this audit found it.** `/approveParentUpdate` is the sixth path in `teacher.json`, `toolsFor('teacher')` offers it, and `frontend/teacher/index.html` has a drafts view calling the routes that already existed. Guarded by a both-directions schema/dispatch comparison plus handler reachability in `tests/unit/drafts.test.mjs` — see §3.3 |
 | 6.4 | Contradiction flagged, stored value quoted and used | PA | Numeric contradictions asserted: `tests/unit/drafts.test.mjs:253`. Non-numeric contradictions ("say she was present" vs stored absent) are never flagged (`drafts.mjs:189` matches digits only), and the matcher **over-flags**: any number absent from the stored figures is reported, so "the 12th" yields a spurious mismatch. No test either way |
 | 6.5 | Shaming wording declined, respectful alternative | PA | The alternative is pinned: `tests/unit/drafts.test.mjs:286` — no shaming word reaches the draft. "Decline that wording" is not: the action returns no declined flag, and that half is model-only (`instructions.md:54`) |
 | 6.6 | Audit approval with teacher, timestamp, exact text | A | `tests/unit/drafts.test.mjs:464` — `entry.after.approvedText === draft.draftText`, plus ISO timestamp at `:461` and actor at `:457` |
@@ -242,7 +242,24 @@ name-drift bug — checks env-var names and IAM, never key attributes. I ran
 key attribute name appears in the `Item` that `writeAudit` puts. Four lines, and it generalises to
 all eight tables. One side has to move; the seed and the template comment both say `tsUlid`.
 
-### 3.3 — 6.3: the approval gate has no path a teacher can walk
+### 3.3 — 6.3: the approval gate has no path a teacher can walk — ✅ **CLOSED 2026-11-20**
+
+> **Fixed the same day this audit found it.** `/approveParentUpdate` is now the sixth path in
+> `backend/agent/schemas/teacher.json`, and `toolsFor('teacher')` offers it — verified by hand:
+> `addStudent, markAttendance, recordFee, addMarks, draftParentUpdate, approveParentUpdate`. Because
+> the schemas are the single source, it reached `toolspecs.mjs` **and** `harness-config.mjs`, and
+> `allowedTools` grew on its own. `frontend/teacher/index.html` gained a drafts section calling the
+> `/teacher/drafts` routes that already existed; no backend route was added. 802 tests pass, and
+> **22 mutations were run against the fix — all 22 red**, including deleting the schema path
+> again, which now fails in three separate test files.
+>
+> The guard the smallest-test note below asked for exists, in a stronger form than suggested:
+> `tests/unit/drafts.test.mjs` compares `toolNamesFor('teacher')` — the real derivation that
+> feeds the model — against the handler's dispatch tables **in both directions**, and then sends
+> every offered name through `handler` to prove it is reachable rather than merely declared.
+>
+> **The paragraph below is kept as written, because it is the record of what was true when the audit
+> ran.** Do not read it as current.
 
 **Cost: product.md rule 4 — the approval gate between a draft and a parent — cannot be exercised at
 all.** `approveParentUpdate` is absent from `backend/agent/schemas/teacher.json` (0 occurrences), so

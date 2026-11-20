@@ -124,6 +124,28 @@
     <p class="mic-status" id="mic-status" role="status"></p>
   </section>
 
+  <!-- ---------- parent updates awaiting approval (requirements 6.2, 6.3) ----------
+       The approval gate, as a screen, and the only place in Panthiya where a teacher can send
+       anything to a parent. Nothing listed here has been sent: each row is `status: 'draft'` in
+       DynamoDB and appears in no parent's inbox, and the one button in this section is the only
+       transition out of that state.
+
+       There is no field anywhere in here, on purpose. `POST /teacher/drafts/{id}/approve` takes
+       the draft id and nothing else, so there is no way for wording to enter on this path: a
+       draft's whole guarantee is that every sentence in it came from a stored row (requirement
+       6.1), and an approval that could carry its own text would be a hole straight through that.
+       A teacher who wants different words asks Panthiya for a new draft.
+
+       Scoping belongs to the server, as it does for the audit log below: `GET /teacher/drafts`
+       reads only the partitions of the classes this teacher owns, resolved from the verified
+       token's own `sub`. This page therefore does not filter and does not re-sort. -->
+  <section class="block" aria-labelledby="drafts-heading">
+    <h3 class="block__heading" id="drafts-heading" data-i18n="drafts.heading"></h3>
+    <p class="audit-intro" data-i18n="drafts.intro"></p>
+    <p class="audit-status" id="drafts-status" role="status"></p>
+    <ul class="audit-list" id="drafts-list" aria-labelledby="drafts-heading"></ul>
+  </section>
+
   <!-- ---------- fee ledger ---------- -->
   <section class="block" aria-labelledby="ledger-heading">
     <h3 class="block__heading" id="ledger-heading" data-i18n="ledger.heading"></h3>

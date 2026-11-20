@@ -10,13 +10,19 @@
 //
 //   the microphone is reachable by keyboard, its recording state is not carried by colour alone,
 //   and a failed transcription shows the server's own words, is never retried, and is never drawn
-//   as a message that was sent (requirement 12.4, 3.6).
+//   as a message that was sent (requirement 12.4, 3.6);
+//
+//   the drafts view is the approval gate on a screen — nothing in it has been sent, the only
+//   control in it is the approve button, and no field anywhere in it could supply replacement
+//   wording for a draft (requirement 6.1-6.4).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { auditLines, tombstone, micView, transcriptFailure } from '../../frontend/assets/teacher.js';
+import {
+  auditLines, tombstone, micView, transcriptFailure, loadDrafts, approveDraft,
+} from '../../frontend/assets/teacher.js';
 
 const ROOT = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
@@ -33,6 +39,14 @@ const auditSection = (() => {
   const start = HTML.indexOf('id="audit-heading"');
   const end = HTML.indexOf('</section>', start);
   assert.ok(start > 0 && end > start, 'the audit section was not found in teacher/index.html');
+  return HTML.slice(HTML.lastIndexOf('<section', start), end);
+})();
+
+/** The drafts section of the markup, on its own. Same extraction as the audit one above. */
+const draftsSection = (() => {
+  const start = HTML.indexOf('id="drafts-heading"');
+  const end = HTML.indexOf('</section>', start);
+  assert.ok(start > 0 && end > start, 'the drafts section was not found in teacher/index.html');
   return HTML.slice(HTML.lastIndexOf('<section', start), end);
 })();
 
@@ -281,6 +295,184 @@ test('req 3.5 — a finished transcript goes to the chat exactly as it arrived',
     'teacher.js edits the transcript; voice.mjs already trimmed it and nothing else may touch it');
 });
 
+/* --- requirement 6: the approval gate, as a screen -------------------------------------------- */
+
+test('req 6.3 — a teacher can reach the approval gate at all: the view and its one control exist', () => {
+  // The defect this is here for, found 2026-11-20: `approveParentUpdate` was implemented in full,
+  // tested in full and reachable by NOBODY — absent from `teacher.json` so the model was never
+  // offered it, and absent from this page so no teacher could press anything. 790 tests were green
+  // and no parent update could ever send. A gate nothing can open is not a gate, it is a dead end.
+  assert.ok(draftsSection.includes('id="drafts-list"'), 'the drafts section renders no list');
+  assert.ok(draftsSection.includes('id="drafts-status"'), 'the drafts section has no status line');
+  assert.ok(/id="drafts-status"[^>]*role="status"/.test(draftsSection),
+    'the drafts status line is not announced, so an approval happens silently for a screen reader');
+
+  // The list is populated and the button built by the script, so the control is checked there.
+  assert.match(JS, /button\.dataset\.draftId = /, 'teacher.js builds no approve button');
+  assert.match(JS, /approveDraft\(draftId\)/, 'nothing on this page calls the approval endpoint');
+  assert.match(JS, /api\(`\/teacher\/drafts\/\$\{encodeURIComponent\(draftId\)\}\/approve`, \{ method: 'POST' \}\)/,
+    'the approve call is no longer the one POST route template.yaml serves for it');
+  assert.match(JS, /api\('\/teacher\/drafts'\)/, 'the pending drafts are no longer read with a plain GET');
+});
+
+test('req 6.1 — nothing in the drafts section could supply wording of its own', () => {
+  // `approveParentUpdate` accepts a draft id and nothing else on purpose: a draft's whole
+  // guarantee is that every sentence in it came from a stored row, and an approval that could
+  // carry its own text would be a hole straight through requirement 6.1. A field on this screen
+  // would be the first half of building that hole.
+  for (const tag of ['<form', '<input', '<select', '<textarea', 'contenteditable']) {
+    assert.ok(!draftsSection.includes(tag),
+      `the drafts section contains ${tag}; an approval must not be able to carry replacement text`);
+  }
+
+  // One argument, so there is nowhere for a second one to arrive — and no request body at all.
+  assert.equal(approveDraft.length, 1, 'approveDraft() takes a second argument; wording could enter there');
+  const call = JS.slice(JS.indexOf('export async function approveDraft'), JS.indexOf('/** GET /teacher/audit'));
+  assert.ok(!/body:/.test(call), 'the approve call sends a request body; the id is the whole request');
+});
+
+test('req 6.2 — the page says in words that nothing here has been sent, in all three languages', () => {
+  assert.ok(draftsSection.includes('data-i18n="drafts.intro"'), 'the drafts section does not render drafts.intro');
+
+  for (const lang of LANGS) {
+    const value = packs[lang]['drafts.intro'];
+    assert.equal(typeof value, 'string', `drafts.intro missing from ${lang}.json`);
+    assert.ok(value.length > 40, `${lang}.drafts.intro is too short to state the whole promise`);
+  }
+  // The English wording is the one this test can read, and it has to make all three claims.
+  const en = packs.en['drafts.intro'].toLowerCase();
+  assert.ok(en.includes('has been sent'), 'drafts.intro does not say nothing has been sent yet');
+  assert.ok(en.includes('only after you approve'), 'drafts.intro does not say approval is what sends it');
+  assert.ok(en.includes('cannot be changed'), 'drafts.intro does not say the wording cannot be edited here');
+});
+
+test('req 6.2 — the drafts mock answers in the shape GET /teacher/drafts really returns', async () => {
+  // Nothing is deployed, so the mock is what the renderer is exercised against: a mock in the
+  // wrong shape means the drafts view is tested against a fixture and broken against the server.
+  // These are `read/handlers.mjs#teacherDrafts`'s own field names.
+  const { drafts } = await loadDrafts();
+  assert.ok(drafts.length >= 2, 'one draft does not show a list');
+
+  for (const draft of drafts) {
+    for (const field of ['draftId', 'studentId', 'classId', 'createdAt', 'body', 'sourceFacts']) {
+      assert.ok(field in draft, `a mock draft has no ${field}`);
+    }
+    // Requirement 6.1: a draft with no stored rows behind it is the one thing this screen must
+    // never show, because the "built only from your records" line would then be a claim about
+    // nothing.
+    assert.ok(Array.isArray(draft.sourceFacts) && draft.sourceFacts.length > 0,
+      `draft ${draft.draftId} has no stored rows behind it`);
+    for (const fact of draft.sourceFacts) {
+      assert.deepEqual(Object.keys(fact).sort(), ['key', 'table', 'value'], 'a source fact is not {table, key, value}');
+    }
+  }
+
+  assert.ok(drafts.some((d) => d.mismatch), 'no draft in the mock carries a mismatch, so requirement 6.4\'s renderer is first exercised on demo day');
+  const mismatch = drafts.find((d) => d.mismatch).mismatch;
+  assert.equal(typeof mismatch.claimed, 'number', 'the mismatch claim is not the parsed number drafts.mjs returns');
+  assert.ok(mismatch.stored, 'the mismatch names no stored value to prefer');
+});
+
+test('req 6.4 — the stated figure and the stored one are both shown, and told apart', () => {
+  // "Say she got 90" against a stored 72 (drafts.mjs#findMismatch). The teacher sees both BEFORE
+  // they approve, with which is which still legible — reversed, it tells them the record is wrong.
+  assert.match(JS, /t\('drafts\.mismatch', \{/, 'the drafts view does not render a mismatch at all');
+  for (const lang of LANGS) {
+    const value = packs[lang]['drafts.mismatch'];
+    assert.equal(typeof value, 'string', `drafts.mismatch missing from ${lang}.json`);
+    assert.ok(value.includes('{claimed}'), `${lang}.drafts.mismatch does not say what was stated`);
+    assert.ok(value.includes('{stored}'), `${lang}.drafts.mismatch does not say what is stored`);
+  }
+  assert.ok(packs.en['drafts.mismatch'].toLowerCase().includes('uses the stored'),
+    'drafts.mismatch does not say which of the two the draft used');
+});
+
+test('req 6.3 — approving one draft sends one request, and an empty id sends none', async () => {
+  // The mock path, which is the only path a unit test can take: what is asserted is that it
+  // answers an approval without going near the network, and that an id it was not given is
+  // refused before anything is sent rather than becoming a request to `/teacher/drafts//approve`.
+  const real = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = (...args) => {
+    sent.push(args);
+    throw new Error('a unit test made a network call');
+  };
+
+  try {
+    const out = await approveDraft('msg-0101');
+    assert.equal(out.status, 'approved');
+    assert.equal(out.draftId, 'msg-0101', 'the approval is reported against a different draft than the one pressed');
+    assert.deepEqual(sent, [], 'the mock approval reached the network');
+
+    for (const bad of ['', '   ', null, undefined, 42, {}]) {
+      await assert.rejects(() => approveDraft(bad), `approveDraft(${JSON.stringify(bad)}) was not refused`);
+    }
+    assert.deepEqual(sent, [], 'an approval with no draft id was sent anyway');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('req 6.3 — a failed approval is said once, never retried, and the draft stays put', () => {
+  // The same rule as a failed voice note (requirement 3.6) on the one surface where the stake is a
+  // parent reading something: a teacher who is told nothing was sent and can still see the draft
+  // waiting knows where they stand. A silent second attempt tells them nothing.
+  const approve = JS.slice(JS.indexOf('async function approveParentDraft'), JS.indexOf('7. Audit log'));
+  assert.ok(approve.length > 100, 'approveParentDraft() is no longer where this test looks');
+
+  assert.ok(!/for \(|while \(|retry|setTimeout/.test(approve), 'the approval path loops or retries');
+  assert.equal((approve.match(/approveDraft\(/g) ?? []).length, 1, 'the approval endpoint is called more than once');
+  assert.match(approve, /state\.draftsStatusKey = 'drafts\.approve_error'/, 'a failed approval says nothing');
+  // The draft only leaves the list after the await returned, so a failure leaves it on screen.
+  assert.ok(approve.indexOf('await approveDraft') < approve.indexOf('state.drafts = '),
+    'the draft is dropped from the list before the approval has come back');
+  assert.ok(approve.indexOf('state.drafts = ') < approve.indexOf('} catch'),
+    'the draft is dropped from the list on the failure path too');
+
+  const en = packs.en['drafts.approve_error'].toLowerCase();
+  assert.ok(en.includes('nothing was sent'), 'drafts.approve_error does not say nothing was sent');
+  for (const lang of LANGS) {
+    assert.equal(typeof packs[lang]['drafts.approve_error'], 'string', `drafts.approve_error missing from ${lang}.json`);
+  }
+});
+
+test('req 12.4 — the approve button keeps focus while it works, and a second press does nothing', () => {
+  // Same rule as the mic and the send button: `disabled` on the control the teacher has just
+  // pressed hands focus to <body> for the whole round-trip. And the guard has to be real, because
+  // aria-disabled does not stop a click: two presses on one draft would be two approvals.
+  assert.ok(!/button\.disabled\s*=/.test(JS), 'teacher.js disables the approve button');
+  assert.match(JS, /button\.setAttribute\('aria-disabled'/, 'the approve button never says it is busy');
+  assert.match(JS, /if \(state\.approving\) return;/, 'a second press while an approval is open is not ignored');
+  assert.match(JS, /if \(state\.approving \|\| !draftId\) return;/,
+    'approveParentDraft() has no guard of its own, so the rule lives only in the click handler');
+});
+
+test('2.5.3 — the approve button\'s accessible name starts with the words on it, in all three languages', () => {
+  // Eight identical "Approve and send" buttons are told apart by the student the draft is about.
+  // The name has to CONTAIN the visible words, or a voice-control user saying what the button says
+  // matches nothing — so the two keys are a pair, exactly as redteam.reply.show/show_case are.
+  assert.match(JS, /setAttribute\('aria-label', t\('drafts\.approve_case'/, 'the approve button has no accessible name');
+  assert.match(JS, /setText\(button, t\('drafts\.approve'\)\)/, 'the approve button carries no visible words');
+
+  for (const lang of LANGS) {
+    const label = packs[lang]['drafts.approve'];
+    const name = packs[lang]['drafts.approve_case'];
+    assert.ok(label && name, `${lang}.json is missing drafts.approve or drafts.approve_case`);
+    assert.ok(name.startsWith(label),
+      `${lang}: drafts.approve_case ("${name}") does not start with the visible label ("${label}")`);
+    assert.ok(name.includes('{id}'), `${lang}: drafts.approve_case carries no {id} to tell two buttons apart`);
+  }
+});
+
+test('req 6.2 — the drafts list is rendered in the server\'s order, unsorted and unfiltered', () => {
+  // `GET /teacher/drafts` reads only the partitions of this teacher's own classes and returns them
+  // newest-first. A sort or a filter here would be a weaker second copy of the rule that actually
+  // scopes this list — and a page that filtered would imply it was the one doing the scoping.
+  const render = JS.slice(JS.indexOf('function renderDrafts'), JS.indexOf('function renderDrafts') + 600);
+  assert.ok(!/\.sort\(|\.filter\(|\.reverse\(/.test(render), 'renderDrafts() re-orders or filters the drafts');
+  assert.ok(packs.en['drafts.intro'].length > 40, 'sanity: drafts.intro is the sentence checked above');
+});
+
 /* --- the mock, and the one swap point it hides behind ----------------------------------------- */
 
 test('the real call is the implementation and the mock is the fallback, chosen by one value', () => {
@@ -292,7 +484,7 @@ test('the real call is the implementation and the mock is the fallback, chosen b
   assert.equal((JS.match(/SWAP POINT/g) ?? []).length, 1, 'teacher.js has no single SWAP POINT marker');
   assert.ok(JS.indexOf('const MOCK') > JS.indexOf('SWAP POINT'), 'MOCK is not under the SWAP POINT');
 
-  for (const fn of ['loadAudit', 'voiceUploadUrl', 'putAudio', 'voiceTranscript']) {
+  for (const fn of ['loadAudit', 'loadDrafts', 'approveDraft', 'voiceUploadUrl', 'putAudio', 'voiceTranscript']) {
     assert.ok(JS.includes(`function ${fn}`), `${fn}() is missing from the data surface`);
   }
 
@@ -304,7 +496,7 @@ test('the real call is the implementation and the mock is the fallback, chosen b
   // Every mock answer sits behind that value, so a configured page cannot serve one — with the one
   // exception the ledger note explains, which has no endpoint to call and says so.
   const mockBranches = (code.match(/if \(MOCKING\)/g) ?? []).length;
-  assert.equal(mockBranches, 5, 'a mock answer is reachable with CONFIG real, or a real call is unreachable');
+  assert.equal(mockBranches, 7, 'a mock answer is reachable with CONFIG real, or a real call is unreachable');
   assert.match(code, /export async function loadLedger\(\) \{\s*await sleep/,
     'loadLedger() is the documented exception: if it is real now, this test and its note are stale');
 

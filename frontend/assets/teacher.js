@@ -31,9 +31,9 @@ import {
    1. Data access — the only part of this screen that knows where data comes from.
    ================================================================================================ */
 
-// ponytail: SWAP POINT — taken. The six functions below are this screen's entire data surface, and
-// five of them are the real call (design.md §5); MOCK is the fallback they use while the stack is
-// down. `MOCKING` is `configured()` from auth.js — the same "are the four deploy outputs pasted in"
+// ponytail: SWAP POINT — taken. The eight functions below are this screen's entire data surface,
+// and seven of them are the real call (design.md §5); MOCK is the fallback they use while the
+// stack is down. `MOCKING` is `configured()` from auth.js — the same "are the four deploy outputs pasted in"
 // check the sign-in panel already uses — so nothing here is edited on deploy evening: paste the
 // four stack outputs into `CONFIG` in assets/auth.js and this screen is live.
 //
@@ -41,6 +41,12 @@ import {
 //   loadLedger()          → **still the mock, and not a swap point**: the API serves no ledger
 //                           read. See its own note below; this is the one thing on this screen
 //                           that `CONFIG` cannot make live.
+//   loadDrafts()          → GET /teacher/drafts → {drafts[]}, newest-first and this teacher's own
+//                           classes only. Nothing in here is visible to any parent yet.
+//   approveDraft(id)      → POST /teacher/drafts/{id}/approve → the approval. The id is the WHOLE
+//                           request: there is no field here that could supply replacement wording,
+//                           because a draft's guarantee is that every sentence came from a stored
+//                           row (requirement 6.1). One press, one draft, never a retry.
 //   loadAudit()           → GET /teacher/audit → {entries[]}, already newest-first and already
 //                           scoped to this teacher's own classes. Rendered as given: a sort or a
 //                           filter here would be a second, weaker copy of a rule the server holds
@@ -77,6 +83,41 @@ const MOCK = {
       { id: 'stu-10', name: 'Nethmi Senanayake',      status: 'paid', outstanding: 0 },
       { id: 'stu-11', name: 'Mathavan Selvarajah',    status: 'paid', outstanding: 0 },
       { id: 'stu-12', name: 'Keerthana Thevarajah',   status: 'due',  outstanding: 2500 },
+    ],
+  },
+  // Two drafts in the shape `GET /teacher/drafts` returns them — the real field names, and the
+  // same fictional students as the ledger above. Neither has been sent anywhere: a draft is
+  // `status: 'draft'` in DynamoDB and reaches no parent's inbox until it is approved (req 6.2).
+  //
+  // The second one carries a `mismatch`, which is the one thing on this screen worth having in the
+  // demo: the teacher said 90, the stored mark is 72, and the draft was built from the stored row
+  // (requirement 6.4). A mock without one would leave that renderer untested until demo day.
+  drafts: {
+    drafts: [
+      {
+        draftId: 'msg-0101',
+        studentId: 'stu-03',
+        classId: 'cls-ol-maths-thu',
+        createdAt: '2026-11-19T14:30:11.204Z',
+        body: 'November fees: 2,500 LKR is still outstanding. Attendance in November: present on 3 of 4 class days.',
+        sourceFacts: [
+          { table: 'fees', key: 'stu-03#2026-11', value: '0/2500 LKR' },
+          { table: 'attendance', key: 'stu-03#2026-11-12', value: 'absent' },
+        ],
+        mismatch: null,
+      },
+      {
+        draftId: 'msg-0102',
+        studentId: 'stu-02',
+        classId: 'cls-ol-maths-thu',
+        createdAt: '2026-11-19T14:22:48.907Z',
+        body: 'November test: 72 out of 100. November fees: paid in full.',
+        sourceFacts: [
+          { table: 'marks', key: 'stu-02#2026-11-14-november-test', value: '72/100' },
+          { table: 'fees', key: 'stu-02#2026-11', value: '2500/2500 LKR' },
+        ],
+        mismatch: { claimed: 90, stored: 'November test on 2026-11-14: 72 out of 100' },
+      },
     ],
   },
   // Five audit entries in the shape `GET /teacher/audit` returns them — the real field names, the
@@ -207,6 +248,33 @@ export async function loadLedger() {
   return structuredClone(MOCK.ledger);
 }
 
+/** GET /teacher/drafts → {drafts[]}, newest first and this teacher's classes only (req 6.2). */
+export async function loadDrafts() {
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return structuredClone(MOCK.drafts);
+  }
+  return api('/teacher/drafts');
+}
+
+/**
+ * POST /teacher/drafts/{id}/approve → the approval (requirement 6.3).
+ *
+ * The id is the whole request. There is deliberately no second argument: `approveParentUpdate`
+ * accepts no replacement text, so there is nothing here that could put a sentence in front of a
+ * parent that did not come from a stored row. The id is server-supplied — it came back from
+ * `loadDrafts()` — and is still encoded, because it is being spliced into a URL path.
+ */
+export async function approveDraft(draftId) {
+  if (typeof draftId !== 'string' || draftId.trim() === '') throw new Error('empty draftId');
+
+  if (MOCKING) {
+    await sleep(MOCK.latencyMs);
+    return { ok: true, action: 'approveParentUpdate', draftId, status: 'approved' };
+  }
+  return api(`/teacher/drafts/${encodeURIComponent(draftId)}/approve`, { method: 'POST' });
+}
+
 /** GET /teacher/audit → {entries[]}, newest first and this teacher's classes only. */
 export async function loadAudit() {
   if (MOCKING) {
@@ -287,6 +355,9 @@ const state = {
   chatStatusMessage: '',
   sending: false,      // a /chat round-trip is open; the send button says so with aria-disabled
   ledgerStatusKey: '',
+  drafts: null,        // [draft, …] awaiting this teacher's approval, in the server's order
+  draftsStatusKey: '', // pack key only: every failure on this surface is one of our sentences
+  approving: '',       // the draftId of an approval in flight, or '' — one at a time, never two
   auditStatusKey: '',
   auditStatusMessage: '',
   // `message` is a server string shown unedited; `messageKey` is one of ours. Never both.
@@ -495,6 +566,140 @@ function renderLedger() {
   setText(dom.total, money(outstanding));
 
   for (const student of data.students) dom.list.append(ledgerRow(student));
+}
+
+/* ================================================================================================
+   6a. Parent updates awaiting approval (requirements 6.2, 6.3) — the approval gate, as a screen
+
+   Numbered 6a rather than renumbering what follows: the section banners below are what several
+   tests slice this file on, and moving them to add a section is churn with a trap in it.
+
+   Two rules here, and both are requirement 6 rather than decoration:
+
+     Nothing in this list has been sent. It is `status: 'draft'` in DynamoDB, it is in no parent's
+     inbox, and the only transition out of it is the one button below (`approveDraft`). So the
+     section says so in words, not only by being named "awaiting approval".
+
+     The wording cannot be edited here, and there is no field anywhere in this section that could
+     carry a replacement. A draft's whole guarantee is that every sentence in it came from a stored
+     row (requirement 6.1), and an approval that could carry its own text would be a hole straight
+     through it. A teacher who wants different words asks Panthiya for a new draft.
+   ================================================================================================ */
+
+// ponytail: the audit log's card classes are reused as-is for these cards — `.audit-entry` is a
+// white card in a `.audit-list` grid, `.audit-value*` is a labelled evidence box, and both are
+// exactly what a draft needs. A second set of identical rules under `.draft-*` names would be
+// twelve lines of CSS for no pixel. Upgrade path: if the two ever need to look different, the
+// class names here are the only thing to change.
+
+/** One draft, with what it was built from and the single control that can send it. */
+function draftCard(draft) {
+  const card = document.createElement('li');
+  card.className = 'audit-entry';
+
+  card.append(para('audit-entry__action', t('drafts.student', { id: String(draft.studentId ?? '') })));
+
+  // As stored, UTC and all — the same rule as the audit log's own stamp, and the same string.
+  const when = document.createElement('time');
+  when.className = 'audit-entry__when';
+  when.setAttribute('datetime', String(draft.createdAt ?? ''));
+  setText(when, t('audit.when', { ts: String(draft.createdAt ?? '') }));
+  card.append(when);
+
+  // The draft itself: the server's own sentences, through textContent, unedited (requirement 12.7).
+  card.append(para('audit-value__item', String(draft.body ?? '')));
+
+  // Requirement 6.1 on screen: the stored rows this text was assembled from, so a teacher can see
+  // that it invented nothing before they put their name to it.
+  const facts = Array.isArray(draft.sourceFacts) ? draft.sourceFacts : [];
+  if (facts.length) {
+    const box = document.createElement('div');
+    box.className = 'audit-value';
+    box.append(para('audit-value__label', t('drafts.based_on')));
+
+    const list = document.createElement('ul');
+    list.className = 'audit-value__list';
+    for (const fact of facts) {
+      const item = document.createElement('li');
+      item.className = 'audit-value__item';
+      setText(item, t('drafts.fact', {
+        table: String(fact?.table ?? ''),
+        key: String(fact?.key ?? ''),
+        value: String(fact?.value ?? ''),
+      }));
+      list.append(item);
+    }
+    box.append(list);
+    card.append(box);
+  }
+
+  // Requirement 6.4: the teacher stated a figure no stored row supports. The draft used the stored
+  // value, and the teacher is told both before they approve — never after.
+  if (draft.mismatch) {
+    card.append(para('audit-entry__tombstone', t('drafts.mismatch', {
+      claimed: String(draft.mismatch.claimed ?? ''),
+      stored: String(draft.mismatch.stored ?? ''),
+    })));
+  }
+
+  // One button, one draft. The id goes on the element rather than into a closure so the list can
+  // carry a single click listener (see `start()`), and the accessible name names the student, so
+  // eight "Approve and send" buttons are told apart by a screen reader and by voice control. The
+  // visible words are the start of that name (2.5.3), which is why the two keys are a pair.
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'composer__send';
+  button.dataset.draftId = String(draft.draftId ?? '');
+  button.setAttribute('aria-label', t('drafts.approve_case', { id: String(draft.studentId ?? '') }));
+  // `aria-disabled`, never `disabled`: disabling the button the teacher has just pressed drops
+  // focus to <body> for the whole round-trip. The click handler ignores the press instead.
+  button.setAttribute('aria-disabled', String(Boolean(state.approving)));
+  setText(button, t('drafts.approve'));
+  card.append(button);
+
+  return card;
+}
+
+function renderDrafts() {
+  setText(dom.draftsStatus, state.draftsStatusKey ? t(state.draftsStatusKey) : '');
+  dom.draftsList.replaceChildren();
+
+  // In the order the server gave them, which is newest-first. No sort and no filter here: `GET
+  // /teacher/drafts` reads only the partitions of this teacher's own classes, so a filter here
+  // would be a weaker second copy of the rule that actually scopes this list.
+  for (const draft of state.drafts ?? []) dom.draftsList.append(draftCard(draft));
+}
+
+/**
+ * Approve one draft. The only write this screen makes, and the only way anything reaches a parent.
+ *
+ * Never retried: `approveParentUpdate` is idempotent server-side, but a failure here is reported
+ * once and plainly, exactly as a failed voice note is — a teacher who is told nothing was sent and
+ * can see the draft still waiting knows where they stand, and a silent second attempt does not
+ * tell them anything. The sentence is always one of ours: a failure on this path answers with a
+ * code (`denied`/`bad_request`) and no prose, so there is no server sentence to prefer.
+ */
+async function approveParentDraft(draftId) {
+  if (state.approving || !draftId) return;
+
+  state.approving = draftId;
+  state.draftsStatusKey = 'drafts.approving';
+  renderDrafts();
+
+  try {
+    await approveDraft(draftId);
+    // Through the gate, so it is no longer awaiting approval: `GET /teacher/drafts` would not
+    // return it again either. Dropped from the list rather than re-fetched — one approval is one
+    // request, and a reload would be a second one for a row we already know the fate of.
+    state.drafts = (state.drafts ?? []).filter((d) => d.draftId !== draftId);
+    state.draftsStatusKey = 'drafts.approved';
+  } catch (err) {
+    console.error(err);
+    state.draftsStatusKey = 'drafts.approve_error';
+  } finally {
+    state.approving = '';
+    renderDrafts();
+  }
 }
 
 /* ================================================================================================
@@ -858,6 +1063,8 @@ async function start() {
     total: el('ledger-total'),
     list: el('ledger-list'),
     ledgerStatus: el('ledger-status'),
+    draftsList: el('drafts-list'),
+    draftsStatus: el('drafts-status'),
     auditList: el('audit-list'),
     auditStatus: el('audit-status'),
   };
@@ -885,12 +1092,25 @@ async function start() {
     else void startRecording();
   });
 
-  onLang(() => { renderChat(); renderLedger(); renderAudit(); renderMic(); });
+  // One listener on the list rather than one per card: the cards are rebuilt on every language
+  // switch and after every approval, and a listener per button would be re-attached each time.
+  dom.draftsList.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-draft-id]');
+    if (!button) return;
+    // What `disabled` used to do, without taking the focus away to do it: the button is already
+    // `aria-disabled` while an approval is open, and this is the half a browser does not do for us.
+    if (state.approving) return;
+    void approveParentDraft(button.dataset.draftId);
+  });
+
+  onLang(() => { renderChat(); renderLedger(); renderDrafts(); renderAudit(); renderMic(); });
   await init({ titleKey: 'teacher.heading' });
 
   state.ledgerStatusKey = 'ledger.loading';
+  state.draftsStatusKey = 'drafts.loading';
   state.auditStatusKey = 'audit.loading';
   renderLedger();
+  renderDrafts();
   renderAudit();
 
   // The sign-in is still finishing when this page loads: arriving from the hosted UI means a
@@ -909,6 +1129,16 @@ async function start() {
     state.ledgerStatusKey = 'ledger.error';
   }
   renderLedger();
+
+  try {
+    const { drafts } = await loadDrafts();
+    state.drafts = drafts;
+    state.draftsStatusKey = drafts.length ? '' : 'drafts.empty';
+  } catch (err) {
+    console.error(err);
+    state.draftsStatusKey = 'drafts.error';
+  }
+  renderDrafts();
 
   try {
     const { entries } = await loadAudit();
