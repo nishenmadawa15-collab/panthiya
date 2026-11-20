@@ -250,6 +250,32 @@ sentence. **verdict** is `නිර්ණය` / `தீர்ப்பு` as ev
 
 ---
 
+## Priority 1b — two notes rewritten in English on 2026-11-20, si and ta awaiting retranslation
+
+These two had **correct** Sinhala and Tamil until today. The English changed because both were
+about to become **false**: each said that nothing is deployed and nothing is saved, and after the
+four values are pasted into `CONFIG` a typed message really reaches Panthiya and a recorded fee
+really lands in DynamoDB. A false sentence in Sinhala on the screen a judge watches is worse than a
+true one in English, so the old translations were replaced with the English behind the usual
+`TODO(nishen)` prefix rather than left to go stale.
+
+The replacements are written to be true **before and after** the deploy, because the string is
+committed once and the page is pre-paste today and post-paste tomorrow.
+
+- **`teacher.note` — EN:** Demo data only. Every student, fee and mark on this screen is fictional, and the fee ledger below is a stand-in.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+- **`student.note` — EN:** Demo only — a practice account rather than a real class.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+
+**What must survive:** that the data is fictional, and — for the teacher note — that the **fee
+ledger specifically** is still a stand-in, because that is the one part of that screen which stays
+demo data after the deploy (there is no ledger route in the API). Neither note may claim the system
+is not running; neither may claim it is.
+
+---
+
 ## Priority 2 — terminology check
 
 These four words were chosen once and reused across the red-team and audit screens. Check each
@@ -1024,6 +1050,7 @@ where to pick up.
 - [ ] **Priority 1** — safety-critical strings (14 keys)
 - [ ] **`redteam.reason.content_filtered`** — a translation, not a review: si and ta are still English
 - [ ] **`redteam.reason.chat_crashed`** — same: a translation, added 2026-11-20
+- [ ] **Priority 1b** — `teacher.note` and `student.note`, rewritten in English on 2026-11-20
 - [ ] **Priority 2** — terminology (4 words)
 - [ ] `meta.*` (3)
 - [ ] `skip.*` (1)

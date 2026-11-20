@@ -40,6 +40,40 @@ only reason the AgentCore analysis is citable; `customHttp.yml`'s CSP note neede
 was never answered** (`winget` returned 1602); and a held reply was drawing an **empty bubble** on
 the teacher's screen, which `chat.blocked` now fills.
 
+### 🔒 One IAM permission that must never be granted — read this before writing the role
+
+The chat Lambda needs **`bedrock-agentcore:InvokeHarness`**. AWS's own documentation says, of the
+two neighbours it sits beside:
+
+> *“To prevent direct command execution, do not grant `bedrock-agentcore:InvokeAgentRuntimeCommand`
+> in your IAM policies.”*
+
+`InvokeAgentRuntimeCommand` and `InvokeAgentRuntimeCommandShell` **execute commands without passing
+through the model at all** — so they route around `allowedTools`, which is the guard that stops this
+agent being handed a shell and filesystem write. They would be granted by someone pattern-matching
+a prefix in a hurry, on the one evening when everything is being written in a hurry. It is recorded
+here, in `docs/BUILD-LOG.md`, and in `backend/agentcore/execution-role-policy.json` itself.
+
+### What the deploy evening inherits from today
+
+| | |
+|---|---|
+| **A8 is a paste** | Four stack outputs into `CONFIG` in `frontend/assets/auth.js` — `HostedUiDomain`, `UserPoolClientId`, `UserPoolId`, `ApiEndpoint` — then sign in on each page. There are no call sites left to edit. Proven by pasting real-shaped values, running the suite green, and restoring the placeholders |
+| **The CSP needs three origins, not two** | API, Cognito domain, **and the voice bucket** (`VoiceBucketName`), because the microphone PUTs to a presigned S3 URL. Missing it looks like `mic.error` plus a console violation and nothing pointing at `customHttp.yml` |
+| **The seed writes 105 items** | Not the 99 three documents claimed until today. If it says **PARTLY written**, re-run it — that is now safe, because the audit rows are keyed by a fixed timestamp and a second run overwrites rather than doubles |
+| **Two new SWAP POINTs, and one retired** | **New:** the handoff loop fails closed on an unrecognised stop reason, so if the harness spells its finish reason as anything but `end_turn`/`stop_sequence`, **every turn fails loudly on the first live invoke** — that is deliberate, and it is the first thing to check. **New:** `InvokeHarness`'s latency against API Gateway's 29-second ceiling, with up to five round trips at `MAX_TOOL_TURNS=4`; the code already anticipates dropping to 2. **Retired:** the guardrail-vs-model coupling, since we stay on Nova through `Converse` |
+| **Six properties in the create body are marked UNVERIFIED** | `backend/agentcore/README.md` §4 names each one and how to settle it. The two that matter are the create-time `memory: {"disabled": {}}` wrapper and the `InvokeHarness` wire field names. **Read them by eye before running the file** — the guards check the module, and a human runs the JSON |
+| **`allowedTools` is harness-wide, `tools` is per invocation** | So `allowedTools` must be the **union** of all three roles' names. Safe — per-invocation `tools` decides what exists — but it is not what the plan's §3.1 first implied, and whether `allowedTools` is *also* overridable per invocation is unverifiable offline. If it is, tightening it per role is a free extra fence |
+| **Changes needed in files no lane owned** | `docs/AGENTCORE-PLAN.md` §10 has the full list: `invokeViaHarness` beside the two existing orchestrators in `chat/index.mjs` with the stream reader, exporting `TOOL_FAILED`/`toolUnavailable` from `orchestrate.mjs` (a duplicate with a drift test stands in meanwhile), moving `bedrock:InvokeModel`/`ApplyGuardrail` to the harness execution role, and `HarnessId`/`HarnessArn` parameters |
+
+**One thing being watched rather than chased.** `redteam-cli.test.mjs`'s *“a fault on one case does not
+discard the cases already paid for”* failed on two of eight full-suite runs during the session, while
+two lanes were writing the file it spawns. After the lanes stopped it was green on **six isolated runs
+and four full-suite runs**, so the evidence says a read of a half-written file rather than a defect.
+It spawns a subprocess, which makes it the most plausible candidate in the suite for a real flake —
+if it fails once more, it is real, and a test that flakes one time in four is exactly what gets
+explained away at one in the morning.
+
 **Do not restart any of today's four lanes**, or the seven from the 19th, or the six from the 18th.
 
 ---
