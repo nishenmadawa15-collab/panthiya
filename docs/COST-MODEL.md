@@ -25,7 +25,7 @@ docs named are both false for this template:
 | Candidate | What the template actually has |
 |---|---|
 | **The Cognito hosted-UI domain** "bills hourly whether or not anyone signs in" | `AWS::Cognito::UserPoolDomain` is a prefix domain. **No AWS document prices a user pool domain at all** — not the prefix one, not a custom one. Cognito bills per *monthly active user* under the pool's feature plan, and the pool gets 10,000 free MAUs a month. Three demo users and a handful of judges is **$0.00** |
-| **A NAT gateway** on the BMA/AgentCore path | **There is no VPC, subnet, NAT gateway, EIP or `VpcConfig` anywhere in the template** (pinned by `tests/unit/cost-guards.test.mjs`). The NAT risk is real but belongs to the *supplied AgentCore CDK bundle* (`docs/NEXT-SESSION.md` §0a), i.e. to a decision not yet taken — and if taken, it costs **$77–$95 over this window on its own, 5–6× the whole budget** |
+| **A NAT gateway** on the BMA/AgentCore path | **There is no VPC, subnet, NAT gateway, EIP or `VpcConfig` anywhere in the template** (pinned by `tests/unit/cost-guards.test.mjs`). The NAT risk belonged to the *supplied AgentCore CDK bundle*, not to the service. **Corrected 2026-11-20:** AgentCore's documented default is `networkConfiguration: {"networkMode": "PUBLIC"}`, so the chosen path creates no VPC at all and this row is **retired** (`docs/AGENTCORE-PLAN.md`) |
 
 So the correction runs the other way: **ten weeks of availability is close to free, and the budget
 is not duration-bound at all. It is model-price-bound.** The thing that can break $15 is which
@@ -108,12 +108,14 @@ gap between them is pure idle.
 | Judging window: judge traffic, budgeted at 1,000 turns | $1.10 | $3.20 |
 | Judging window: Transcribe, ~30 min | $0.00 (free tier) | $0.72 **[unverified rate]** |
 | **Submission → 2027-01-29** | **~$2.50** | **~$9.80** |
+| **+ the AgentCore harness** (added 2026-11-20, and now mandatory — the rules name the service) | **+$0.08** | **+$0.41** |
+| **Submission → 2027-01-29, on the harness** | **~$2.60** | **~$10.21** |
 
 | Answer | Figure |
 |---|---|
 | **Idle cost per month** | **$0.01–$0.26/month** (midpoint ~$0.05). The whole 71 days of required availability costs **under $0.60** |
 | **Submission → 2027-01-29 total** | **~$2.50 typical, ~$9.80 ceiling** |
-| **Headroom against US$15** | **~$12.50 typical, ~$5.20 at the ceiling** |
+| **Headroom against US$15** | **~$12.40 typical, ~$4.79 at the ceiling** on the harness path (~$12.50 / ~$5.20 without it) |
 
 **The honest total does not exceed $15 — on the stack as it stands, on Nova Lite, in one region.**
 What exceeds $15 is a decision not yet taken.
@@ -134,7 +136,8 @@ Listed because a table engineered to come in under budget would be worth nothing
 
 | # | What | Over the 71-day window |
 |---|---|---|
-| 1 | **Any NAT gateway** — e.g. the AgentCore Runtime CDK bundle on option A or C | **$77–$95** at $0.045–$0.056/hr, plus $0.045/GB processed. **5–6× the entire budget, before any traffic** |
+| ~~1~~ | ~~**Any NAT gateway**~~ — **retired 2026-11-20.** It was the CDK bundle's, never the service's: `networkMode: PUBLIC` is the documented default and the chosen path takes it | ~~$77–$95~~ **$0** |
+| 1 | **The harness defaults, which arrive by *omitting* a field.** Omit `model` and you get Claude Opus 5; omit `allowedTools` and the agent gets a shell and filesystem write; Memory is **on** by default; `idleRuntimeSessionTimeout` defaults to 900s and a V2 runtime pinned to 8 GB bills ≈$2.44 **per session** | **≈$41** for 2,200 turns on Opus 5 alone — **2.7× the entire budget.** Ten forgotten sessions do it on their own. Each default is now pinned by a guard test (`docs/AGENTCORE-PLAN.md` §2) |
 | 2 | **Option C's model.** A GPT-5-class OpenAI model at ~$1.25/M in and ~$10/M out **[list price, unverified for the `bedrock-mantle` endpoint]** makes a turn ~$0.0125 instead of ~$0.0011 | ~**$27** for the same 2,200 turns — **over budget on inference alone** |
 | 3 | **A paid host for the option-C exec server.** A `t4g.small` is ~$0.0168/hr | ~**$29**. $0 only if it runs on Nishen's own machine — and then the live URL a judge opens works only while that machine is on, which is a **rules** problem, not a cost one |
 | 4 | Judge traffic far above the 1,000-turn budget | 10,000 turns is still only ~$11 on Nova Lite, ~$125 on a GPT-5-class model |
@@ -171,7 +174,7 @@ compliance question and not only a cost one.
 | **S3 voice notes, `ExpirationInDays: 1`** on the `voice/` prefix | **No.** | A voice note is transient input to a transcription that completes in the same request; nothing in the app reads the object again afterwards. The rule is a privacy control first and a cost guard second, and both arguments point the same way. Keep it. (Lifecycle expiry is asynchronous and "after 1 day", so an object always outlives the minutes-long job that reads it.) |
 | **Demo account passwords** | **No — verified.** | `scripts/demo-users.mjs` sets them with `admin-set-user-password --permanent`, so they are not `FORCE_CHANGE_PASSWORD` temporaries. Had they been, the default 7-day temporary-password validity would have locked judges out in the second week of December. This is the classic version of this bug and it is already avoided |
 | **Refresh token validity, 1 day** | No | A judge who returns the next day signs in again. Ordinary behaviour for a hosted-UI app |
-| **BMA preview access** (option C only) | **Yes — the only genuine availability risk on this list.** | A public-preview service can change its gate, its model list or its endpoint during a 45-day judging window, and `docs/NEXT-SESSION.md` §0a already records that AWS's own pages disagree about whether the preview is public or limited. Options A and B have no equivalent exposure |
+| **BMA preview access** (option C only — **not the chosen path as of 2026-11-20**; AgentCore is GA and carries no equivalent gate) | **Yes, for option C.** | A public-preview service can change its gate, its model list or its endpoint during a 45-day judging window, and `docs/NEXT-SESSION.md` §0a already records that AWS's own pages disagree about whether the preview is public or limited. Options A and B have no equivalent exposure |
 | **A self-hosted exec server** (option C only) | **Yes.** | The live URL works only while that host runs. Ten weeks of uptime on a laptop is not a thing to promise judges |
 | **Transcribe and Amplify 12-month free-tier windows** | No | Cost only, and both are cents at this scale. But the window is per *account*, not per project, so it may already be spent |
 

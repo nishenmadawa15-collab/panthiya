@@ -3,14 +3,21 @@
 # The CSP starts from `default-src 'none'` and opens only what the app actually uses. There is no
 # 'unsafe-inline' anywhere, which is why index.html carries no inline <style> or <script>.
 #
-# TODO after the first deploy — `connect-src` needs TWO origins, and nothing else changes:
+# TODO after the first deploy — `connect-src` needs THREE origins, and nothing else changes:
 #   connect-src 'self'
 #     https://<api-id>.execute-api.<region>.amazonaws.com
-#     https://panthiya-<account-id>.auth.<region>.amazoncognito.com;
-# Both come out of the stack: `ApiEndpoint` and `HostedUiDomain`. The second one is there because
-# the PKCE token exchange is a `fetch` to the hosted UI's `/oauth2/token` — miss it and sign-in
-# fails in a way that looks identical to being offline, so watch the network tab rather than the
-# page.
+#     https://panthiya-<account-id>.auth.<region>.amazoncognito.com
+#     https://<voice-bucket>.s3.<region>.amazonaws.com;
+# All three come out of the stack: `ApiEndpoint`, `HostedUiDomain` and `VoiceBucketName`.
+#
+# The second is there because the PKCE token exchange is a `fetch` to the hosted UI's
+# `/oauth2/token` — miss it and sign-in fails in a way that looks identical to being offline, so
+# watch the network tab rather than the page.
+#
+# The third was added 2026-11-20, and it had been missing from this note since voice landed: the
+# microphone PUTs the recording straight to a presigned S3 URL, which is a different origin from
+# the API. Miss it and the mic fails with `mic.error` while the console shows a CSP violation —
+# a twenty-minute mystery at the wrong hour of the night, and the fix is one word in this file.
 #
 # `form-action` stays 'none', corrected from an earlier note that said otherwise: there is no
 # <form> anywhere, and the trip to the hosted UI is `location.assign`, a top-level navigation,

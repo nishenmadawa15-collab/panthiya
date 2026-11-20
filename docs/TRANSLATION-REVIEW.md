@@ -65,7 +65,7 @@ is why it is above Priority 1.
 
 ---
 
-## Priority 1 — safety-critical strings (14 keys)
+## Priority 1 — safety-critical strings (14 keys, plus two awaiting translation)
 
 ### `redteam.reason.content_filtered` — **in si and ta this is still English** (added 2026-11-19)
 
@@ -89,6 +89,24 @@ the same ones in the Priority 2 terminology table: **layer** (`ස්තර` / `
 
 These carry a safety or honesty distinction. A translation that *reads well* but loses the
 distinction is a defect here.
+
+### `redteam.reason.chat_crashed` — **in si and ta this is still English** (added 2026-11-20)
+
+The same shape as the one above, one day later, and the reason it exists is worth a line. HTTP 500
+from `/chat` — a genuine unhandled throw inside our own Lambda — used to be filed under
+`chat_error`, the same code as a scoring failure in the browser. A verification lane gave it its own
+branch today, which means the red-team page gained an outcome it has never had a sentence for.
+English with a `TODO(nishen)` prefix went into si and ta rather than an invented translation.
+
+- **EN:** The chat function itself failed, so this case has no verdict. Its CloudWatch log has the throw.
+  - Fix (si): ______________________________________________
+  - Fix (ta): ______________________________________________
+
+**What must survive:** that the failure is **ours** and not the student's, not the attack's, and not
+a verdict. It says where to look — the CloudWatch log — which is the only actionable half of the
+sentence. **verdict** is `නිර්ණය` / `தீர்ப்பு` as everywhere else.
+
+---
 
 ### `parent.approved`, `parent.ask.unverified`
 
@@ -1005,6 +1023,7 @@ where to pick up.
 - [ ] **Priority 0** — the two Sinhala medicine words (30 seconds, and it is not a screen string)
 - [ ] **Priority 1** — safety-critical strings (14 keys)
 - [ ] **`redteam.reason.content_filtered`** — a translation, not a review: si and ta are still English
+- [ ] **`redteam.reason.chat_crashed`** — same: a translation, added 2026-11-20
 - [ ] **Priority 2** — terminology (4 words)
 - [ ] `meta.*` (3)
 - [ ] `skip.*` (1)

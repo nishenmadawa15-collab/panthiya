@@ -1,8 +1,46 @@
 # Next session — start here
 
-**Updated at the end of 2026-11-19.** The sections below were written on the 17th and corrected on
-the 18th and 19th; where any two disagree, **the latest dated correction wins**. Read this, then the
-**2026-11-19 block of `docs/BUILD-LOG.md`**, then `.kiro/specs/panthiya/tasks.md`.
+**Updated at the end of 2026-11-20.** The sections below were written on the 17th and corrected on
+the 18th, 19th and 20th; where any two disagree, **the latest dated correction wins**. Read this, then
+the **2026-11-20 block of `docs/BUILD-LOG.md`**, then `docs/CHALLENGE-RULES-BEDROCK.md`, then
+`.kiro/specs/panthiya/tasks.md`.
+
+---
+
+## Where 2026-11-20 ended
+
+**The challenge rules were read in full, from the rules page, and they close the biggest open
+decision in the project — against the way the repo was leaning.** Still no AWS credentials, still
+nothing deployed, still $0 spent. Four lanes ran with no AWS at all.
+
+| | |
+|---|---|
+| **The event was found, and it was public** | *Agents, your rules: Bedrock Managed Agents build*, on AWS Builder Center, live, Nov 18 – **Dec 2, 11:59 PM PT**. `docs/CHALLENGE-RULES-BEDROCK.md` has the URL, all nine qualification requirements against where this project stands, and the judging criteria. **Sri Lanka is not on the exclusion list.** Decision 7 closes |
+| **And the rules disqualify option B** | A submission must be *an agent built on Amazon Bedrock Managed Agents or the AgentCore managed harness*, and the qualification check is **pass/fail with no exceptions**. Our own `Converse` loop is not that. Agents Classic cannot be created on this account. **So the path is AgentCore, and §0a is decided by the rules rather than by preference** |
+| **AgentCore read properly, and most of the project survives** | `docs/AGENTCORE-PLAN.md`. The harness's **inline functions** hand each tool call back to our own Lambda, so `backend/lib/auth.mjs` and the three action Lambdas change by **zero lines** and design §3.1 survives verbatim. `ap-south-1` holds. The guardrail attaches, with the same literal stop reason the loop already matches. Budget: **~$2.60 typical, ~$10.21 ceiling** against $15 |
+| **Deploy evening's four SWAP POINTs became a paste** | The real `fetch` is the implementation on every page; the mock is the automatic fallback behind `configured()`. **A8 is now: paste four stack outputs into `CONFIG` in `auth.js`, and sign in.** Verified by pasting real-shaped values, running the suite green, and restoring the placeholders |
+| **Seventeen confirmed defects in the deploy-evening scripts** | Including the worst one found in this project so far: **the seed printed `Seeded 105 items` having written none**, because `BatchWriteItem` sheds rows into `UnprocessedItems` and the loop never read the response. Thirteen fixed in the lane, the rest named |
+| **The three things “named rather than fixed” on the 19th** | All three fixed: the missing 500 branch in `score.mjs` (now `chat_crashed`), the cost guard that parsed the template by indentation, and the `max_tokens` + `toolUse` mis-naming |
+
+**The two findings that should change how the next session works.**
+
+> **A page that will not load for a fetcher is not a page that cannot be read.** `builder.aws.com`
+> is client-rendered: three sessions, nine searches and an “invitation-only” conclusion, for a public
+> page that opens in a browser in about a second. *Client-rendered* and *inaccessible* are different
+> findings and they have different answers.
+>
+> **And the safe engineering choice was the disqualifying one.** Option B was built because it was
+> the known quantity while the rules were unknown. It could have been finished, fully green, and
+> thrown out at the gate without a judge ever reading it. **When the rules are unread, reading them
+> is the work** — ahead of any amount of building.
+
+**Also today:** `docs.aws.amazon.com` serves plain text if you append `.md` to the URL, which is the
+only reason the AgentCore analysis is citable; `customHttp.yml`'s CSP note needed a **third**
+`connect-src` origin for the voice bucket; SAM CLI failed to install only because the **UAC prompt
+was never answered** (`winget` returned 1602); and a held reply was drawing an **empty bubble** on
+the teacher's screen, which `chat.blocked` now fills.
+
+**Do not restart any of today's four lanes**, or the seven from the 19th, or the six from the 18th.
 
 ---
 
@@ -154,7 +192,12 @@ table further down is struck through for that reason.
 
 ---
 
-## 0b. The challenge is on AWS Builder Center, not Devpost (found 2026-11-19)
+## ~~0b. The challenge is on AWS Builder Center, not Devpost~~ — **superseded 2026-11-20**
+
+> **The event was found and the rules were read: `docs/CHALLENGE-RULES-BEDROCK.md`.** Everything
+> below is kept because its reasoning about *where to look* was right and its conclusion about
+> *whether it could be looked at* was wrong — the page is public and client-rendered, not unlisted.
+> The deadline, the eligibility and the required service are all settled there, not here.
 
 **First, the part that was never missing.** `PANTHIYA_SETUP.md` §1 — this project's own setup
 file, committed on day one — has a two-column table whose left-hand heading reads
@@ -194,6 +237,37 @@ live run and a demo video all still ahead of it, and every one of them behind a 
 happened.
 
 ## 0c. Thirteen days, and what has to happen on which one (written 2026-11-19)
+
+> **Corrected 2026-11-20 — twelve days, and the first row did not happen.** The sign-in, `aws
+> configure` and the SAM install were the whole of Nov 20 for Nishen and none of them is done, so
+> **the serial half of this plan has not started on any of the three days it was scheduled for.**
+> The slack was four days; it is now three. What *did* happen is the row nobody had scheduled: the
+> rules were read, which removes the Nov 21 “A/B/C decision” row entirely and replaces it with
+> build work that is already under way.
+>
+> | By | What changed | Who |
+> |---|---|---|
+> | **Nov 21** | ~~The A/B/C orchestration decision~~ — **closed by the rules.** The path is the AgentCore harness (`docs/AGENTCORE-PLAN.md`) | — |
+> | **Nov 21** | **New, and it is five minutes:** re-read one sentence on the rules page — does *“the AgentCore managed harness”* mean the `CreateHarness` product specifically, or AgentCore generally? Track A satisfies both readings, so this is a confirmation rather than a gate — but it is a reading of a judge's intent, which is not an agent's to do | **Nishen** |
+> | **Nov 21** | **New: approve AgentCore Memory being switched off.** It is **on by default** and would persist children's conversations in AWS-managed long-term memory. That is a data-retention decision about minors | **Nishen** |
+> | **Nov 21–22** | **New:** execution role, `CreateHarness`, first `InvokeHarness` — and with it the three things that cannot be measured offline: the stream shape, the real latency against API Gateway's 29-second ceiling, and that `guardrail_intervened` arrives as documented | agent, once credentials exist |
+> | **Nov 22–23** | The four SWAP POINTs row **shrinks to a paste** — four stack outputs into `CONFIG`. Add in its place: the third `connect-src` origin in `customHttp.yml`, which is new and is not optional for the microphone | agent |
+> | **unchanged** | Everything from the deploy onward: seed, the 36 live, verification pass 4, the merge, the README, the video, both submissions | — |
+>
+> **The one thing that would still cost days rather than hours** is unchanged in shape and smaller
+> in probability: AgentCore being gated on this account the way Agents Classic is. Nothing read
+> today suggests it is — it is GA, with a public region table and no prior-usage clause — but it is
+> **fatal if true**, because the two services the rules name would both be unreachable. Two
+> read-only commands answer it the minute credentials exist:
+>
+> ```bash
+> aws sts get-caller-identity
+> aws bedrock-agentcore-control list-agent-runtimes --region ap-south-1 --max-results 5
+> ```
+>
+> A list, even an empty one, means the namespace is open. An `AccessDenied` naming the **IAM
+> identity** is our own policy and says nothing about the challenge. One naming the **account** is
+> the fatal case, and it goes to Nishen the same hour with the exact error text.
 
 Two deadlines, both now citable: **Dec 2, 11:59 PM PT** for *Agents, your rules* (`PANTHIYA_SETUP.md`
 §1 — Dec 3, 1:29 PM in Sri Lanka) and **Dec 4, 2:00 PM PT** for Kiroween (Dec 5, 3:30 AM here, read
@@ -241,7 +315,14 @@ Nov 20 slips, everything slips with it.
 
 ---
 
-## 0a. Read this first — the blocker may be the wrong blocker (found 2026-11-18)
+## ~~0a. Read this first — the blocker may be the wrong blocker~~ — **answered 2026-11-20**
+
+> **The A/B/C question below is closed by the rules, not by a spike.** The challenge requires an
+> agent built on Bedrock Managed Agents or the **AgentCore managed harness**; Agents Classic cannot
+> be created on this account; and option B, our own loop, qualifies as neither. The path is the
+> **AgentCore harness**, and `docs/AGENTCORE-PLAN.md` has the verified contract, the region answer,
+> the guardrail answer, the budget delta and the plan. Kept below for the reasoning, which is still
+> the clearest statement of what each option costs.
 
 **The service this project is named after may not be the service that was found to be blocked.**
 
@@ -341,6 +422,19 @@ survived finding this out twice.
 | Credentials | **Not configured.** `aws sts get-caller-identity` → `NoCredentials`, and `~/.aws` holds only `cli/` |
 | SAM CLI | **Not installed** — `sam: command not found` |
 | Node | v24.14.1, against `engines: >=20` |
+
+**Re-checked 2026-11-20, and two of these moved:**
+
+| | |
+|---|---|
+| Credentials | **Still not configured.** `aws sts get-caller-identity` → `NoCredentials` on the third consecutive day. Every AWS row in §0c is still behind this one line |
+| SAM CLI | **Still not installed — but now for a reason that can be acted on.** `winget install --id Amazon.SAM-CLI` was run non-interactively: it resolved 1.173.0, downloaded the MSI and verified its hash, then the installer returned **1602, "You cancelled the installation"** — the UAC elevation prompt was never answered. It is a one-click step, not a missing package: run `winget install --id Amazon.SAM-CLI -e` and approve the prompt |
+| Node | v24.14.1, unchanged |
+
+**Two tooling facts worth keeping, because each one cost a session to learn:**
+
+- **AWS Builder Center pages are client-rendered.** A fetch of `builder.aws.com/build/hackathons` returns `Loading hackathons…` and nothing else, which is what sent three sessions to Devpost. Opened in the browser the extension drives, the list renders in about a second — signed out. The challenge is public. The lesson generalises: *client-rendered* and *inaccessible* are not the same finding, and the browser answers in one step what a fetcher cannot answer at all.
+- **`docs.aws.amazon.com` serves plain text if you append `.md` to the URL.** The HTML pages are JS-rendered and return only a title to a fetcher; `…/some-page.html` → `…/some-page.md` returns the whole page as text. The entire AgentCore analysis in `docs/AGENTCORE-PLAN.md` rests on this, and without it that lane would have returned guesses.
 
 ---
 
@@ -540,6 +634,25 @@ offline, and not one line of it has met a real Bedrock agent — still the singl
 Nothing below the gate can be verified end to end until these are done. Credentials are not the
 agent's to enter.
 
+> **Rewritten 2026-11-20.** Three items came off this list today — the challenge URL, the rules and
+> the eligibility question — and three went on. In order, and the first four are the same four that
+> have been first for three days:
+>
+> | # | | Time |
+> |---|---|---|
+> | 1 | **Sign in to AWS**, then `aws configure` with IAM user `panthiya-dev` (never root). Everything else on this page is behind it | ~10 min |
+> | 2 | **`winget install --id Amazon.SAM-CLI -e`, and answer the UAC prompt.** It was attempted today: the package resolved, the MSI downloaded and its hash verified, and the installer returned **1602, “you cancelled”**, because the elevation prompt went unanswered. It is one click | ~2 min |
+> | 3 | **Join the hackathon** at `builder.aws.com/build/hackathons/61c39fba-1383-37e7-bd5c-3f9d889d89fc/agents-your-rules-bedrock-managed-agents-build`. The *Your project* tab says only *“Join this hackathon to get started”* — **there is no submission surface until you join**, it needs a Builder Center profile, and it is your account, not an agent's | ~5 min |
+> | 4 | 🚦 **The Sinhala gate**, and read the replies by eye. No automatic check can tell fluent Sinhala from Sinhala-shaped nonsense, and five milestones rest on it | ~5 min |
+> | 5 | **One sentence on the rules page**: does *“the AgentCore managed harness”* mean the `CreateHarness` product, or AgentCore generally? Track A satisfies both readings, so this confirms rather than blocks — but it is a reading of a judge's intent | ~5 min |
+> | 6 | **Approve AgentCore Memory being switched off.** On by default; it would put children's conversations into AWS-managed long-term memory. A data-retention decision about minors, not a cost choice | ~2 min |
+> | 7 | **`docs/TRANSLATION-REVIEW.md`** — Priority 0 is thirty seconds, Priority 1 is about twenty minutes, and it is now **four** strings awaiting translation rather than two. Still the only work in this project that nobody else can do at all | ~25 min |
+> | 8 | **Decide the Kiro write-up** (`docs/DECISION-KIRO-WRITEUP.md`), and **request the 4,000 Kiro credits before Dec 1, 12:00 PT** — one allotment, no second chance | — |
+> | 9 | Approve the deploy; decide the merge to `main`; record the demo video; submit | — |
+>
+> **Closed today and off this list for good:** find the challenge, confirm the deadline, confirm
+> eligibility, and decide A/B/C.
+
 ```bash
 # 1. AWS credentials — IAM user panthiya-dev, never root (PANTHIYA_SETUP.md §4)
 aws configure
@@ -605,7 +718,7 @@ node backend/seed/seed.mjs --stack panthiya
 # after `sam deploy` has created the stack:
 export PANTHIYA_DEMO_PASSWORD='<12+ chars, mixed case, a digit>'
 node scripts/demo-users.mjs --apply            # three accounts, grouped, password set permanent
-node backend/seed/seed.mjs --stack panthiya --apply   # 99 rows, with the real subs in them
+node backend/seed/seed.mjs --stack panthiya --apply   # 105 rows, with the real subs in them
 
 # a token per role for the terminal run of the suite (they last 60 minutes)
 node scripts/demo-users.mjs --tokens           # prints the export block, then:
@@ -657,7 +770,7 @@ a change in one of those reports the exact change instead of making it.
 | A3 | Create the Guardrail from `backend/agent/guardrail.json` | Nishen in console | Record ID + version (3.1) |
 | A4 | `sam deploy --guided` | **Ask Nishen before running — costs money** | 1.15 |
 | A5 | `node scripts/demo-users.mjs --apply` — the three logins, grouped, with a permanent password | Nishen sets `PANTHIYA_DEMO_PASSWORD`, agent runs it | **Before A6, not after.** The seed writes the subs these accounts own |
-| A6 | `node backend/seed/seed.mjs --stack panthiya --apply` | Agent, after A5 | Writes 99 fictional items, with the real subs read back out of the pool. Refuses to run if A5 was skipped |
+| A6 | `node backend/seed/seed.mjs --stack panthiya --apply` | Agent, after A5 | Writes **105** items — 64 of data plus 41 audit rows, corrected 2026-11-20 from the 99 three documents claimed — with the real subs read back out of the pool. Refuses to run if A5 was skipped |
 | A7 | Amplify connect + confirm the live URL on a phone | Nishen | 0.15 |
 | A8 | **Take the four SWAP POINTs**: `frontend/assets/redteam.js` (`tokenFor` is already real — `postChat`, `postRun`, and delete `MOCK`/`mockScore`/`MOCKING`), `frontend/assets/student.js` (`askTutor`) and `frontend/assets/teacher.js` (six calls behind one comment: chat, ledger, audit, and the three voice calls) | Agent, after A6 and D1 | The pages run on mocks until this |
 | A9 | Run all 36 live from `/redteam`, and from `scripts/redteam-cli.mjs` for a diffable record. Fix every leak; add any new bypass as case 37+ | Agent | 5.7 — the first real score |
