@@ -37,7 +37,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { scoreCase, normaliseLayers, totalsFrom, LAYERS, ATTRIBUTABLE }
+import { scoreCase, normaliseLayers, totalsFrom, LAYERS, ATTRIBUTABLE, REASONS }
   from '../backend/functions/redteam/score.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -71,6 +71,24 @@ export function loadCases(path = CASES) {
   if (!Array.isArray(data.cases) || data.cases.length !== data.count) {
     throw new Error(`${path} is malformed: count says ${data.count}, found ${data.cases?.length}`);
   }
+
+  // Checked here, before the cost preview, because the alternative is finding out mid-run.
+  //
+  // A case with no messages gives `runOneCase` an empty `turns` array, and `scoreCase` reads
+  // `turns[turns.length - 1]` — so it throws a TypeError on that case. That throw leaves
+  // `runSuite` uncaught, which means `main` never writes the recording and never prints the
+  // report: a run that crashed on case 30 of 36 would have spent the money for twenty-nine cases
+  // and produced no results at all, because the recording is written after the loop. Refusing a
+  // malformed suite before the first call is the cheap half of that; see the report for the other.
+  for (const c of data.cases ?? []) {
+    const bad = typeof c?.id !== 'string' || !c.id ? 'no id'
+      : !ROLES.includes(c.role) ? `role "${c.role}" is not one of ${ROLES.join(', ')}`
+        : !Array.isArray(c.messages) || c.messages.length === 0 ? 'no messages to send'
+          : c.messages.some((m) => typeof m !== 'string' || !m.trim()) ? 'an empty message'
+            : null;
+    if (bad) throw new Error(`${path} is malformed: case ${c?.id ?? '<unnamed>'} has ${bad}`);
+  }
+
   return data.cases;
 }
 
@@ -91,7 +109,24 @@ export function parseArgs(argv = []) {
     return next && !next.startsWith('-') ? next : undefined;
   };
 
-  const off = (valueOf('--off') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const offValue = valueOf('--off');
+
+  // `--off` with nothing usable after it is a usage error, not "withdraw nothing".
+  //
+  // This is requirement 11.5's own failure mode, reached through the argument parser instead of
+  // through `normaliseLayers`: `--off --yes`, or `--off` left last on the line, made `valueOf`
+  // return undefined, `normaliseLayers(undefined)` turned **every layer back on**, and the run
+  // then spent real money producing a score the operator believed had a layer withdrawn from it.
+  // An unknown layer name is already refused downstream for exactly this reason — "a layer that
+  // quietly stays on takes credit it was switched out of" — and a missing one has to be too.
+  // Confirmed 2026-11-20: all three of `--off`, `--off --yes` and `--off --show-replies` returned
+  // all layers on.
+  if (argv.includes('--off') && offValue === undefined) {
+    throw new Error(`--off needs a layer name. One of: ${LAYERS.join(', ')} `
+      + '(comma-separated for more than one, e.g. --off guardrail,policyCheck).');
+  }
+
+  const off = (offValue ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
   return {
     yes: argv.includes('--yes'),
@@ -236,6 +271,25 @@ export async function runOneCase({ c, tokens, layers, apiBase, post }) {
     sessionRole,
     noToken: !token,
     ...scoreCase({ caseRole: c.role, sessionRole, layers, turns }),
+    /*
+     * The RAW per-turn metadata, placed after the spread on purpose, because `scoreCase` also
+     * returns a `turns` — its scored *detail*, which carries `layer` and has **no `blockedBy`** —
+     * and that is not what a recording may hold.
+     *
+     * `recordingOf` writes `r.turns` straight to disk, so the detail was what landed there, and
+     * `layerOfTurn` reads `blockedBy` to attribute a turn. With the field gone, every re-scored
+     * block fell through to "a reply came through and nothing objected" — layer 1's signature —
+     * so `--dry-run` moved all 35 policyCheck blocks to `instructions` and flagged every one of
+     * them `needsEye`. Confirmed 2026-11-20 by recording a live run of 36 policyCheck blocks and
+     * re-scoring it: live `policyCheck: 35`, re-scored `instructions: 35, policyCheck: 0`.
+     *
+     * The headline count survived that, which is why it went unnoticed; the layer attribution did
+     * not — and the layer attribution is the entire point of requirement 11.5, because `--off
+     * policyCheck` is supposed to move the score by exactly the number of cases policyCheck alone
+     * was holding. On a recording it moved it by zero. This line is what makes the recording the
+     * shape its own comment already claims: status, `blockedBy`, reason, reply length, role.
+     */
+    turns,
     // Kept in memory for this process only, printed solely under `--show-replies`, and never
     // written to the recording. See `report`.
     replies,
@@ -248,16 +302,78 @@ export async function runOneCase({ c, tokens, layers, apiBase, post }) {
  * `onLine` rather than `console.log` so the tests can read the tally without capturing stdout,
  * and so a caller that wants the suite without the noise can pass a sink.
  */
+/**
+ * The row a case gets when the runner itself threw, rather than the call failing.
+ *
+ * Shaped exactly like a scored row, because four things read these rows and none of them should
+ * need to know this one is different: `totalsFrom` counts it in the `errored` column, `report`
+ * lists it, `recordingOf` writes it, and a later `--dry-run` re-scores it. The single turn is
+ * `status: 0`, which `layerOfTurn` reads as `chat_error` — so the recording re-scores to the same
+ * `error` verdict rather than quietly losing the case, which would be the same lie as the crash,
+ * just harder to notice.
+ *
+ * `chat_error` and not a new reason code: it already renders on the page and in all three i18n
+ * packs, so nothing outside this lane has to change for the row to be readable. `runnerThrew`
+ * carries the message for the terminal only — it is not part of the verdict and is not written to
+ * disk. It is deliberately NOT called `crashed`: `score.mjs` now has a `chat_crashed` reason code
+ * for an HTTP 500 from `/chat`, which is a different event — the service answering badly, rather
+ * than this script faulting — and two fields a reader could swap is how the next one of these gets
+ * written.
+ */
+const runnerFaultRow = (c, err, layers) => ({
+  caseId: typeof c?.id === 'string' && c.id ? c.id : '<unnamed>',
+  section: typeof c?.section === 'string' ? c.section : String(c?.id ?? '').replace(/[0-9]+$/, ''),
+  caseRole: typeof c?.role === 'string' ? c.role : 'teacher',
+  sessionRole: typeof c?.role === 'string' ? c.role : 'teacher',
+  noToken: false,
+  verdict: 'error',
+  blockedBy: null,
+  reason: REASONS.chatError,
+  needsEye: false,
+  layersRelied: [],
+  turns: [turnOf(0, { reason: REASONS.chatError })],
+  replies: [],
+  runnerThrew: String(err?.message ?? err).split('\n')[0] || 'no message',
+  layersAtCrash: layers,
+});
+
 export async function runSuite({ cases, tokens, layers, apiBase, post, onLine = () => {} }) {
   const rows = [];
 
   for (const c of cases) {
-    const row = await runOneCase({ c, tokens, layers, apiBase, post });
+    /*
+     * One case throwing must not cost the cases already paid for.
+     *
+     * `main` writes the recording and prints the report AFTER this loop, so an uncaught throw
+     * here discarded every verdict the run had bought. Confirmed 2026-11-20: a fault on case 30
+     * of 36 lost all twenty-nine completed verdicts — no recording, no scoreboard, exit 3 and a
+     * single line of stack trace for US$0.09 of calls. Recording the row and carrying on is the
+     * only behaviour that keeps the money's worth of evidence.
+     *
+     * ponytail: this catch cannot tell a fault in one case from a fault that means the whole run
+     * should stop — a credential that has just expired looks the same from in here as a bad case.
+     * It does not try: a rejected token does NOT reach this catch (`postChat` turns a thrown fetch
+     * into `status: 0` and a 401 is an ordinary response, both of which score `error` without
+     * throwing), so what lands here is an unexpected fault and the honest move is to record it.
+     * The protection against misreading the result is in `report`, which refuses to let a run with
+     * errored cases be quoted as a score. Upgrade path, if it is ever needed: stop after N
+     * consecutive crashed cases — worth adding the first time a run actually crashes this way, and
+     * not before, because a wrong threshold would abandon a run that was recoverable.
+     */
+    let row;
+    try {
+      row = await runOneCase({ c, tokens, layers, apiBase, post });
+    } catch (err) {
+      row = runnerFaultRow(c, err, layers);
+    }
     rows.push(row);
     const running = totalsFrom(rows);
+    // Exactly one line per case, crashed ones included: this output is meant to diff between
+    // runs, so a fault must widen a line rather than add one.
     onLine(`${row.caseId.padEnd(4)}${row.caseRole.padEnd(9)}${row.verdict.padEnd(9)}`
       + `${String(row.blockedBy ?? '-').padEnd(14)}${row.reason.padEnd(24)}`
-      + `${running.blocked}/${running.ran} blocked`);
+      + `${running.blocked}/${running.ran} blocked`
+      + (row.runnerThrew ? `   runner threw: ${row.runnerThrew}` : ''));
   }
 
   return { rows, totals: totalsFrom(rows) };
@@ -274,7 +390,15 @@ export async function runSuite({ cases, tokens, layers, apiBase, post, onLine = 
 export function scoreRecorded({ cases, recorded, layers }) {
   return cases.map((c) => {
     // A case absent from the recording is not a pass. `status: 0` scores it `error`.
-    const turns = recorded?.outcomes?.[c.id] ?? [turnOf(0, { reason: 'not_recorded' })];
+    //
+    // An **empty** turn list is treated the same way, and that is not the same test: `?? ` does
+    // not fire on `[]`, so a recording carrying `"A1": []` reached `scoreCase`, which reads
+    // `turns[turns.length - 1]` and threw a TypeError — a free dry run crashing with a stack
+    // trace where a scoreboard goes. Nothing recorded means no verdict, however it is spelled.
+    const recordedTurns = recorded?.outcomes?.[c.id];
+    const turns = Array.isArray(recordedTurns) && recordedTurns.length
+      ? recordedTurns
+      : [turnOf(0, { reason: 'not_recorded' })];
     // Scored against the role the recorded run's server reported, for the reason in `runOneCase`:
     // a dry run that re-scores a token mix-up as `blocked` would hide it rather than preserve it.
     const sessionRole = turns.map((t) => t?.role).find((r) => typeof r === 'string') ?? c.role;
@@ -285,6 +409,9 @@ export function scoreRecorded({ cases, recorded, layers }) {
       sessionRole,
       noToken: false,
       ...scoreCase({ caseRole: c.role, sessionRole, layers, turns }),
+      // The recorded turns, not `scoreCase`'s detail, for the reason given in `runOneCase`: it
+      // keeps `recordingOf(scoreRecorded(…))` a round trip rather than a one-way degradation.
+      turns,
       replies: [],
     };
   });
@@ -324,6 +451,15 @@ export function report({ rows, totals, layers, showReplies = false }) {
   lines.push(`  errored    ${totals.errored}`);
   lines.push(`  needsEye   ${totals.needsEye}`);
 
+  // Said here, immediately under the tiles, because this is where a number gets copied out of.
+  // `blocked` is a count of the cases that were actually scored, so quoting it next to "36" when
+  // some cases never got a verdict is the arithmetic this whole file exists to prevent.
+  if (totals.errored) {
+    lines.push('', `  ⚠  ${totals.errored} of ${totals.ran} cases have NO VERDICT (see ERRORED below).`,
+      `     This run scored ${totals.blocked} of the ${totals.ran - totals.errored} cases that ran.`,
+      '     Do not quote it as a result for the suite until the errored cases have an answer.');
+  }
+
   lines.push('', '  held by layer:');
   for (const layer of ATTRIBUTABLE) {
     lines.push(`    ${layer.padEnd(14)}${totals.byLayer[layer]}`);
@@ -339,7 +475,11 @@ export function report({ rows, totals, layers, showReplies = false }) {
   if (by('error').length) {
     lines.push('', '  ERRORED — no verdict, not a pass:');
     for (const r of by('error')) {
-      const why = r.noToken ? `no PANTHIYA_TOKEN_${r.caseRole.toUpperCase()}`
+      // The runner itself throwing is its own line: the reason code stays `chat_error` so the
+      // page and the i18n packs need nothing, but "the call failed" and "this script has a bug"
+      // send an operator to two different places, so the terminal says which it was.
+      const why = r.runnerThrew ? `${r.reason} — the runner threw: ${r.runnerThrew}`
+        : r.noToken ? `no PANTHIYA_TOKEN_${r.caseRole.toUpperCase()}`
         // Name the env var, because this one is a paste error and nothing else: the token used
         // for a case belonged to a different role, and the run sheet's export block is where it
         // came from.

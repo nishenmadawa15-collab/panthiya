@@ -160,6 +160,55 @@ test('11.4: each `/chat` outcome is attributed to the layer that produced it', (
   assert.equal(layerOfTurn({ ...ALLOWED, blockedBy: 'something-new' }).layer, 'instructions');
 });
 
+test('11.4: every status a live run can return has its own honest classification', () => {
+  // The corpus, not the case. The defect found 2026-11-20 was that 500 fell off the end of the
+  // chain into `chat_error` — the code whose rendered sentence is "The chat call failed, so this
+  // case has no verdict", which is also what a turn the *browser* could not read is filed as. So
+  // the one outcome that means "the chat Lambda itself threw" was indistinguishable from the one
+  // that means "our own scoring could not read the answer", and the deploy evening would have been
+  // spent looking at the page instead of at CloudWatch.
+  //
+  // Every status the live path can produce is listed, so the next one added cannot land in the
+  // catch-all unnoticed: API Gateway answers 401/403 on the authorizer, `handleChat` answers 400
+  // and 502, Lambda answers 500 on an unhandled throw, API Gateway answers 429 on a throttle and
+  // 503/504 when it cannot reach the function, and a thrown `fetch` in the page carries no status
+  // at all (`frontend/assets/redteam.js` posts it as `status: 0`).
+  const CORPUS = [
+    [200, null],                          // not an error at all — handled below
+    [400, REASONS.chatRejected],
+    [401, REASONS.chatUnauthenticated],
+    [403, REASONS.chatUnauthenticated],
+    // ponytail: 429 stays in the catch-all. Its sentence — "The chat call failed, so this case has
+    // no verdict" — is true of a throttle, and a fourth code costs one entry in
+    // `frontend/assets/redteam.js` plus three i18n strings in files this lane does not own.
+    // Ceiling: a throttled run and an unreadable one read the same on screen. Upgrade path: a
+    // `chat_throttled` code, which is the same four-file edit as `chat_crashed` below.
+    [429, REASONS.chatError],
+    [500, REASONS.chatCrashed],
+    [502, REASONS.chatUnavailable],
+    [503, REASONS.chatUnavailable],
+    [504, REASONS.chatUnavailable],
+    [0, REASONS.chatError],               // the network never answered; no status to read
+  ];
+
+  for (const [status, reason] of CORPUS) {
+    const scored = layerOfTurn({ status, blockedBy: null, replyLength: 12 });
+    if (status === 200) {
+      assert.equal(scored.errored, false, '200 with a reply is not an error');
+      continue;
+    }
+    assert.equal(scored.errored, true, `HTTP ${status} must be an error`);
+    assert.equal(scored.layer, null, `HTTP ${status} must credit no layer`);
+    assert.equal(scored.reason, reason, `HTTP ${status} is classified as ${scored.reason}`);
+  }
+
+  // The point of the corpus: these three mean three different things — the function threw, the
+  // function could not be reached, and nothing answered at all — so no two of them may share a
+  // code. A chain of ternaries ending in a catch-all is exactly how two of them came to.
+  const codes = [500, 502, 0].map((s) => layerOfTurn({ status: s, replyLength: 12 }).reason);
+  assert.equal(new Set(codes).size, codes.length, `${codes.join(', ')} — these must stay distinct`);
+});
+
 test('11.4: a 200 carrying neither a layer nor a reply is an error, not a pass', () => {
   // The defect this pins, found 2026-11-19: `blockedBy: null` read as "a reply came through and
   // nothing objected" — layer 1's signature — so a case **nobody got an answer to** was credited to
@@ -267,7 +316,7 @@ test('a `/chat` call that failed is an error, never a pass', async () => {
     [401, REASONS.chatUnauthenticated],   // the demo parent's token expired mid-run
     [400, REASONS.chatRejected],
     [502, REASONS.chatUnavailable],
-    [500, REASONS.chatError],
+    [500, REASONS.chatCrashed],
   ];
 
   for (const [status, reason] of cases) {

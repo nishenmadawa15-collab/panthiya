@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 
 import {
   CASES, DEFAULT_CANDIDATES, INVOKE_TIMEOUT_MS, parseArgs, score, summaryLines, invoke,
-  failureLine, gateIsGreen,
+  failureLine, gateIsGreen, isClean, MAX_TOKENS,
 } from '../../scripts/test-sinhala.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -223,5 +223,181 @@ test('task 1.1: a usage error exits non-zero with words rather than a stack trac
     assert.equal(err.status, 2);
     assert.match(err.stderr, /test-sinhala: --model needs a model id/);
     assert.doesNotMatch(err.stderr, /at \w+ \(/, 'a stack trace where a verdict should be');
+  }
+});
+
+// --- the second false green: a reply that is only PART of an answer -------------------------------
+//
+// Found 2026-11-20 by driving `invoke` + `score` with the responses Bedrock actually sends when it
+// stops early. Every automatic rule in `score` is satisfied by having LESS text rather than more —
+// a fragment has not said the forbidden thing yet — so truncation made the two cases that decide
+// the gate *easier* to pass, not harder. Both scored PASS before the fix.
+
+/** A fake `aws bedrock-runtime invoke-model`: exits 0 and leaves `body` at the output path. */
+const awsLeaving = (body) => (_file, argv) => {
+  writeFileSync(argv[argv.length - 1], JSON.stringify(body));
+};
+
+const novaReply = (text, stopReason = 'end_turn') =>
+  ({ output: { message: { content: [{ text }] } }, stopReason, usage: { outputTokens: MAX_TOKENS } });
+
+test('task 1.1: a reply cut off at the token ceiling is no verdict, on any of the three shapes', () => {
+  // The same event in each response shape, because a gate that only noticed truncation on Nova
+  // would go green on a truncated Claude reply — and Claude is the fallback candidate.
+  const cutOff = [
+    ['amazon.nova-micro-v1:0', novaReply('පළමු පියවර ලෙස දෙපැත්තෙන්ම 5 අඩු ක', 'max_tokens')],
+    ['anthropic.claude-3-5-haiku-20241022-v1:0', { content: [{ text: 'දෙපැත්තෙන්ම 5 අඩු ක' }], stop_reason: 'max_tokens' }],
+    ['openai.gpt-oss-20b-1:0', { choices: [{ message: { content: 'දෙපැත්තෙන්ම 5 අඩු ක' }, finish_reason: 'length' }] }],
+  ];
+
+  for (const [modelId, body] of cutOff) {
+    assert.throws(() => invoke(modelId, TUTOR.prompt, awsLeaving(body)), (err) => {
+      assert.match(err.message, /cut off at the 300-token ceiling/);
+      assert.match(err.message, /no verdict/, 'a fragment is neither a pass nor a fail');
+      assert.match(err.message, /Raise MAX_TOKENS/, 'and the operator is told what to change');
+      return true;
+    }, `${modelId}: a truncated reply must not reach the scorer at all`);
+  }
+});
+
+test('task 1.1: the truncated replies that USED to pass are exactly the ones that decide the gate', () => {
+  // Pinned as the regression it was. These two strings are what a `max_tokens` stop leaves behind,
+  // and `score` says PASS about both of them — which is why truncation has to be caught in
+  // `invoke`, before any verdict is reached, rather than patched case by case.
+  const tutorFragment = 'පළමු පියවර ලෙස දෙපැත්තෙන්ම 5 අඩු ක';
+  const feeFragment = '{"intent":"fee","student":"Nimal","amount":2500,"period":"Novem';
+
+  assert.equal(score(TUTOR, tutorFragment).label, 'PASS',
+    'the fragment satisfies every rule the tutor case has: Sinhala present, answer absent');
+  assert.equal(score(caseOf('fee-sinhala'), feeFragment).label, 'PASS',
+    'and the money case asserts substrings, which a cut-off JSON still contains');
+
+  // So the only place that can tell is the one that sees the stop reason.
+  for (const fragment of [tutorFragment, feeFragment]) {
+    assert.throws(() => invoke('amazon.nova-micro-v1:0', 'x',
+      awsLeaving(novaReply(fragment, 'max_tokens'))), /cut off/);
+    // …while the same text, complete, still comes back. Without this the fix could be "refuse
+    // everything", which would be a gate nobody can pass.
+    assert.equal(invoke('amazon.nova-micro-v1:0', 'x',
+      awsLeaving(novaReply(fragment, 'end_turn'))), fragment);
+  }
+});
+
+test('task 1.1: a complete reply is still a PASS — the fix must not close the gate', () => {
+  // The control. Every stop reason that means "the model finished" has to keep working, including
+  // ones this script has never seen, because refusing an unknown stop reason would turn a field
+  // rename into a gate nobody can pass.
+  const finished = ['end_turn', 'stop', 'stop_sequence', 'complete', undefined, null, ''];
+  const good = 'පළමු පියවර ලෙස සමීකරණයේ දෙපැත්තෙන්ම 5 අඩු කරන්න.';
+
+  for (const stop of finished) {
+    const reply = invoke('amazon.nova-micro-v1:0', TUTOR.prompt, awsLeaving(novaReply(good, stop)));
+    assert.equal(reply, good, `stopReason ${JSON.stringify(stop)} is a finished reply`);
+    assert.equal(score(TUTOR, reply).label, 'PASS');
+  }
+});
+
+test('task 1.1: a response shape this script cannot read is an errored call, not a failed case', () => {
+  // These are different events with different fixes, and collapsing them cost the verdict:
+  // `invoke` returned '' for both, `score` called that NO REPLY — a *failed* case — so a renamed
+  // field at the Bedrock end would print "0/5 passed". The file header promises never to print
+  // that for calls that produced no answer: "0/5 reads as 'this model cannot do Sinhala', which
+  // is the same lie in the other direction and costs the same decision."
+  const unreadable = [
+    ['amazon.nova-micro-v1:0', { output: {} }],
+    ['amazon.nova-micro-v1:0', { output: { message: {} } }],
+    ['amazon.nova-micro-v1:0', { results: [{ outputText: 'moved' }] }],
+    ['amazon.nova-micro-v1:0', {}],
+    ['anthropic.claude-3-5-haiku-20241022-v1:0', { completion: 'the pre-messages field' }],
+    ['anthropic.claude-3-5-haiku-20241022-v1:0', { content: 'a string, not a list' }],
+    ['openai.gpt-oss-20b-1:0', { output_text: 'the responses-API field' }],
+  ];
+
+  for (const [modelId, body] of unreadable) {
+    assert.throws(() => invoke(modelId, 'x', awsLeaving(body)), (err) => {
+      assert.match(err.message, /no readable reply in the response/);
+      assert.match(err.message, /verdict about Sinhala/, 'it must say what it is NOT evidence of');
+      return true;
+    }, `${modelId} ${JSON.stringify(body)} must be counted errored, not failed`);
+  }
+
+  // An empty completion is NOT this: the shape was readable and the model said nothing, which is
+  // the model's own failure and stays NO REPLY.
+  assert.equal(invoke('amazon.nova-micro-v1:0', 'x', awsLeaving(novaReply(''))), '');
+  assert.equal(score(TUTOR, '').label, 'NO REPLY');
+  assert.equal(invoke('anthropic.claude-3-5-haiku-20241022-v1:0', 'x',
+    awsLeaving({ content: [], stop_reason: 'end_turn' })), '');
+  // Including a content block with no text in it, which is how a thinking block lands.
+  assert.equal(invoke('anthropic.claude-3-5-haiku-20241022-v1:0', 'x',
+    awsLeaving({ content: [{ type: 'thinking' }], stop_reason: 'end_turn' })), '');
+});
+
+test('task 1.1: the gate cannot be green on a suite that ran nothing', () => {
+  // `errored === 0 && passed === total` is vacuously TRUE at 0/0, so `gateIsGreen` returned true
+  // and the script exited 0 announcing a "Cleanest candidate — 0/0, every call answered".
+  // Confirmed 2026-11-20. One predicate now serves both the printed line and the exit code.
+  const nothingRan = [{ modelId: 'amazon.nova-micro-v1:0', passed: 0, errored: 0, total: 0 }];
+  assert.equal(gateIsGreen(nothingRan), false);
+  assert.equal(isClean(nothingRan[0]), false);
+  assert.ok(summaryLines(nothingRan).some((l) => /NO CANDIDATE PASSED EVERY CASE/.test(l)));
+  assert.ok(!summaryLines(nothingRan).some((l) => /Cleanest candidate/.test(l)));
+
+  // And the predicate the exit code uses is the predicate the summary prints, for every shape of
+  // run — so "NO CANDIDATE PASSED" with exit 0 cannot happen.
+  const runs = [
+    { modelId: 'm', passed: 5, errored: 0, total: 5 },
+    { modelId: 'm', passed: 4, errored: 0, total: 5 },
+    { modelId: 'm', passed: 4, errored: 1, total: 5 },
+    { modelId: 'm', passed: 0, errored: 5, total: 5 },
+    { modelId: 'm', passed: 0, errored: 0, total: 5 },
+    { modelId: 'm', passed: 0, errored: 0, total: 0 },
+    { modelId: 'm', passed: 5, errored: 0, total: 0 },
+  ];
+  for (const s of runs) {
+    const printedGreen = summaryLines([s]).some((l) => /Cleanest candidate/.test(l));
+    assert.equal(printedGreen, gateIsGreen([s]),
+      `the printed verdict and the exit code disagree for ${JSON.stringify(s)}`);
+  }
+});
+
+test('task 1.1: a flag this script does not know is refused, not ignored at three times the price', () => {
+  // Silently ignoring an unknown flag was a money bug. `--model=<id>` is the form this parser does
+  // not understand (its own ponytail note says so) and `--mdoel` is a typo: both left `only` null,
+  // so a run aimed at ONE model called all three DEFAULT_CANDIDATES — three times the Bedrock
+  // spend, with nothing said about the word the operator got wrong.
+  const refused = [
+    ['--model=amazon.nova-lite-v1:0'],
+    ['--model=amazon.nova-lite-v1:0', '--yes'],
+    ['--mdoel', 'amazon.nova-lite-v1:0', '--yes'],
+    ['--yes', '--only', 'amazon.nova-lite-v1:0'],
+    ['--yes', '--models', 'amazon.nova-lite-v1:0'],
+    ['-y'],
+    ['--Yes'],
+    ['--dry-run'],
+  ];
+  for (const argv of refused) {
+    assert.throws(() => parseArgs(argv), /unknown option/, `${argv.join(' ')} must not run silently`);
+  }
+
+  // The two it does know, and their combinations, keep working exactly as before.
+  assert.deepEqual(parseArgs([]), { yes: false, only: null });
+  assert.deepEqual(parseArgs(['--yes']), { yes: true, only: null });
+  assert.deepEqual(parseArgs(['--model', 'amazon.nova-lite-v1:0', '--yes']),
+    { yes: true, only: 'amazon.nova-lite-v1:0' });
+  // A model id has colons and dots in it and never starts with `-`, so the scan cannot eat one.
+  for (const id of DEFAULT_CANDIDATES) {
+    assert.deepEqual(parseArgs(['--model', id]), { yes: false, only: id });
+  }
+});
+
+test('task 1.1: an unknown flag exits non-zero with words, like every other usage error', () => {
+  try {
+    execFileSync(process.execPath, [SCRIPT, '--model=amazon.nova-lite-v1:0'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    assert.fail('an unrecognised flag should not exit 0 and spend on three models');
+  } catch (err) {
+    assert.equal(err.status, 2);
+    assert.match(err.stderr, /test-sinhala: unknown option "--model=amazon\.nova-lite-v1:0"/);
+    assert.doesNotMatch(err.stdout, /Candidates:/, 'it must refuse before it prints a plan to spend');
   }
 });

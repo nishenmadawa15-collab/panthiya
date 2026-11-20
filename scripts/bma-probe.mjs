@@ -131,10 +131,49 @@ export function verdict(status, text = '') {
   const lower = text.toLowerCase();
 
   if (status >= 200 && status < 300) {
+    // A 2xx is not by itself a model list, and this branch used to assume it was: an empty body,
+    // a captive-portal HTML page, a truncated payload and an error document that happened to
+    // arrive with a 200 all printed "REACHABLE … pick a model from the list above" with nothing
+    // above to pick from. Confirmed 2026-11-20. The body has to actually hold models.
+    let models = null;
+    try {
+      const parsed = JSON.parse(text);
+      // The OpenAI-compatible shape BMA answers with: {"data":[{"id":"openai.gpt-oss-120b-1:0"}]}.
+      if (Array.isArray(parsed?.data)) models = parsed.data;
+    } catch { /* not JSON at all, handled just below */ }
+
+    if (models === null) {
+      return {
+        ok: false,
+        tag: 'ANSWERED 2xx, BUT NOT WITH A MODEL LIST',
+        lines: [
+          `The call came back HTTP ${status} and the body is not a model list `
+          + `(${text.trim() ? 'it is printed above' : 'it is empty'}).`,
+          'Something between here and BMA answered: a proxy, a redirect, a truncated response, or a',
+          'changed response shape. This is NOT a verdict about the account in either direction.',
+          'Read the body above, then run this again from a network that does not intercept HTTPS.',
+        ],
+      };
+    }
+
+    if (models.length === 0) {
+      return {
+        ok: false,
+        tag: 'REACHABLE, BUT THE MODEL LIST IS EMPTY',
+        lines: [
+          'Signing and authorisation both worked — the account can talk to BMA — but it offers no',
+          'models here, so there is nothing to run the Sinhala gate against and Option C is not yet',
+          'on the table. Try another preview Region, or check model access for this account.',
+        ],
+      };
+    }
+
     return {
+      ok: true,
       tag: 'REACHABLE',
       lines: [
-        'This account can sign into BMA and the endpoint answered. Option C is on the table.',
+        `This account can sign into BMA and the endpoint answered with ${models.length} model`
+        + `${models.length === 1 ? '' : 's'}. Option C is on the table.`,
         'Next: pick a model from the list above and re-run the Sinhala gate against it —',
         '  node scripts/test-sinhala.mjs --yes --model <openai model id>  (with AWS_REGION set to this Region)',
         'The gate decides the model. Nothing else is allowed to.',
@@ -155,6 +194,7 @@ export function verdict(status, text = '') {
 
     if (/validation/i.test(text)) {
       return {
+        ok: true,
         tag: 'AUTHORISED — the body was simply wrong',
         lines: [
           'A ValidationException is good news: the request got past authorisation and only the body',
@@ -164,6 +204,7 @@ export function verdict(status, text = '') {
     }
     if (ourPolicy && !eligibility) {
       return {
+        ok: false,
         tag: 'OUR IAM, NOT THE ACCOUNT',
         lines: [
           'The denial names the IAM identity rather than the account, so this is almost certainly our',
@@ -176,6 +217,7 @@ export function verdict(status, text = '') {
     }
     if (eligibility) {
       return {
+        ok: false,
         tag: 'ACCOUNT BLOCKED',
         lines: [
           'The message is about the account rather than the identity, so BMA looks as unavailable here',
@@ -186,6 +228,7 @@ export function verdict(status, text = '') {
       };
     }
     return {
+      ok: false,
       tag: 'UNCLEAR — READ THE MESSAGE',
       lines: [
         'The body above decides this. Does it name the IAM identity (our policy) or the account',
@@ -196,6 +239,7 @@ export function verdict(status, text = '') {
 
   if (status === 404) {
     return {
+      ok: false,
       tag: 'WRONG PATH OR REGION',
       lines: [
         // AWS lists unavailable preview access as a cause of 404 on this endpoint, which is why this
@@ -209,7 +253,7 @@ export function verdict(status, text = '') {
     };
   }
 
-  return { tag: 'UNEXPECTED', lines: ['Not a documented outcome. Paste the status and body into the build log.'] };
+  return { ok: false, tag: 'UNEXPECTED', lines: ['Not a documented outcome. Paste the status and body into the build log.'] };
 }
 
 /**
@@ -227,6 +271,7 @@ export function networkFailure(err, region) {
   const unresolved = code === 'ENOTFOUND' || code === 'EAI_AGAIN';
 
   return {
+    ok: false,
     tag: 'NO ANSWER — A NETWORK ERROR, NOT A VERDICT',
     lines: [
       `Nothing came back from https://${host}: ${code} — ${err?.message ?? err}`,
@@ -247,7 +292,20 @@ export function networkFailure(err, region) {
 }
 
 export function parseArgs(argv) {
-  const value = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
+  /**
+   * The value after a flag, or the fallback — and never the next flag.
+   *
+   * `argv[argv.indexOf(name) + 1]` unguarded is the bug `scripts/demo-users.mjs` and
+   * `backend/seed/seed.mjs` both carry a paragraph about, and it was still here: `--region --yes`
+   * made the region the string **"--yes"**, and a trailing `--region` made it `undefined`. Either
+   * way this script then signed for `https://bedrock-mantle.--yes.api.aws`, failed to resolve it,
+   * and reported a network verdict about a host that was never BMA. Confirmed 2026-11-20.
+   */
+  const value = (name, fallback) => {
+    const i = argv.indexOf(name);
+    const next = i >= 0 ? argv[i + 1] : undefined;
+    return next && !next.startsWith('-') ? next : fallback;
+  };
   return {
     region: value('--region', process.env.AWS_REGION ?? 'us-east-1'),
     yes: argv.includes('--yes'),
@@ -346,9 +404,19 @@ Re-run with --yes.`);
     }
   }
 
-  const { tag, lines } = verdict(models.status, models.text);
+  const { ok, tag, lines } = verdict(models.status, models.text);
   console.log(`\nVerdict: ${tag}`);
   for (const l of lines) console.log(`  ${l}`);
+
+  // The exit code follows the verdict, which it did not before: every HTTP outcome exited 0, so
+  // `node scripts/bma-probe.mjs --yes && <next step>` carried on after ACCOUNT BLOCKED and after
+  // OUR IAM, NOT THE ACCOUNT. `test-sinhala.mjs` and `redteam-cli.mjs` both derive their exit code
+  // from the printed verdict for exactly this reason, and this is the first script of the evening.
+  //
+  // 1 is shared with the "this script broke" path at the bottom. Both mean do not proceed, and the
+  // text says which: that path says so in those words.
+  process.exitCode = ok ? 0 : 1;
+
   console.log(`
 Whatever this says, write the exact status and message into docs/BUILD-LOG.md. It answers the
 largest open question in the project, and a remembered paraphrase of it is worth nothing.

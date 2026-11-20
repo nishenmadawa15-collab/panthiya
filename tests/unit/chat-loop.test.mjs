@@ -452,6 +452,70 @@ test('a reply cut short by the token cap is an error, not a finished answer', as
   assert.deepEqual(scored.layersRelied, [], 'a truncated reply may not be attributed to a layer');
 });
 
+test('every stop-reason / tool-use combination is named for what it is', async () => {
+  // The corpus, not the case. Two independent facts arrive on the same response — whether the stop
+  // reason says the turn is over, and whether the content carries a tool-use block — and the loop
+  // used to read them in an order that let one name stand in for the other: the tool-use check came
+  // first, so `max_tokens` **with** a tool-use block was refused as `tool_use_without_stop_reason`.
+  //
+  // Both are a 502, so no run was ever scored wrong by it. What was wrong was the word on the
+  // screen. `tool_use_without_stop_reason` says the model asked for a tool and then claimed the
+  // turn was finished — a model-contract bug, nothing to do about it on the night. `max_tokens`
+  // says the reply hit the cap: it stopped mid-sentence, and in the longest legitimate reply this
+  // product produces — a parent-fee draft — mid-sentence means mid-number. That one has an answer
+  // (raise `maxTokens` in index.mjs, or shorten the draft), and it is the one the error has to say.
+  //
+  // `max_tokens` with a tool-use block is not a rare shape, either: that is what a cap hit *during*
+  // a tool call looks like — the block is there, half-built, because the cap landed inside it.
+  const text = { text: 'Dear Parent, Kasun has paid Rs. 2,5' };
+  const use = { toolUse: { toolUseId: 'tu-1', name: 'recordFee', input: { studentName: 'Kasun' } } };
+  const reply = (stopReason, content) => ({
+    ...(stopReason === null ? {} : { stopReason }),
+    output: { message: { role: 'assistant', content } },
+  });
+
+  const CORPUS = [
+    // stopReason      content        expected
+    ['end_turn', [text], null],
+    ['end_turn', [text, use], 'tool_use_without_stop_reason'],
+    [null, [text], null],
+    [null, [text, use], 'tool_use_without_stop_reason'],
+    ['max_tokens', [text], 'reply_truncated'],
+    ['max_tokens', [text, use], 'reply_truncated'],
+  ];
+
+  for (const [stopReason, content, expected] of CORPUS) {
+    const where = `stopReason=${stopReason} toolUse=${content.includes(use)}`;
+    const deps = fakeLoop({ script: [reply(stopReason, content)] });
+    const run = () => runToolLoop({
+      inputText: 'draft an update for Kasun', sessionAttributes: session('teacher'), deps,
+    });
+
+    if (expected === null) {
+      assert.equal(await run(), text.text, `${where} is a finished reply`);
+      continue;
+    }
+    await assert.rejects(run, (err) => {
+      assert.ok(err instanceof LoopError, where);
+      assert.equal(err.code, expected, where);
+      return true;
+    });
+    assert.equal(deps.toolCalls.length, 0, `${where}: nothing may be invoked for a refused turn`);
+  }
+
+  // And on the wire. `handleChat` passes `reply_truncated` through by name and folds every other
+  // loop code into `agent_unavailable`, so before the fix this exact response — a cap hit inside a
+  // tool call — reached the teacher as "the agent could not be reached", which it could.
+  const res = await handleChat({
+    claims: { sub: 't-1', role: 'teacher' },
+    body: { message: 'draft an update for Kasun' },
+    deps: chatDeps(fakeLoop({ script: [reply('max_tokens', [text, use])] })),
+  });
+  assert.equal(res.status, 502, 'still a 502: only the attribution was wrong');
+  assert.equal(res.body.error, 'reply_truncated');
+  assert.ok(!JSON.stringify(res.body).includes('Rs. 2,5'), 'the half-number must not reach anyone');
+});
+
 test('a content-filtered turn is blocked without crediting the guardrail that is not deployed', async () => {
   // `content_filtered` is the model provider's own filter, and it used to be folded into
   // `guardrailIntervened()` — so it came back as `blockedBy: 'guardrail'` and the real scorer

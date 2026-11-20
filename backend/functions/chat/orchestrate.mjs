@@ -350,15 +350,23 @@ export async function runToolLoop({ inputText, sessionAttributes, deps, maxTurns
     if (!Array.isArray(content)) throw new LoopError('model_response_unreadable');
 
     if (response.stopReason !== 'tool_use') {
-      // The mirror of the refusal below: a tool-use block whose stop reason says the turn is over.
-      // Returning the text would drop the tool use silently, invoke nothing, and pass off whatever
-      // the model wrote as the reply — an answer out of its own knowledge.
-      if (content.some((block) => block?.toolUse)) throw new LoopError('tool_use_without_stop_reason');
       // The cap in `index.mjs` is generous enough that hitting it means something went wrong, so a
       // capped reply is the silent truncation this file's header forbids: the text stops mid-word
       // — mid-number, in a parent-update draft a teacher forwards — and returning it would score
       // as a pass. Honest error, same as running out of rounds.
+      //
+      // Checked BEFORE the tool-use refusal below, and the order is the whole point. A cap hit
+      // *during* a tool call leaves a half-built `toolUse` block in `content` alongside the text,
+      // so the refusal below matched first and the turn was reported as
+      // `tool_use_without_stop_reason` — "the model asked for a tool and then said it was done",
+      // which is a model-contract bug nobody can act on at 9pm. It is truncation, and truncation
+      // has an answer: raise the cap or shorten the draft. Same 502 either way; only the name was
+      // lying, and the name is what the deploy evening reads.
       if (response.stopReason === 'max_tokens') throw new LoopError('reply_truncated');
+      // The mirror of the refusal below: a tool-use block whose stop reason says the turn is over.
+      // Returning the text would drop the tool use silently, invoke nothing, and pass off whatever
+      // the model wrote as the reply — an answer out of its own knowledge.
+      if (content.some((block) => block?.toolUse)) throw new LoopError('tool_use_without_stop_reason');
       return textOf(content);
     }
 

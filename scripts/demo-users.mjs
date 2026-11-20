@@ -97,11 +97,25 @@ export function passwordProblems(password) {
   return out;
 }
 
-/** The export block a shell can paste, for `scripts/redteam-cli.mjs`. */
+/**
+ * The export block a shell can paste, for `scripts/redteam-cli.mjs`.
+ *
+ * A role with no token gets a **comment**, not `export PANTHIYA_TOKEN_PARENT=<missing>`.
+ *
+ * `<missing>` was chosen as the readable alternative to exporting an empty string, and it is
+ * neither: unquoted `<` and `>` are shell redirections, so that line is a syntax error — and bash
+ * abandons the rest of the file when it hits one. Confirmed 2026-11-20 by sourcing a block whose
+ * only gap was the parent token: bash reported `syntax error near unexpected token 'newline'` and
+ * left `PANTHIYA_TOKEN_STUDENT` **unset as well**, because that export came after it. Two roles
+ * lost, 34 of the 36 red-team cases scored `error`, and only one role had been named as missing.
+ * A comment is just as readable and cannot take the next line with it.
+ */
 export function exportLines(apiBase, tokens) {
   return [
     `export PANTHIYA_API_BASE=${apiBase}`,
-    ...DEMO_ACCOUNTS.map((a) => `export ${a.env}=${tokens[a.role] ?? '<missing>'}`),
+    ...DEMO_ACCOUNTS.map((a) => (tokens[a.role]
+      ? `export ${a.env}=${tokens[a.role]}`
+      : `# ${a.env} NOT SET — no token came back for ${a.role}; its cases will score 'error'`)),
   ];
 }
 

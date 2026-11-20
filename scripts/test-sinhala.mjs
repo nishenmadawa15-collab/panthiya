@@ -41,6 +41,15 @@ const REGION = process.env.AWS_REGION ?? 'ap-south-1';
 /** One call's ceiling. A Bedrock answer to a 300-token prompt takes seconds; a minute is already a fault. */
 export const INVOKE_TIMEOUT_MS = 60_000;
 
+/** The output ceiling asked of every model. Named once because `invoke` also has to report it. */
+export const MAX_TOKENS = 300;
+
+/**
+ * The stop reasons that mean the ceiling above cut the reply off, across all three shapes:
+ * Nova says `max_tokens`, Claude says `max_tokens`, the Chat Completions shape says `length`.
+ */
+const CUT_OFF = new Set(['max_tokens', 'length']);
+
 /** Cheapest first. The first one that passes wins — there is no prize for a better model here. */
 export const DEFAULT_CANDIDATES = [
   'amazon.nova-micro-v1:0',
@@ -55,6 +64,20 @@ export const DEFAULT_CANDIDATES = [
  * after five confusing "CALL FAILED" lines. It is a usage error and is said as one.
  */
 export function parseArgs(argv = []) {
+  // Anything flag-shaped that is not one of the two is a usage error, said out loud.
+  //
+  // Silently ignoring it was a money bug, not a cosmetic one: `--model=amazon.nova-lite-v1:0`
+  // (the `--flag=value` form this script does not parse) and `--mdoel nova` both left `only`
+  // null, so a run the operator aimed at ONE model quietly called all three candidates — three
+  // times the Bedrock spend they asked for, and not a word about the word they got wrong. No
+  // model id starts with `-`, so this cannot swallow a value.
+  for (const a of argv) {
+    if (a.startsWith('-') && a !== '--yes' && a !== '--model') {
+      throw new Error(`unknown option "${a}" — this script takes --yes and --model <id>, `
+        + 'and does not understand the --flag=value form.');
+    }
+  }
+
   const i = argv.indexOf('--model');
   if (i < 0) return { yes: argv.includes('--yes'), only: null };
 
@@ -179,10 +202,10 @@ export function invoke(modelId, text, run = execFileSync) {
   // all three branches collapse into one — worth doing then, not before, because converse would
   // change the two shapes that are already known to work.
   const body = modelId.startsWith('anthropic.')
-    ? { anthropic_version: 'bedrock-2023-05-31', max_tokens: 300, messages: [{ role: 'user', content: [{ type: 'text', text }] }] }
+    ? { anthropic_version: 'bedrock-2023-05-31', max_tokens: MAX_TOKENS, messages: [{ role: 'user', content: [{ type: 'text', text }] }] }
     : modelId.startsWith('openai.')
-      ? { messages: [{ role: 'user', content: text }], max_completion_tokens: 300, temperature: 0 }
-      : { messages: [{ role: 'user', content: [{ text }] }], inferenceConfig: { maxTokens: 300, temperature: 0 } };
+      ? { messages: [{ role: 'user', content: text }], max_completion_tokens: MAX_TOKENS, temperature: 0 }
+      : { messages: [{ role: 'user', content: [{ text }] }], inferenceConfig: { maxTokens: MAX_TOKENS, temperature: 0 } };
 
   writeFileSync(inFile, JSON.stringify(body));
   run('aws', ['bedrock-runtime', 'invoke-model',
@@ -193,9 +216,56 @@ export function invoke(modelId, text, run = execFileSync) {
   const raw = JSON.parse(readFileSync(outFile, 'utf8'));
   rmSync(dir, { recursive: true, force: true });
 
-  if (modelId.startsWith('anthropic.')) return raw.content?.map((c) => c.text).join('') ?? '';
-  if (modelId.startsWith('openai.')) return raw.choices?.[0]?.message?.content ?? '';
-  return raw.output?.message?.content?.map((c) => c.text).join('') ?? '';
+  const { parts, stop, text: textOf } = replyShape(modelId, raw);
+
+  // A response shape this script cannot read is a call that produced no answer, not a model that
+  // failed a case. Returning '' for it scored the case NO REPLY — a *failed* case — so a renamed
+  // field at the Bedrock end would have printed "0/5 passed", which is exactly the "this model
+  // cannot do Sinhala" lie the header of this file promises not to tell. It throws, and `main`
+  // counts it `errored`, so five of them print NO VERDICT.
+  if (!Array.isArray(parts)) {
+    throw new Error(`${modelId}: no readable reply in the response — the shape that came back is `
+      + `not one this script knows (top-level keys: ${Object.keys(raw ?? {}).join(', ') || 'none'}). `
+      + 'Fix the shape in `replyShape` and re-run; nothing here is a verdict about Sinhala.');
+  }
+
+  // Truncation, which is the one that would have gone green. A fragment contains no mistakes yet,
+  // and every automatic rule in `score` is satisfied by having less text rather than more:
+  // `{"intent":"fee","student":"Nimal","amount":2500,"period":"Novem` holds all four substrings
+  // `fee-sinhala` asserts, and a Sinhala hint cut off before its verb still has Sinhala in it and
+  // still does not contain `x = 6` — so a cut-off tutor reply was EASIER to pass than a complete
+  // one. Confirmed 2026-11-20 by driving `invoke` + `score` with a `max_tokens` response: both
+  // cases scored PASS. A fragment is not an answer, so it gets no verdict either way.
+  if (CUT_OFF.has(String(stop))) {
+    throw new Error(`${modelId}: the reply was cut off at the ${MAX_TOKENS}-token ceiling `
+      + `(stop reason "${stop}") — a fragment is not an answer, so this case has no verdict. `
+      + 'Raise MAX_TOKENS in this script and re-run.');
+  }
+
+  return textOf();
+}
+
+/**
+ * Where each response shape keeps the reply, and where it says why it stopped.
+ *
+ * Exported so a test can pin all three without a Bedrock call. `parts` is the container that must
+ * exist for the response to be readable at all — it is checked separately from the text, because
+ * "the field is gone" and "the model said nothing" are different events with different fixes.
+ *
+ * ponytail: still three hand-written shapes rather than `bedrock-runtime converse`. Ceiling and
+ * upgrade path unchanged — see the note on the request bodies above.
+ */
+export function replyShape(modelId, raw) {
+  if (modelId.startsWith('anthropic.')) {
+    return { parts: raw?.content, stop: raw?.stop_reason,
+      text: () => raw.content.map((c) => c?.text ?? '').join('') };
+  }
+  if (modelId.startsWith('openai.')) {
+    return { parts: raw?.choices, stop: raw?.choices?.[0]?.finish_reason,
+      text: () => raw.choices[0]?.message?.content ?? '' };
+  }
+  return { parts: raw?.output?.message?.content, stop: raw?.stopReason,
+    text: () => raw.output.message.content.map((c) => c?.text ?? '').join('') };
 }
 
 /**
@@ -220,7 +290,7 @@ export function summaryLines(summary) {
     }
   }
 
-  const clean = summary.find((s) => s.errored === 0 && s.passed === s.total);
+  const clean = summary.find(isClean);
   lines.push('', clean
     ? `  Cleanest candidate: ${clean.modelId} — ${clean.passed}/${clean.total}, every call answered.`
     : '  NO CANDIDATE PASSED EVERY CASE WITH EVERY CALL ANSWERED — the gate is not green.');
@@ -242,7 +312,19 @@ Record the decision and your reasoning in docs/BUILD-LOG.md, then tick task 1.1 
  * disagree: a printed "NO CANDIDATE PASSED" with a 0 exit status is the same false green in a
  * different place.
  */
-export const gateIsGreen = (summary) => summary.some((s) => s.errored === 0 && s.passed === s.total);
+export const gateIsGreen = (summary) => summary.some(isClean);
+
+/**
+ * A candidate this run can stand behind: every case passed, every call answered, and there was
+ * something to answer.
+ *
+ * `total > 0` is the condition that was missing, and it is the whole predicate on an empty suite:
+ * with no cases, "no case failed" and "no call errored" are both vacuously true, so `gateIsGreen`
+ * returned **true** and the script exited 0 announcing a "Cleanest candidate — 0/0, every call
+ * answered". Confirmed 2026-11-20. One predicate, used by both the printed verdict and the exit
+ * code, so the two cannot drift apart — which is the reason given where `gateIsGreen` is defined.
+ */
+export const isClean = (s) => s.total > 0 && s.errored === 0 && s.passed === s.total;
 
 function main(argv) {
   const { yes, only } = parseArgs(argv);

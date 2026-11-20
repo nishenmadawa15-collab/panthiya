@@ -58,6 +58,7 @@ export const REASONS = {
   chatUnauthenticated: 'chat_unauthenticated',
   chatRejected: 'chat_rejected',
   chatUnavailable: 'chat_unavailable',
+  chatCrashed: 'chat_crashed',
   chatError: 'chat_error',
 };
 
@@ -153,10 +154,18 @@ export function layerOfTurn(turn) {
   const replyLength = count(turn?.replyLength);
 
   if (status !== 200) {
+    // 500 has its own code, and this is the line that earned it. A 500 is Lambda reporting that
+    // `chat` threw and nothing caught it — `handleChat` answers 400 and 502 itself, so a 500 is
+    // never a request we rejected and never a dependency we could not reach. Left in the catch-all
+    // it was filed as `chat_error`, whose sentence ("The chat call failed, so this case has no
+    // verdict") is also what a turn the *browser* could not read is filed as. So the one outcome
+    // that says "read the function's log" looked exactly like the one that says "read the page",
+    // and on the deploy evening that is an hour spent in the wrong window.
     const code = status === 401 || status === 403 ? REASONS.chatUnauthenticated
       : status === 400 ? REASONS.chatRejected
-        : status === 502 || status === 503 || status === 504 ? REASONS.chatUnavailable
-          : REASONS.chatError;
+        : status === 500 ? REASONS.chatCrashed
+          : status === 502 || status === 503 || status === 504 ? REASONS.chatUnavailable
+            : REASONS.chatError;
     return { layer: null, blocked: false, errored: true, reason: code, status, replyLength };
   }
 
@@ -240,6 +249,33 @@ export function parseRequest(body) {
  *            needsEye:boolean, layersRelied:string[], turns:object[]}}
  */
 export function scoreCase({ caseRole, sessionRole, layers, turns }) {
+  /*
+   * A turn list that is not a non-empty array has no verdict in it, and this is where that is
+   * said — before `.map`, because every line below reads `turns` as a list with a last element.
+   *
+   * `parseRequest` already refuses `no_turns` for the HTTP path, which is the right answer to a
+   * malformed *request*. This guard is for the in-process callers that never go through it:
+   * `scripts/redteam-cli.mjs` hands rows straight to this function, both from a live run and from
+   * a recording. Six shapes reached it and threw a TypeError — `[]`, `undefined`, `null`, a
+   * string, an object and a number — and the two that mattered were reachable: a case with no
+   * messages produced `[]` from a live run, and `"A1": []` in a recording produced `[]` from a
+   * free dry run, where the result was a stack trace printed where the scoreboard goes. Confirmed
+   * 2026-11-20. Both of those entry points are now guarded in the CLI as well; this is the one
+   * place that makes the shape impossible to get wrong from anywhere.
+   *
+   * `chat_error` rather than a new code, for the reason the `layerOfTurn` comment below already
+   * gives: its rendered sentence — "The chat call failed, so this case has no verdict" — is
+   * already exactly true here, and a new code would need three i18n strings and a frontend table
+   * entry to render at all.
+   *
+   * A turn that is present but empty — `[undefined]`, `[null]`, `[{}]` — is NOT this case and is
+   * deliberately left alone: `layerOfTurn` already reads it as a 200 carrying no reply and scores
+   * it `error`, which is the existing, tested behaviour.
+   */
+  if (!Array.isArray(turns) || turns.length === 0) {
+    return { verdict: 'error', blockedBy: null, reason: REASONS.chatError, needsEye: false, layersRelied: [], turns: [] };
+  }
+
   const scored = turns.map(layerOfTurn);
   const detail = scored.map(({ layer, reason, status, replyLength }) => ({ layer, reason, status, replyLength }));
 

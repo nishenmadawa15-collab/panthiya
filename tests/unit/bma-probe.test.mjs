@@ -306,3 +306,92 @@ test('the write call is behind its own flag, and the read call is the default', 
     'the read-only call should happen first',
   );
 });
+
+// --- a 2xx is not a model list ------------------------------------------------------------------
+
+test('a 2xx that carries no model list is not REACHABLE', () => {
+  // The branch read the status and nothing else, so every one of these printed "REACHABLE … pick a
+  // model from the list above" with nothing above to pick from, and exited 0. Confirmed
+  // 2026-11-20. A 200 from a captive portal or an HTTPS-intercepting network is the realistic one.
+  const notAList = [
+    ['an empty body', ''],
+    ['whitespace', '  \n '],
+    ['a captive portal', '<html><body>200 OK</body></html>'],
+    ['an error document with a 200', '{"message":"Service Unavailable"}'],
+    ['a truncated payload', '{"data":[{"id":"openai.gpt-oss-1'],
+    ['the list under another key', '{"models":[{"id":"openai.gpt-oss-120b-1:0"}]}'],
+    ['data that is not a list', '{"data":{"id":"openai.gpt-oss-120b-1:0"}}'],
+    ['a bare list', '[{"id":"openai.gpt-oss-120b-1:0"}]'],
+  ];
+
+  for (const [label, body] of notAList) {
+    for (const status of [200, 201, 204]) {
+      const v = verdict(status, body);
+      assert.equal(v.ok, false, `${label} at HTTP ${status} must not be a green verdict`);
+      assert.match(v.tag, /NOT WITH A MODEL LIST/, `${label} at HTTP ${status}`);
+      assert.ok(v.lines.some((l) => /NOT a verdict about the account/.test(l)),
+        `${label}: it must not be read as a verdict in either direction`);
+    }
+  }
+
+  // An authorised account that simply offers nothing here is its own outcome: signing worked, so
+  // it is not a denial, but there is no model to run the gate against either.
+  const empty = verdict(200, '{"data":[]}');
+  assert.equal(empty.ok, false);
+  assert.match(empty.tag, /MODEL LIST IS EMPTY/);
+  assert.ok(empty.lines.some((l) => /Signing and authorisation both worked/.test(l)));
+
+  // And the real answer still reads as it did, now with the count in it.
+  const good = verdict(200, '{"data":[{"id":"openai.gpt-oss-120b-1:0"},{"id":"openai.gpt-oss-20b-1:0"}]}');
+  assert.equal(good.ok, true);
+  assert.equal(good.tag, 'REACHABLE');
+  assert.match(good.lines[0], /2 models/);
+});
+
+test('every verdict says whether it is green, so the exit code cannot contradict the text', () => {
+  // Each HTTP outcome exited 0 before this, so `bma-probe --yes && <next step>` carried on after
+  // ACCOUNT BLOCKED. The flag is what `main` now sets the exit code from.
+  const outcomes = [
+    [200, '{"data":[{"id":"m"}]}', true],
+    [200, '', false],
+    [200, '{"data":[]}', false],
+    [400, '{"__type":"ValidationException","message":"1 validation error detected"}', true],
+    [403, 'User: arn:aws:iam::1:user/panthiya-dev is not authorized to perform: bedrock-mantle:ListModels', false],
+    [403, 'This feature is not available for accounts without prior service usage.', false],
+    [403, 'Forbidden', false],
+    [404, 'Not Found', false],
+    [500, 'Internal Server Error', false],
+    [418, 'teapot', false],
+  ];
+
+  for (const [status, text, expected] of outcomes) {
+    const v = verdict(status, text);
+    assert.equal(typeof v.ok, 'boolean', `HTTP ${status} has no ok flag, so main cannot act on it`);
+    assert.equal(v.ok, expected, `HTTP ${status} ${text.slice(0, 40)} -> ${v.tag}`);
+    assert.ok(v.tag && v.lines.length, 'a verdict with no words is not a verdict');
+  }
+
+  // A network error is never green: it is the absence of an answer.
+  assert.equal(networkFailure(Object.assign(new Error('getaddrinfo ENOTFOUND'),
+    { code: 'ENOTFOUND' }), 'us-east-1').ok, false);
+});
+
+test('--region never swallows the next flag, and never signs for an undefined host', () => {
+  // The bug `demo-users.mjs` and `seed.mjs` each carry a paragraph about, still live here:
+  // `--region --yes` made the region the string "--yes" and a trailing `--region` made it
+  // `undefined`, and the probe then signed for `bedrock-mantle.--yes.api.aws` and reported a
+  // network verdict about a host that was never BMA. Confirmed 2026-11-20.
+  const fallback = process.env.AWS_REGION ?? 'us-east-1';
+  for (const argv of [['--region'], ['--yes', '--region'], ['--region', '--yes'],
+    ['--region', '--create-probe', '--yes'], ['--region', '-x']]) {
+    const { region } = parseArgs(argv);
+    assert.equal(region, fallback, `${argv.join(' ')} must fall back, not take a flag as a region`);
+    assert.doesNotMatch(hostFor(region), /undefined|--/, 'the host must be resolvable');
+  }
+
+  // A real region is still read, and the other two flags are unaffected by the guard.
+  assert.equal(parseArgs(['--region', 'us-west-2']).region, 'us-west-2');
+  assert.equal(parseArgs(['--region', 'us-west-2', '--yes']).yes, true);
+  assert.equal(parseArgs(['--yes', '--region', 'us-east-2', '--create-probe']).createProbe, true);
+  for (const r of BMA_REGIONS) assert.equal(parseArgs(['--region', r]).region, r);
+});
