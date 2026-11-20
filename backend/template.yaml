@@ -343,12 +343,19 @@ Resources:
       AttributeDefinitions:
         - AttributeName: classId
           AttributeType: S
-        - AttributeName: tsUlid
+        - AttributeName: sk
           AttributeType: S
       KeySchema:
         - AttributeName: classId
           KeyType: HASH
-        - AttributeName: tsUlid # "ts#ulid"
+        # Corrected 2026-11-20: this declared `tsUlid` while backend/lib/audit.mjs writes `sk`
+        # (and `backend/functions/read/handlers.mjs` queries it). A PutItem missing the range key
+        # is rejected -- so in a deployed stack EVERY audit write would have failed, AFTER the data
+        # row it describes had already persisted: precisely the untraceable write requirement 10.2
+        # exists to prevent. Invisible offline because all three test fixtures declare
+        # ['classId','sk'] and only the seed wrote `tsUlid`. The name is `sk` rather than `tsUlid`
+        # because audit.mjs builds `${ts}#${randomUUID()}` -- a UUID, never a ULID.
+        - AttributeName: sk # "<ISO timestamp>#<uuid>"
           KeyType: RANGE
 
   # The only table with a TTL: red-team runs self-delete after 30 days,

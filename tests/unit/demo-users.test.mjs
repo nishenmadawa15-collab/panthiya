@@ -109,6 +109,18 @@ test('a password is checked against the pool policy before any account is made',
   // console an hour later.
   assert.match(TEMPLATE, /MinimumLength:\s*12/);
   assert.match(TEMPLATE, /RequireSymbols:\s*false/);
+
+  // And the mirror is driven from the pool's own number, both ways. Every case above is 7
+  // characters or 13, so the length in passwordProblems() could drift anywhere from 8 to 13 with
+  // all of them still green — while `assert.match(TEMPLATE, /MinimumLength:\s*12/)` pins the pool
+  // and not the copy of it. Cognito rejects a short password *after* creating the user, which is
+  // the half-made account this whole check exists to avoid.
+  const min = Number(/MinimumLength:\s*(\d+)/.exec(TEMPLATE)[1]);
+  const ofLength = (n) => `Aa1${'x'.repeat(n - 3)}`;
+  assert.deepEqual(passwordProblems(ofLength(min)), [],
+    `${min} characters is the pool's own minimum and has to pass here`);
+  assert.deepEqual(passwordProblems(ofLength(min - 1)), [`at least ${min} characters`],
+    `${min - 1} characters must be refused here, by the pool's number and in its words`);
 });
 
 // --- the AWS calls --------------------------------------------------------------------------------
@@ -282,6 +294,16 @@ test('--apply names every account it did and did not create, and does not stop a
   assert.match(results[1].error, /^ThrottlingException: rate exceeded$/, 'one line, not a stack');
   assert.ok(calls.some((c) => c.includes('student@panthiya.demo')), 'the student was still attempted');
 
+  // Each account goes into its OWN group, compared both ways across all three — the role is the
+  // only thing that distinguishes these logins, and `--group-name` was asserted once, for the
+  // teacher, by a test that creates the teacher. A hardcoded 'teacher' there stayed green while
+  // the parent and student logins both came back with teacher scope: `classes.byTeacher` resolves
+  // for them, the parent login can write marks, and case A1 stops being an attack at all.
+  const groups = calls.filter((c) => c.includes('admin-add-user-to-group'))
+    .map((c) => [c[c.indexOf('--username') + 1], c[c.indexOf('--group-name') + 1]]);
+  assert.deepEqual(groups, DEMO_ACCOUNTS.map((a) => [a.email, a.role]),
+    'an account was put in a group that is not its own role');
+
   const { lines, ok } = applyLines(results);
   const text = lines.join('\n');
   assert.equal(ok, false);
@@ -337,6 +359,21 @@ test('--tokens hands over the tokens it has and names the role it could not', ()
   // could not stay — it is a shell syntax error that also eats the line after it.
   assert.match(exportLines('https://api', tokens).join('\n'),
     /^# PANTHIYA_TOKEN_STUDENT NOT SET — no token came back for student/m);
+});
+
+test('the demo password is never printed, and never read from argv', () => {
+  // Source guard, the same one tests/unit/bma-probe.test.mjs holds that script to for credentials,
+  // and this script needs it more: PANTHIYA_DEMO_PASSWORD is the *permanent* password of three live
+  // logins, `--apply` runs in a terminal on deploy evening, and that terminal becomes a screenshot
+  // and a build log. The policy error names the rules the password breaks; it must never name the
+  // password. Nothing else in this file reads `requirePassword`, which is why this is a read.
+  const source = read('scripts/demo-users.mjs');
+  assert.doesNotMatch(source, /console\.(log|error)\([^)]*\bpassword\b/,
+    'the password appears inside a console call');
+  assert.doesNotMatch(source, /--password[= ]'|flagValue\(args, '--password'/,
+    'the password must come from the environment, not from a flag a shell history keeps');
+  assert.ok(source.includes('process.env.PANTHIYA_DEMO_PASSWORD'),
+    'the password no longer comes from the environment');
 });
 
 test('neither mode can end in a stack trace instead of a sentence', () => {

@@ -16,7 +16,7 @@
 // would create exactly the gap design §4.1 exists to close, so this file never compares names
 // itself: it calls `findNames` and `foldedKey`.
 
-import { findNames, foldedKey } from '../../lib/names.mjs';
+import { findNames, foldedKey, foldHomoglyphs } from '../../lib/names.mjs';
 
 const ROLES = new Set(['teacher', 'parent', 'student']);
 
@@ -38,8 +38,21 @@ export const REASONS = {
 const block = (reason) => ({ verdict: 'block', reason });
 const ALLOW = { verdict: 'allow', reason: 'ok' };
 
-/** Lowercase, script-preserving, punctuation-free form used for phrase matching. */
-const flatten = (s) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+/**
+ * Lowercase, script-preserving, punctuation-free form used for phrase matching.
+ *
+ * `foldHomoglyphs` is load-bearing, not decoration. **NFKC does not fold Cyrillic**, so until
+ * 2026-11-20 this was NFKC + lowercase and one Cyrillic character walked past three of the four
+ * conditions below: `х = 6.` was allowed where `x = 6.` blocked, and the instruction-leak and
+ * write-claim phrases were allowed with a single Cyrillic `о`. Cases D3 and D6 are exactly
+ * that shape and have never been run live, so nothing contradicted the claim.
+ *
+ * Folding Greek and Cyrillic maths letters is deliberate and is *not* a false-positive risk here:
+ * if the answer really is `α = 30`, requirement 8.3 says the tutor may not state it, so
+ * blocking it is the correct behaviour rather than collateral damage.
+ */
+const flatten = (s) => foldHomoglyphs(s.normalize('NFKC'))
+  .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 // =================================================================================================
 // Check 1 — instruction leak (case D3)
@@ -606,19 +619,34 @@ export function runChecks({ role, userMessage = '', agentReply, foreignNames = [
   if (typeof agentReply !== 'string' || agentReply.trim() === '') return block(REASONS.badInput);
   if (typeof userMessage !== 'string') return block(REASONS.badInput);
 
+  // Fold look-alike characters ONCE, here, at the trust boundary — not inside each check.
+  //
+  // Found 2026-11-20: `flatten()` was NFKC + lowercase, and **NFKC does not fold Cyrillic**, so
+  // `х = 6.` was allowed where `x = 6.` blocked, and the write-claim phrase was allowed with a
+  // single Cyrillic `о`. Three of the four checks below never see `flatten()` at all —
+  // `finalAnswerLeak` matches shapes on raw text — so folding in `flatten` alone fixed one of
+  // them. One fold at the entry fixes all four and cannot be forgotten by a fifth check added later.
+  //
+  // Safe because the map covers Cyrillic, Greek and Latin look-alikes only: Sinhala and Tamil are
+  // untouched, so the foreign-name and Indic number paths behave exactly as before. It can only
+  // make a base64 run look MORE like base64, never less, so check 5 does not get quieter. And no
+  // check echoes text — a block carries a reason, never the reply — so nothing folded is
+  // ever shown to anyone.
+  const reply = foldHomoglyphs(agentReply);
+
   const message = userMessage;
-  const core = coreChecks({ role, text: agentReply, userMessage: message, foreignNames, permittedNames });
+  const core = coreChecks({ role, text: reply, userMessage: message, foreignNames, permittedNames });
   if (core) return block(core);
 
   // Check 5: the same four checks again on the decoded text. One level only — a payload nested
   // twice is not a case we have seen, and each level costs CPU on every single reply.
-  for (const decoded of decodeBase64Runs(agentReply)) {
+  for (const decoded of decodeBase64Runs(reply)) {
     const inner = coreChecks({ role, text: decoded, userMessage: message, foreignNames, permittedNames });
     if (inner) return block(`encoded_${inner}`);
     if (role !== 'teacher' && writeClaim(decoded)) return block(`encoded_${REASONS.writeClaim}`);
   }
 
-  if (role !== 'teacher' && writeClaim(agentReply)) return block(REASONS.writeClaim);
+  if (role !== 'teacher' && writeClaim(reply)) return block(REASONS.writeClaim);
 
   return ALLOW;
 }

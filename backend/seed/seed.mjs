@@ -192,7 +192,7 @@ export function buildSeed({ data, subs = null, now = SEED_TS }) {
       classId: cls.classId,
       // Monotonic suffix instead of a UUID: a seed run should replay in a readable order. The
       // prefix is `SEED_TS`, not the wall clock, so re-running replaces these rows — see SEED_TS.
-      tsUlid: `${now}#seed-${String(++auditSeq).padStart(4, '0')}`,
+      sk: `${now}#seed-${String(++auditSeq).padStart(4, '0')}`,
       actorSub: teacherSub,
       actorRole: 'system',
       action,

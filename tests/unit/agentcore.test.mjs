@@ -10,7 +10,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  createHandler, start, outcomeOf, parseInvocation, OUTCOME_CODES, PORT, MAX_BODY_BYTES,
+  createHandler, start, outcomeOf, parseInvocation, readBody, OUTCOME_CODES, PORT, MAX_BODY_BYTES,
 } from '../../backend/agentcore/server.mjs';
 import { MAX_MESSAGE } from '../../backend/functions/chat/orchestrate.mjs';
 
@@ -222,6 +222,35 @@ test('an oversized body is refused and runTurn never sees it', async () => {
   assert.equal(status, 200);
   assert.deepEqual(json, { output: { error: 'bad_input' } });
   assert.equal(called, false);
+});
+
+test('the body over the limit is drained, not destroyed — the request has to stay answerable', async () => {
+  // The test above proves the *refusal*; this one proves the half of readBody() that its nine-line
+  // comment is actually about. A 32KB body arrives in one chunk, so that test crosses the limit on
+  // the first `data` event and no second event ever follows: the `if (over)` drain branch is never
+  // executed by it, and replacing that branch with `req.destroy()` leaves it green. Destroying is
+  // what the first version did, and it costs the whole point of this file — the caller gets
+  // UND_ERR_SOCKET instead of a response, and a transport error carries no code, which is the one
+  // outcome every other decision here is arranged to avoid.
+  //
+  // A stub request rather than a real socket, because "the limit is crossed by a later chunk" is a
+  // property of the reader and a real client may coalesce two writes into one packet.
+  const handlers = {};
+  let destroyed = null;
+  const req = {
+    on(event, fn) { handlers[event] = fn; return req; },
+    destroy(err) { destroyed = err ?? new Error('destroyed'); },
+  };
+
+  const body = readBody(req, 8);
+  handlers.data(Buffer.from('1234'));          // under
+  handlers.data(Buffer.from('56789'));         // over, here
+  handlers.data(Buffer.from('the rest'));      // and the client keeps sending
+  handlers.end();
+
+  await assert.rejects(body, /body_too_large/);
+  assert.equal(destroyed, null,
+    'the request was destroyed, so the caller gets a transport error instead of a bad_input code');
 });
 
 test('sessionAttributes are passed through untouched — identity is never rebuilt here', async () => {

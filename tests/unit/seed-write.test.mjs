@@ -204,14 +204,14 @@ test('two runs of the seed write the same keys, so the re-run it advises cannot 
   const first = buildSeed({ data: clone(), subs: SUBS });
   const second = buildSeed({ data: clone(), subs: SUBS });
 
-  const auditKeys = (b) => b.audit.map((r) => `${r.classId}|${r.tsUlid}`);
+  const auditKeys = (b) => b.audit.map((r) => `${r.classId}|${r.sk}`);
   assert.deepEqual(auditKeys(second), auditKeys(first), 'the audit sort keys must not move');
   assert.equal(new Set(auditKeys(first)).size, first.audit.length, 'and must not collide inside one run');
 
   // Every row, not just the keys: a re-run should be a byte-identical overwrite.
   assert.deepEqual(second.items, first.items);
   assert.deepEqual(second.audit, first.audit);
-  assert.ok(first.audit.every((r) => r.tsUlid.startsWith(SEED_TS)));
+  assert.ok(first.audit.every((r) => r.sk.startsWith(SEED_TS)));
 });
 
 test('a wall-clock timestamp is what made the audit rows pile up — pinned so it cannot come back', () => {
@@ -219,13 +219,13 @@ test('a wall-clock timestamp is what made the audit rows pile up — pinned so i
   // two runs on the same evening.
   const a = buildSeed({ data: clone(), subs: SUBS, now: '2026-12-02T19:04:11.000Z' });
   const b = buildSeed({ data: clone(), subs: SUBS, now: '2026-12-02T19:11:38.000Z' });
-  const keys = new Set([...a.audit, ...b.audit].map((r) => r.tsUlid));
+  const keys = new Set([...a.audit, ...b.audit].map((r) => r.sk));
   assert.equal(keys.size, a.audit.length + b.audit.length,
     'different clocks give every audit row a brand new key — this is the pile-up, reproduced');
 
   // And the default does not do that.
   assert.equal(new Set([...buildSeed({ data: clone(), subs: SUBS }).audit,
-    ...buildSeed({ data: clone(), subs: SUBS }).audit].map((r) => r.tsUlid)).size,
+    ...buildSeed({ data: clone(), subs: SUBS }).audit].map((r) => r.sk)).size,
   a.audit.length, 'the shipped default collapses the two runs onto one set of keys');
 });
 

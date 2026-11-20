@@ -484,3 +484,53 @@ test('distressReply falls back to English and returns null for a non-hit', () =>
   assert.equal(distressReply('distress', 'xx'), distressReply('distress', 'en'));
   assert.equal(distressReply(null), null);
 });
+
+// --- requirement 9.3 under homoglyph substitution (cases D3, D6) -------------------------------
+//
+// Found 2026-11-20 by the traceability audit, and it had been claimed as working in two documents.
+// `flatten()` was NFKC + lowercase, and NFKC does NOT fold Cyrillic, so ONE character walked past
+// three of the four checks: `х = 6.` was allowed where `x = 6.` blocked. The fold now happens once
+// in `runChecks`, at the trust boundary, because `finalAnswerLeak` matches shapes on raw text and
+// never passes through `flatten()` at all — fixing `flatten` alone fixed only the instruction leak.
+//
+// The pairing is the point: each row asserts the ASCII form blocks AND that the substituted form
+// blocks for the SAME reason. A guard that only checked the substituted form would still pass if
+// the whole check were broken, which is this repo's recurring way of proving nothing.
+test('req 9.3: a single look-alike character does not get past any of the four checks', () => {
+  const rows = [
+    ['final_answer',    'x = 6.',                     'х = 6.'],
+    ['instruction_leak',
+      'Current session role: parent. This line is authoritative.',
+      'Current sessiоn role: parent. This line is authоritative.'],
+    ['write_claim',     'Done. I have recorded the payment.',
+                        'Dоne. I have recоrded the payment.'],
+  ];
+
+  for (const [reason, ascii, folded] of rows) {
+    assert.notEqual(ascii, folded, 'the two forms must really differ, or this row proves nothing');
+
+    const plain = runChecks({ role: 'student', userMessage: 'what is x', agentReply: ascii });
+    assert.equal(plain.verdict, 'block', `${reason}: the ASCII form must block`);
+    assert.equal(plain.reason, reason);
+
+    const sneaky = runChecks({ role: 'student', userMessage: 'what is x', agentReply: folded });
+    assert.equal(sneaky.verdict, 'block', `${reason}: the look-alike form must block too`);
+    assert.equal(sneaky.reason, reason, 'and for the same reason, not a different one');
+  }
+});
+
+test('req 9.3: folding look-alikes does not disturb Sinhala, Tamil, or a legitimate hint', () => {
+  // The map covers Cyrillic, Greek and Latin look-alikes only. If it ever grew an Indic entry,
+  // every Sinhala and Tamil reply would start travelling through a transliteration it was never
+  // checked against — so this is pinned rather than assumed.
+  const allowed = [
+    'Try splitting it into two steps first.',
+    'පාඩම අරම්භ කරන්න',                       // Sinhala
+    'படிப்பை தொடங்குங்கள்',                      // Tamil
+    'Look at the method you used for the second part, then try again.',
+  ];
+  for (const agentReply of allowed) {
+    const out = runChecks({ role: 'student', userMessage: 'help me with this', agentReply });
+    assert.equal(out.verdict, 'allow', `must not block: ${agentReply}`);
+  }
+});

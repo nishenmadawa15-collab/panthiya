@@ -441,4 +441,9 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 // 2026-11-19 was exactly a validated function left exported, tested and unused at its call site.
 export const __test__ = {
   todayInColombo, maxTurnsFromEnv, orchestrator: ORCHESTRATOR, runtimeSessionIdOf, harnessArnFor,
+  // The map itself, so the chain name -> map -> implementation can be checked by behaviour instead
+  // of by source text. Both existing pins on that chain are `assert.match` on this file's own
+  // source, and this repo has been caught four times by a guard that read a declaration rather than
+  // the thing it protected. A source pin would not notice `{ harness: invokeViaLoop }`.
+  orchestrators: ORCHESTRATORS,
 };

@@ -175,6 +175,23 @@ function normalise(input) {
 }
 
 /**
+ * Fold look-alike characters to their Latin shapes, and nothing else.
+ *
+ * Exported for `policy-check/checks.mjs`, whose `flatten()` was NFKC + lowercase only — and **NFKC
+ * does not fold Cyrillic**. One Cyrillic character therefore walked past three of layer 3's four
+ * conditions (`х = 6.`, and the instruction-leak and write-claim phrases with a Cyrillic `о`),
+ * while `docs/SUBMISSION-BEDROCK.md` claimed policyCheck did homoglyph normalisation and red-team
+ * cases D3/D6 are exactly that shape. Found 2026-11-20 by the traceability audit.
+ *
+ * It is this map rather than a second one on purpose: a copy would drift, and the name check and
+ * the phrase checks must agree about what a letter is.
+ */
+export function foldHomoglyphs(input) {
+  if (typeof input !== 'string') return '';
+  return [...input].map((ch) => HOMOGLYPHS.get(ch) ?? ch).join('');
+}
+
+/**
  * Canonical key for a name, in any of the four input languages or any script mixture.
  * Returns '' for input that holds no letters, which callers must treat as "no match", never as
  * a wildcard that matches everything.

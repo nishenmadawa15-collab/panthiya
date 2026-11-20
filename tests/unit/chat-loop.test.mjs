@@ -1255,3 +1255,73 @@ test('req: the deployed module says which orchestrator it selected, once, at col
     console.log = real;
   }
 });
+
+// --- the chain name -> map -> implementation, observed rather than grepped --------------------
+//
+// Pass 4 recorded the ceiling this closes: the two existing pins on this chain are `assert.match`
+// against this file's own source, so they read declarations. Neither would notice
+// `ORCHESTRATORS = { harness: invokeViaLoop, ... }` — the call site text stays correct, the
+// selected name stays `'harness'`, and the disqualified Converse loop serves every request.
+//
+// The harness implementation is identified here by a side effect only it has: `harnessArnFor` is
+// its first statement, so with HARNESS_ARN unset it rejects with our own message before any AWS
+// SDK import. That is behaviour, not a name and not a line of source.
+test('req: the orchestrator map really points at the implementation it names', async () => {
+  const harnessEnv = {
+    HARNESS_ID: 'panthiya_harness_01',
+    HARNESS_ARN: '',
+    GUARDRAIL_ID: 'gr1',
+    GUARDRAIL_VERSION: '1',
+    MODEL_ID: 'apac.amazon.nova-lite-v1:0',
+    BEDROCK_AGENT_ID: 'ABC1234567',
+  };
+  const mod = await importChatIndex(harnessEnv, 'map-harness');
+  const { orchestrators, orchestrator } = mod.__test__;
+
+  assert.deepEqual(
+    Object.keys(orchestrators).sort(), ['agent', 'harness', 'loop'],
+    'three orchestrators, named as orchestratorFor returns them',
+  );
+
+  // Three distinct implementations. `{ harness: invokeViaLoop }` collapses two keys onto one
+  // function, which is the shape the source pins cannot see.
+  const impls = new Set(Object.values(orchestrators));
+  assert.equal(impls.size, 3, 'each name has its own implementation, not a shared one');
+
+  // The selected name must resolve to something callable — this is what `handler` passes on.
+  assert.equal(typeof orchestrators[orchestrator], 'function');
+
+  const turn = { inputText: 'hello', sessionAttributes: { role: 'teacher', sub: 's'.repeat(40) } };
+
+  // These implementations may throw synchronously (the harness path validates before its first
+  // await) or reject (the loop path gets as far as a dynamic import). `assert.rejects` propagates
+  // a synchronous throw instead of catching it, so capture both shapes rather than assuming one.
+  const errorFrom = async (fn) => {
+    try {
+      await fn();
+    } catch (err) {
+      return err;
+    }
+    return null;
+  };
+
+  // Behavioural identification: only the harness path checks the ARN against HARNESS_ID, and it
+  // does so as its first statement, before any AWS SDK import.
+  const harnessErr = await errorFrom(() => orchestrators.harness(turn));
+  assert.ok(harnessErr, 'the harness path must refuse an ARN that does not match HARNESS_ID');
+  assert.match(
+    harnessErr.message, /HARNESS_ARN must address the harness HARNESS_ID names/,
+    'ORCHESTRATORS.harness must be the harness implementation, not the loop wearing its name',
+  );
+
+  // And the loop must NOT be the harness. It has no ARN precondition, so it gets further and fails
+  // elsewhere (there is no bedrock-runtime SDK in a zero-dependency tree). Asserting "not that
+  // error" is what makes the assertion above mean something: if the map pointed both names at the
+  // same function, one of these two must fail.
+  const loopErr = await errorFrom(() => orchestrators.loop(turn));
+  assert.ok(loopErr, 'the loop path fails offline too, but for its own reason');
+  assert.doesNotMatch(
+    loopErr.message, /HARNESS_ARN/,
+    'the loop path must not be running the harness precondition',
+  );
+});

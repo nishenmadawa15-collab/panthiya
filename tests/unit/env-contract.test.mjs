@@ -327,3 +327,76 @@ test('the audit log table is only ever granted append and read permissions', () 
   assert.deepEqual(violations, [],
     `audit_log must stay append-only (req 10.4):\n  ${violations.join('\n  ')}`);
 });
+
+// --- the other half of the same contract: key schemas -----------------------------------------
+//
+// The header above describes a bug where ddb.mjs read TABLE_CLASSES while the template set
+// CLASSES_TABLE. On 2026-11-20 the traceability audit found the same class of bug one layer down:
+// the audit-log table declared its range key as `tsUlid` while backend/lib/audit.mjs writes `sk`.
+//
+// A PutItem missing the range key is rejected by DynamoDB, so in a deployed stack EVERY audit write
+// would have failed — and it fails AFTER the data row it describes has already persisted, which is
+// the untraceable write requirement 10.2 exists to prevent. The suite stayed green because all
+// three fixtures declare ['classId','sk'] and NO test read `KeySchema` at all. Nothing compared the
+// key the table declares against the key the writer writes, so the two drifted in silence.
+//
+// This reads both sides and insists they agree, behaviourally: the Item is the one `writeAudit`
+// really builds, captured through its injected `put`.
+
+/** The `KeySchema` attribute names of one table resource, found by indentation like `envVarsIn`. */
+function keySchemaOf(resourceName) {
+  const start = template.indexOf(`  ${resourceName}:`);
+  assert.notEqual(start, -1, `${resourceName} must exist in the template`);
+  // The next line indented by EXACTLY two spaces is the next resource. `indexOf('\n  ')` is
+  // wrong here: it also matches '\n    ', so it cut the block at the first property line.
+  const after = start + `  ${resourceName}:`.length;
+  const next = /\n {2}\S/.exec(template.slice(after));
+  const block = template.slice(start, next ? after + next.index : template.length);
+
+  const head = /^([ ]*)KeySchema:[ ]*$/m.exec(block);
+  assert.ok(head, `${resourceName} must declare a KeySchema`);
+
+  const names = [];
+  for (const line of block.slice(head.index + head[0].length).split('\n')) {
+    if (line.trim() === '' || line.trim().startsWith('#')) continue;
+    if (line.search(/\S/) <= head[1].length) break;
+    const name = /^\s*-?\s*AttributeName:\s*([A-Za-z0-9_]+)/.exec(line);
+    if (name) names.push(name[1]);
+  }
+  return names;
+}
+
+test('the audit table declares the key that writeAudit actually writes', async () => {
+  const { writeAudit } = await import('../../backend/lib/audit.mjs');
+
+  const declared = keySchemaOf('AuditLogTable');
+  // Sentinel: a reader that silently found nothing would make every assertion below vacuous.
+  assert.equal(declared.length, 2, `expected a composite key, read ${JSON.stringify(declared)}`);
+
+  let captured;
+  await writeAudit(
+    { put: async (params) => { captured = params; }, tables: { auditLog: 't' } },
+    {
+      classId: 'c1', actorSub: 's1', actorRole: 'teacher',
+      action: 'recordFee', targetId: 'st1', before: null, after: { paid: 2500 },
+    },
+  );
+
+  for (const key of declared) {
+    assert.ok(
+      key in captured.Item,
+      `the table's key "${key}" is not written by writeAudit — a PutItem missing it is REJECTED, `
+      + `and that happens after the data row it describes has already persisted`,
+    );
+    // Append-only is enforced at the database, so the condition has to name the real keys too.
+    // `includes`, not a built RegExp: `attribute_not_exists(classId)` interpolated into a regex
+    // turns the parentheses into a capture group, so it matches `attribute_not_existsclassId`,
+    // which nothing writes. A guard that fails for the wrong reason is only luckier than one that
+    // passes for the wrong reason -- this one did, on its first run.
+    assert.ok(
+      captured.ConditionExpression.includes(`attribute_not_exists(${key})`),
+      `the append-only condition must name "${key}", or it guards an attribute that does not `
+      + `exist. Condition is: ${captured.ConditionExpression}`,
+    );
+  }
+});

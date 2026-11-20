@@ -108,6 +108,12 @@ test('req 10.4 — a deletion is an appended entry with a tally, not an absence'
   assert.equal(tombstone({ action: 'recordFee', after: { amount: 2500, status: 'paid' } }), null);
   assert.equal(tombstone({ action: 'recordFee', after: null }), null);
   assert.equal(tombstone(undefined), null);
+  // `deleted === true` is what makes a tombstone, not the presence of a `removed` field: no case
+  // above carries one without the flag, so reading `after.removed` on its own stayed green — and
+  // an entry that did would render in this log as "this child was deleted, 1 row removed", which
+  // is the one kind of claim an append-only record a parent reads must never invent.
+  assert.equal(tombstone({ action: 'recordFee', after: { removed: { fees: 1 } } }), null);
+  assert.equal(tombstone({ action: 'deleteStudent', after: { deleted: 'true', removed: { fees: 1 } } }), null);
 });
 
 /* --- requirement 10.3: read honestly, and in the server's order -------------------------------- */

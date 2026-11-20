@@ -114,6 +114,14 @@ test('a 403 that names the identity is our IAM; one that names the account is no
 
   // The distinction is the whole value of this script, so the two must never collapse together.
   assert.notEqual(ours.tag, theirs.tag);
+
+  // A body that names BOTH — the identity and the account — is the account's answer. `&& !eligibility`
+  // in verdict() is the whole of that precedence and nothing above reads it: with the two conditions
+  // tested only one at a time, dropping it stays green while this body reports as OUR IAM, which
+  // sends the evening into policy edits that cannot fix an account that is not eligible.
+  const both = verdict(403, 'User: arn:aws:iam::1:user/panthiya-dev is not authorized to perform: '
+    + 'bedrock-mantle:ListModels — this feature is not available for accounts without prior service usage.');
+  assert.equal(both.tag, 'ACCOUNT BLOCKED', 'a denial naming the account was read as our own IAM policy');
 });
 
 test('a ValidationException is read as proof of authorisation, not as a failure', () => {
@@ -200,13 +208,20 @@ function fakeNet({ status = 200, chunks = [], error = null, hangs = false } = {}
 
 test('the request really goes to the signed host and path, with the body attached', async () => {
   const { net, seen } = fakeNet();
+  // A Sinhala character in the body, because `content-length` is a count of **bytes**: with an
+  // ASCII-only body `body.length` and `Buffer.byteLength(body)` agree, so this assertion passed
+  // either way. A short length truncates the body at the endpoint, and a truncated signed body
+  // comes back as a 403 whose message blames the identity — the one answer this script exists to
+  // tell apart from an account block.
+  const body = '{"probe":"ප"}';
 
-  await send({ method: 'POST', path: SESSIONS_PATH, body: '{"probe":"x"}', creds: EXAMPLE, region: 'us-west-2' }, net);
+  await send({ method: 'POST', path: SESSIONS_PATH, body, creds: EXAMPLE, region: 'us-west-2' }, net);
   assert.equal(seen.options.host, 'bedrock-mantle.us-west-2.api.aws');
   assert.equal(seen.options.path, SESSIONS_PATH);
-  assert.equal(seen.options.headers['content-length'], 13);
+  assert.equal(seen.options.headers['content-length'], 15);
+  assert.notEqual(seen.options.headers['content-length'], body.length, 'the length is a character count');
   assert.ok(seen.options.headers.authorization.includes('/us-west-2/bedrock-mantle/'));
-  assert.deepEqual(seen.wrote, ['{"probe":"x"}']);
+  assert.deepEqual(seen.wrote, [body]);
 });
 
 test('a body split across chunks is decoded as UTF-8, not once per chunk', () => {
@@ -294,6 +309,27 @@ test('the script never prints a credential, and never takes one from argv', () =
   }
   assert.doesNotMatch(SOURCE, /--access-key|--secret/, 'credentials must not be accepted as flags');
   assert.ok(SOURCE.includes("'configure', 'export-credentials'"), 'credentials should come from the CLI');
+});
+
+test('main acts on the verdict it printed: the warning, the body, and the exit code', () => {
+  // Source guard, and the one this file was missing. Everything above checks a function against a
+  // known answer; nothing checked that `main` *calls* it with what it needs, which is the shape
+  // this repo has now shipped four times. All three of these stay green with every assertion above
+  // passing: `verdict(models.status)` drops the body, so a 2xx carrying a real model list reads as
+  // "NOT WITH A MODEL LIST"; `console.log('BMA probe')` loses the ap-south-1 warning, so a 404 from
+  // a Region that never served BMA looks like a path problem; and `process.exitCode = 0` is exactly
+  // the defect the verdict's own `ok` flag was added to fix.
+  const main = SOURCE.slice(SOURCE.indexOf('async function main'));
+
+  assert.match(main, /console\.log\(plan\(region\)\)/,
+    'main does not print plan(region), so a run against a non-preview Region gets no warning');
+  assert.deepEqual(
+    main.match(/verdict\([^)]*\)/g) ?? [],
+    ['verdict(session.status, session.text)', 'verdict(models.status, models.text)'],
+    'a verdict is read from a status with no body, or one of the two calls is gone',
+  );
+  assert.match(main, /process\.exitCode = ok \? 0 : 1/,
+    'the exit code no longer follows the verdict, so `--yes && <next step>` carries on after a block');
 });
 
 test('the write call is behind its own flag, and the read call is the default', () => {

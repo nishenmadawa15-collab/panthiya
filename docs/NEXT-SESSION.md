@@ -683,10 +683,10 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 783 tests pass, nothing skipped. Nothing has been deployed and nothing has
-been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 783/783, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
+**67 of 79 tasks done. 787 tests pass, nothing skipped. Nothing has been deployed and nothing has
+been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 787/787, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
 because every remaining task is behind the credentials gate or behind Nishen; the test count moved
-**587 → 783** in the same two days.
+**587 → 787** in the same two days.
 
 > **Verification pass 4 ran at the end of the day: 41 mutations against production files, 38 red,
 > one surviving — and the surviving one was the *fourth* instance of this repo's signature
@@ -694,7 +694,14 @@ because every remaining task is behind the credentials gate or behind Nishen; th
 > correct; the test was the defect. All four were found by mutation and none by reading. **What it did
 > not cover is listed honestly in that pass's own report — `bma-probe`, `demo-users` and
 > `api-swap-frontend` were not mutated at all, and `agentcore.test.mjs` and `audit-mic-frontend` got
-> one mutation each out of ~20. That is where pass 5 starts.** Re-derive rather than trust either.)
+> one mutation each out of ~20. That is where pass 5 starts.** **Pass 5 has since run:** 33 more mutations over those five files, **11 survived**, 9 guards fixed, **no production defects**. Its own uncovered list is `frontend/assets/student.js` and `parent.js` (never mutated directly), most of `redteam.js` beyond its three network functions, and the accessibility/CSS source guards — that is where **pass 6** starts. Re-derive rather than trust either.)
+>
+> **The one ceiling pass 4 named has been closed.** The chain *selected name → orchestrator map →
+> implementation* was pinned by two source-text `assert.match` calls and nothing else. It is now
+> checked behaviourally, and the experiment that justifies it is worth remembering: leaving the map
+> text **perfectly correct** while making `invokeViaHarness` delegate to `invokeViaLoop` left **783 pass,
+> 1 fail** — the one failure being the new test. Both source pins stayed green while every request
+> would have been served by the orchestrator the rules do not accept.
 
 | Milestone | State |
 |---|---|
