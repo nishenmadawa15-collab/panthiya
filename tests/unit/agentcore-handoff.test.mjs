@@ -27,7 +27,10 @@ import {
   runHarnessTurn, assembleStream, HandoffError, TOOL_FAILED, toolUnavailable, FINISHED,
 } from '../../backend/agentcore/handoff.mjs';
 import { toolNamesOf, inlineToolsFor } from '../../backend/agentcore/harness-config.mjs';
-import { handleChat, MAX_TOOL_TURNS } from '../../backend/functions/chat/orchestrate.mjs';
+import {
+  handleChat, MAX_TOOL_TURNS,
+  TOOL_FAILED as CONVERSE_TOOL_FAILED, toolUnavailable as converseToolUnavailable,
+} from '../../backend/functions/chat/orchestrate.mjs';
 import { layerOfTurn, scoreCase } from '../../backend/functions/redteam/score.mjs';
 
 // --- the fakes ---------------------------------------------------------------------------------
@@ -710,26 +713,36 @@ test('a student in distress never reaches the harness, so no tokens are spent on
 
 // --- drift -------------------------------------------------------------------------------------
 
-test('the refusal wording has not drifted from the Converse path', () => {
-  // ponytail: TOOL_FAILED and toolUnavailable are duplicated from orchestrate.mjs, where they are
-  // module-private. Two copies of a safety sentence is how a rule stops being the rule, so the
-  // copies are pinned to the original rather than merely commented. The one-line fix is to export
-  // them from orchestrate.mjs — a file this lane does not own, reported in the plan instead.
-  const source = readFileSync(
-    new URL('../../backend/functions/chat/orchestrate.mjs', import.meta.url), 'utf8');
+test('the refusal wording IS the Converse path definition, not a copy of it', () => {
+  // RETIRED AND REPLACED, 2026-11-20. The test that stood here read orchestrate.mjs as text and
+  // asserted four sentence fragments were still in it, because `TOOL_FAILED` and `toolUnavailable`
+  // were module-private there and duplicated into handoff.mjs. They are now exported from
+  // orchestrate.mjs and imported by handoff.mjs (docs/AGENTCORE-PLAN.md §10 item 3), so that
+  // assertion tests nothing: the strings it compared are the same strings by construction, and it
+  // would stay green on every edit including the one it existed to catch.
+  //
+  // What still has teeth is the thing the fragments stood in for — that there is ONE definition —
+  // so that is asserted directly, two ways:
 
+  // 1. Identity. Not equality: two copies that happen to agree today satisfy `deepEqual`, which is
+  //    exactly the state this replaces.
+  assert.equal(TOOL_FAILED, CONVERSE_TOOL_FAILED);
+  assert.equal(toolUnavailable, converseToolUnavailable,
+    'handoff.mjs must re-export the function from orchestrate.mjs, not define a second one');
+
+  // 2. Absence of a copy, in the source with the comments stripped — because the failure mode is a
+  //    later edit re-inlining the sentence here "to drop the cross-module import", and that edit
+  //    passes check 1 as long as the strings still match on the day it is made.
+  const source = readFileSync(new URL('../../backend/agentcore/handoff.mjs', import.meta.url), 'utf8');
+  const code = source.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   for (const fragment of [
     'This tool did not run and nothing was read or written.',
-    'There is no such tool in this session. Nothing was read or written.',
-    'tell the user kindly that this is not something the app can do, ',
-    'tell the user kindly that only their teacher can do this, ',
+    'There is no such tool in this session.',
+    'tell the user kindly that',
   ]) {
-    assert.ok(source.includes(fragment),
-      `orchestrate.mjs no longer contains "${fragment}" — the two copies have drifted. `
-      + 'Update backend/agentcore/handoff.mjs to match, or export the strings and import them.');
+    assert.ok(!code.includes(fragment),
+      `handoff.mjs re-declares "${fragment}" — import it from orchestrate.mjs instead`);
   }
-
-  // And the assembled sentences must be byte-identical to what that file builds.
-  assert.ok(source.includes(TOOL_FAILED.slice(0, 60)));
-  assert.ok(source.includes(toolUnavailable('teacher').slice(0, 60)));
+  assert.match(code, /import \{[^}]*TOOL_FAILED[^}]*\} from '\.\.\/functions\/chat\/orchestrate\.mjs'/,
+    'the refusal wording must come from orchestrate.mjs by import');
 });

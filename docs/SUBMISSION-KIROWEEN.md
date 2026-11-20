@@ -1,11 +1,15 @@
 # Submission draft — Kiroween 2026, Frankenstein category
 
-**Status: draft, not submitted.** Target submission date **Dec 3 2026**; the deadline recorded in
-`PANTHIYA_SETUP.md` §1 is **Dec 4, 2:00 PM PT** (Dec 5, 3:30 AM Sri Lanka). Target prizes: **Best
+**Status: draft, not submitted.** Target submission date **Dec 3 2026**; the deadline, read from the
+official rules on 2026-11-18, is **Dec 4, 2:00 PM PT** (Dec 5, 3:30 AM Sri Lanka). Target prizes: **Best
 Startup Project** ($10,000) or **Best Student Project** ($1,500 + Kiro Pro Max).
 
 Everything below is written to be pasted into the Devpost form, field by field, with every
 unanswerable field marked `TODO(nishen)`.
+
+Written 2026-11-18 and corrected on the 19th and 20th. **Where any two lines disagree, the latest
+dated correction wins.** The 2026-11-20 corrections are the Bedrock rules being read (§0, §0b) and
+the orchestrator being decided (§6).
 
 ---
 
@@ -25,7 +29,7 @@ submission day.** It has to stay up for about ten more weeks, which is the real 
 this project and which answers task 7.9 before anyone asked it: leave it running, and budget for the
 window rather than for the demo.
 
-### Dual submission: the Kiroween half is answered
+### Dual submission: both halves are now answered
 
 **Nothing in these rules forbids submitting the same project to another challenge.** The only
 restrictions on where a project may come from are *New Projects Only* — built during the submission
@@ -34,13 +38,25 @@ rules out projects funded or contracted by AWS or Devpost. Submissions stay the 
 with a non-exclusive licence to the sponsor for judging and promotion. The *Multiple Submissions*
 clause is about entering more than one project **into Kiroween**, not about other events.
 
-So half of open decision 7 is closed: Kiroween does not prohibit it. The other half belongs to the
-Bedrock challenge's own rules, and nobody has them.
+So half of open decision 7 was closed on the 18th: Kiroween does not prohibit it.
 
-`TODO(nishen)` — **the Bedrock challenge still cannot be found.** Two web searches and Devpost's own
-search for *"agents your rules"*, *"bedrock agents"* and *"managed agents"* return no such event.
-`PANTHIYA_SETUP.md` §6 remains its only source, including its Dec 2 deadline. The invitation email or
-a URL settles it; until then Kiroween is the only verified deadline this project has.
+**The other half closed on 2026-11-20, when the Bedrock challenge's rules were read.** It is a real
+public event on AWS Builder Center — *Agents, your rules: Bedrock Managed Agents build*, deadline
+**Dec 2 2026, 11:59 PM PT** — and the summary is in
+[`docs/CHALLENGE-RULES-BEDROCK.md`](CHALLENGE-RULES-BEDROCK.md). Searching for it had failed three
+times because the page is client-rendered and a fetch returns a loading placeholder; it opens in a
+browser in about a second.
+
+On dual submission those rules say two relevant things, and **neither forbids entering the same
+project elsewhere**: the agent must be original and not previously published, and there is a limit of
+one entry per person or team — which, as in Kiroween, is about entering more than one project into
+*that* event. So **open decision 7 is closed: both files are used.** The deadlines happen to order
+themselves helpfully, Bedrock on Dec 2 and Kiroween on Dec 4, so the Bedrock project is published
+first and "not previously published" is never under strain.
+
+One thing the Bedrock rules did change, and it reaches this file: **they require the agent to be
+built on Amazon Bedrock Managed Agents or the AgentCore managed harness**, which decides the
+orchestrator §6 used to leave open. See §6.
 
 ### What the rules require of the repository, checked against it
 
@@ -89,25 +105,22 @@ which is the framing §2 already argues.
 
 ---
 
-## 0b. ~~The question that decides whether this file is used at all~~ — half closed
+## 0b. ~~The question that decides whether this file is used at all~~ — closed 2026-11-20
 
 ~~**Unresolved: may the same project be submitted to both the AWS Bedrock challenge and Kiroween?**~~
 
-The Bedrock challenge rules publish **today, 2026-11-18**, and nobody has read them yet. This is
-recorded as open decision 7 in `docs/NEXT-SESSION.md` §4 and as open question 5 in `design.md` §12,
-and it has been open since the plan was written.
+**Answered: yes, as far as both published rule sets go.** Kiroween's *Multiple Submissions* clause is
+about entering more than one project into Kiroween, and the Bedrock rules — read on 2026-11-20,
+`docs/CHALLENGE-RULES-BEDROCK.md` — require originality and limit entries per person within that
+event, without restricting where else a project may go. Neither set contains a clause against it. So
+this file is submitted roughly as drafted, and the fallback in `PANTHIYA_SETUP.md` §1 is not needed.
+Open decision 7 in `docs/NEXT-SESSION.md` §4 and open question 5 in `design.md` §12 both close here.
 
-Do not assume either way. Both readings are live:
+Said precisely, because the distinction matters: this is **the absence of a prohibition in both rule
+sets as read**, not an affirmative permission from either organiser. Both pages win over both
+summaries, so re-read them on submission day rather than trusting this paragraph.
 
-- If a parallel submission **is** permitted, this file is submitted roughly as drafted.
-- If it **is not**, `PANTHIYA_SETUP.md` §1 already names the fallback: submit Panthiya to Bedrock only
-  and decide about Kiroween then. That decision would need a second project or no Kiroween entry, and
-  neither exists today.
-
-`TODO(nishen)` — read the Bedrock rules, write the answer here with the clause it comes from, and
-record it in `docs/BUILD-LOG.md`. Fifteen minutes settles two weeks of planning.
-
-Two smaller unknowns in the same place:
+Two smaller unknowns remain in the same place:
 
 - `TODO(nishen)` — confirm the **Frankenstein category's own requirements**. This draft assumes the
   category rewards a project visibly stitched together from parts; if it has specific judging criteria
@@ -139,7 +152,7 @@ body, sewn into one, and the stitches are the interesting part.
 
 | Limb | What it is | Where it lives |
 |---|---|---|
-| **The agent** | The orchestrator. Takes a verified role, decides which tool to call, and never gets to decide *who the caller is* | `backend/functions/chat/`, `backend/agent/` |
+| **The agent** | An Amazon Bedrock AgentCore managed harness. Takes a verified role, decides which tool to call, and never gets to decide *who the caller is* — every tool call is handed back to our own Lambda, which is where the role lives | `backend/agentcore/`, `backend/functions/chat/`, `backend/agent/` |
 | **The voice** | Press-to-record in Sinhala, Tamil or English. Presigned S3 PUT → Amazon Transcribe → the transcript goes to the chat path **unchanged** | `backend/functions/voice/` |
 | **The inbox** | A WhatsApp-style thread of teacher-**approved** updates about one parent's own child, with an ask box beside it | `frontend/parent/`, `backend/functions/read/` |
 | **The ledger** | Fees, attendance and marks, plus an append-only `audit_log` with actor, timestamp, before and after for every write | `backend/functions/actions-teacher/`, `backend/lib/audit.mjs` |
@@ -273,13 +286,30 @@ Attacker idioms stay; human pleas go through to layers 1 and 3, which can refuse
 be kind. The security cost is close to zero — the tutor's Lambda has no data permissions at all,
 `PROMPT_ATTACK` stays HIGH, and `policyCheck` still blocks any final answer.
 
-**The agent could not be created.** `CreateAgent` returns `AccessDeniedException` on this account —
-Bedrock Agents is in maintenance mode and new agent creation is unavailable to accounts without prior
-service usage, in both candidate regions, with **no exception process** per AWS's own page. Found by
-driving the console, not by reading the SDK. Most of the build survives it: guardrails are unaffected,
-model inference is fully supported, AgentCore is available in `ap-south-1`, and `chat/orchestrate.mjs`
-is already a pure function with the model call injected — so the orchestrator is two files, whichever
-path is taken. `TODO(nishen)` — name the chosen path here once the spike has run.
+**The agent could not be created, and the fallback we had built did not qualify.** `CreateAgent`
+returns `AccessDeniedException` on this account — Bedrock Agents is in maintenance mode and new agent
+creation is unavailable to accounts without prior service usage, in both candidate regions, with **no
+exception process** per AWS's own page. Found by driving the console, not by reading the SDK. So the
+orchestrator was written as our own `Converse` tool loop instead, which worked and went green.
+
+**Then the Bedrock challenge's rules were read on 2026-11-20 and ruled that loop out** — they require
+an agent built on Bedrock Managed Agents or the AgentCore managed harness, and a hand-written loop is
+neither (`docs/CHALLENGE-RULES-BEDROCK.md`). **Decided the same day: the AgentCore managed harness**,
+built offline in `backend/agentcore/` and analysed in `docs/AGENTCORE-PLAN.md`.
+
+What makes that affordable with two weeks left is a documented harness feature called *inline
+functions*: the harness pauses when the model calls a tool and hands the call back to our own Lambda,
+which holds the verified claims and invokes the action Lambda with the same payload as before. So
+`backend/lib/auth.mjs` and the three action Lambdas change by **zero lines**, the guardrail attaches
+to the model call unchanged, and all 36 attack cases still face the same three layers. What is lost is
+the hand-written loop and its 23 tests, replaced by a handoff loop whose properties were re-proved —
+one of them deliberately stricter, since an unrecognised stop reason now fails closed instead of being
+read as a finished reply.
+
+The lesson, which belongs in this section more than the architecture does: **the safe engineering
+choice was the disqualifying one.** The loop was built because it was the known quantity while the
+rules were unread. It could have been finished, fully green, and rejected at the qualification gate
+without a judge reading a line of it. When the rules are unread, reading them is the work.
 
 ---
 
@@ -296,10 +326,12 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 - **A refusal that leaks nothing.** An unowned class, a non-existent class, a real child the caller
   may not see and an invented child all return the **byte-identical** refusal — asserted by `deepEqual`
   across English, Sinhala, Tamil, Singlish and a Cyrillic homoglyph.
-- **587 passing tests, nothing skipped, zero dependencies** (counted 2026-11-19; `npm test`). The
-  Node.js built-in runner, around fifteen seconds a run — the two runs on 2026-11-19 reported
-  `duration_ms` of 12.2 s and 15.6 s — and it touches no AWS service, so the save hook can run it
-  freely.
+- **779 passing tests, nothing skipped, zero dependencies** (`npm test`), counted 2026-11-20 in 16.9 s. The Node.js built-in
+  runner, around fifteen seconds a run — the two runs on 2026-11-19 reported `duration_ms` of 12.2 s
+  and 15.6 s — and it touches no AWS service, so the save hook can run it freely. **Counted 2026-11-20 at 779; treat that as a
+  floor, not a figure:** §11 dates the same count to 2026-11-18 at 17:59 UTC, this bullet credited it
+  to the 19th, and two lanes were adding tests in between. Re-run before pasting, as §11 already
+  requires. Lanes have added code since, including `backend/agentcore/`, so the count has moved.
 - **A build log that records what broke**, including a defect found by one lane in another lane's code
   and a privacy test that flickered once and was written down rather than dismissed.
 
@@ -334,11 +366,9 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 
 ## 10. Built with
 
-`amazon-bedrock` · `amazon-bedrock-guardrails` · `aws-lambda` · `amazon-dynamodb` ·
-`amazon-cognito` · `amazon-api-gateway` · `amazon-transcribe` · `amazon-s3` · `aws-amplify` ·
-`aws-sam` · `node.js` · `javascript` · `html` · `css` · `kiro`
-
-`TODO(nishen)` — add `amazon-bedrock-agentcore` if option A is chosen for the orchestrator (§6).
+`amazon-bedrock` · `amazon-bedrock-agentcore` · `amazon-bedrock-guardrails` · `aws-lambda` ·
+`amazon-dynamodb` · `amazon-cognito` · `amazon-api-gateway` · `amazon-transcribe` · `amazon-s3` ·
+`aws-amplify` · `aws-sam` · `node.js` · `javascript` · `html` · `css` · `kiro`
 
 ---
 
@@ -356,7 +386,7 @@ path is taken. `TODO(nishen)` — name the chosen path here once the spike has r
 
 **Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **587 of 587 tests pass, nothing skipped.**
+- **779 of 779 tests pass, nothing skipped** (2026-11-20).
 - **67 of 79 planned tasks done**, 12 open, 9 of those marked `[human]`. Re-check with `npm test` and
   `grep -c '^- \[x\]' .kiro/specs/panthiya/tasks.md`.
 - **$0 spent, nothing deployed.** Every AWS step in `tasks.md` is `[human]` and none has run;
@@ -373,9 +403,8 @@ in the same hour these were taken, so they were already slightly low when writte
 
 - `TODO(nishen)` — a blog post. The strongest material is already in this repo: the nine defects a
   green suite approved, or the C10 guardrail-versus-a-crying-child decision. Either stands alone.
-- `TODO(nishen)` — a LinkedIn post **starting with** `#KiroweenHackathon26` (verified against the live rules on 2026-11-18; the rules require the hashtag to be the first thing in the post). Previously this line asked to confirm the hashtag against
-  the live rules before posting; `PANTHIYA_SETUP.md` is the only source for it here and it has not been
-  verified.
+- `TODO(nishen)` — a LinkedIn post **starting with** `#KiroweenHackathon26`. Verified against the live
+  rules on 2026-11-18: the hashtag must be the first thing in the post.
 
 ---
 
@@ -421,9 +450,15 @@ before. If either answer differs from what is above, this section is the one to 
 
 ## 13. Open questions only Nishen can close
 
-- [ ] **May the same project go to both challenges?** (§0 — the one that decides whether this file is used.)
+- [x] **May the same project go to both challenges?** — **yes, closed 2026-11-20**: neither rule set
+      forbids it (§0, §0b).
 - [ ] The Frankenstein category's own requirements and the real Devpost field list (§0).
-- [ ] The orchestration decision, A or B (§6).
+- [x] The orchestration decision — **the AgentCore managed harness**, decided 2026-11-20 by the
+      Bedrock rules rather than by preference (§6).
+- [ ] Whether the AgentCore harness can be created on this account at all. Nothing in
+      `backend/agentcore/` has met AWS, and Bedrock Agents Classic is already closed here
+      (`docs/AGENTCORE-PLAN.md` §7.2). The live URL, the video and the red-team score below all sit
+      behind it.
 - [ ] The Amplify live URL (task 0.15).
 - [ ] The demo video link (task 7.7).
 - [ ] The four Kiro screenshots the write-up names (§5).

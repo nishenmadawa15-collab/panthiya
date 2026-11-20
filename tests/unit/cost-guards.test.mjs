@@ -395,6 +395,67 @@ test('no literal email address is committed anywhere in the template', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3a. The two AgentCore parameters (docs/AGENTCORE-PLAN.md §10).
+//
+//     Nothing above needed changing for them: `COSTS_NOTHING_IDLE` is an
+//     allow-list over RESOURCE types and the harness is not a resource of this
+//     template — `CreateHarness` is run by hand, because its execution role has
+//     to exist first. So the two tests the new `Parameters` entries do reach
+//     (the budget-amount reader and the subscriber reader, both of which demand
+//     `unreadable` be empty) keep passing only while the entries are shaped like
+//     every other one, which is worth asserting rather than assuming.
+//
+//     What the parameters DO bring is a cost claim this file cannot make and
+//     must not appear to: a harness session bills memory for every second it is
+//     alive. That is bounded in backend/agentcore/harness-config.mjs (60 s idle,
+//     900 s max) and costed in docs/COST-MODEL.md, outside this template. The
+//     honest statement here is the narrow one: no harness is created BY this
+//     deploy, and no account id is committed by it.
+// ---------------------------------------------------------------------------
+
+test('the harness is referenced by this template, never created by it', () => {
+  const { entries, unreadable } = entriesOf(TEMPLATE, 'Parameters');
+  assert.deepEqual(unreadable, [], `unreadable Parameters entries: ${unreadable.join(', ')}`);
+
+  for (const name of ['HarnessId', 'HarnessArn']) {
+    const param = entries.get(name);
+    assert.ok(param, `${name} is not a parameter of this template`);
+    assert.deepEqual(valuesOf(param, 'Type'), ['String'], `${name} must be a String parameter`);
+  }
+
+  // A harness billed per live session is a cost line design §10 does not carry, and the allow-list
+  // above only knows the types it was told about. This says the quiet part: if a later lane turns
+  // the hand-run `create-harness` into a resource, it re-costs §10 first — the same contract
+  // COSTS_NOTHING_IDLE states for every other type, and in the same direction.
+  const { resources } = resourcesOf(TEMPLATE);
+  const agentcore = [...resources].filter(([, r]) => /agentcore/i.test(r.type));
+  assert.deepEqual(agentcore.map(([n, r]) => `${n} is a ${r.type}`), [],
+    'a harness bills memory for every second a session is alive. Re-cost docs/COST-MODEL.md and '
+    + 'design §10 first, then add the type to COSTS_NOTHING_IDLE deliberately');
+});
+
+test('no parameter default commits an AWS account id', () => {
+  // The same reasoning as the literal-address test above, for the other identifier a public repo
+  // cannot carry. `HarnessArn` is the one that invites it — the real value is
+  // arn:aws:bedrock-agentcore:REGION:ACCOUNT:harness/ID, and the obvious way to make a deploy
+  // easier is to paste it in as the Default. It stays empty, and the IAM grant is built from
+  // HarnessId with ${AWS::AccountId} instead, so nothing here needs the number at all.
+  const { entries } = entriesOf(TEMPLATE, 'Parameters');
+  const offenders = [];
+  for (const [name, lines] of entries) {
+    for (const value of valuesOf(lines, 'Default')) {
+      if (/\b\d{12}\b/.test(value)) offenders.push(`${name} Default ${value}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `a 12-digit account id in a parameter default is committed to a public repo:\n  ${offenders.join('\n  ')}`);
+
+  // And over the whole file, including the IAM: account ids reach it as ${AWS::AccountId} only.
+  const bare = TEMPLATE.split('\n').map(uncomment).filter((line) => /\b\d{12}\b/.test(line));
+  assert.deepEqual(bare, [], `template.yaml names an account id literally:\n  ${bare.join('\n  ')}`);
+});
+
+// ---------------------------------------------------------------------------
 // 4. The proof. Three mutated templates, each a real way to lose a cost guard,
 //    and on each one the assertions this file replaced stay green.
 //

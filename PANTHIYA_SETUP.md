@@ -28,7 +28,17 @@ This starter pack contains:
 | Our target date | **Dec 1** | **Dec 3** |
 | Angle | An agent with hard rules about student privacy, fees and exam answers, shown resisting 36 attacks | Frankenstein: Bedrock agent + voice + WhatsApp-style messaging + a ledger + a tutor stitched into one app |
 
-**⚠️ Verify on Nov 18:** Bedrock challenge rules publish that day. If they forbid submitting the same project elsewhere, we submit Panthiya to **Bedrock only** and decide about Kiroween then. Kiroween requires the project to be **built in Kiro** with the `/.kiro` folder committed. That's why this pack uses Kiro.
+**✅ Read 2026-11-20, two days late — and they answer three questions this file had open.** The rules are summarised, in our own words and with the URL, in [`docs/CHALLENGE-RULES-BEDROCK.md`](docs/CHALLENGE-RULES-BEDROCK.md). Where that file and the page disagree, the page wins.
+
+| Was open | The rules say |
+|---|---|
+| Is Sri Lanka eligible? | **Yes** |
+| May the same project also go to Kiroween? | **Yes.** The agent must be original and not previously published, and there is **one entry per person or team** — but nothing forbids entering it elsewhere, which matches what the Kiroween rules already said. Both submissions are on |
+| What counts as an agent? | **Bedrock Managed Agents or the AgentCore managed harness.** This is the binding one: our own `Converse` tool loop — built, green, and the safer piece of engineering — **does not qualify**, and Agents Classic cannot be created on this account. The path is the AgentCore harness, analysed in [`docs/AGENTCORE-PLAN.md`](docs/AGENTCORE-PLAN.md) and built offline on 2026-11-20 under `backend/agentcore/` |
+
+Still open, and **only Nishen can close it**: the hackathon has not been joined. The *Your project* tab says only *“Join this hackathon to get started”* — **there is no submission surface until he joins**, and it needs his own Builder Center profile.
+
+Kiroween requires the project to be **built in Kiro** with the `/.kiro` folder committed. That's why this pack uses Kiro.
 
 ## 2. The rules Panthiya never breaks (judges will test these)
 
@@ -69,12 +79,14 @@ API Gateway (HTTP API)
 > (`CreateAgent` → `AccessDeniedException`, maintenance mode, no exception process). It is also not
 > what **Bedrock Managed Agents (BMA, powered by OpenAI)** means — that is a separate preview
 > service with a different endpoint, a different model family, and MCP tools instead of action
-> groups. Everything else in this diagram stands. The live architecture, and the open decision about
-> what replaces that one box, is in `README.md` § Architecture and `docs/NEXT-SESSION.md` §0.
+> groups. Everything else in this diagram stands. **The box is no longer open: closed 2026-11-20 by the
+> challenge rules** — it is the **AgentCore managed harness**, with each action group an
+> inline function. The live architecture is in `README.md` § Architecture; the reasoning is in
+> `docs/AGENTCORE-PLAN.md`.
 
 - **Model:** cheapest that handles Sinhala well enough (start with Amazon Nova Lite or a Haiku-class model; test Sinhala early, switch if poor).
 - **Messaging:** a WhatsApp-*style* in-app parent inbox for the hackathon. Real WhatsApp Business API needs Meta approval and costs money, so it's **Phase 2**.
-- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. **Corrected 2026-11-19:** the $10/month alert is **no longer a console step** — `backend/template.yaml` now holds an `AWS::Budgets::Budget`, so `sam deploy --guided` creates it and will ask for `BudgetAlertEmail`. It is inert until that deploy, and the account still holds no Panthiya resources. The whole re-costed window (to 2027-01-29) comes to **~$2.50 typical, ~$9.80 ceiling** — see `docs/COST-MODEL.md`.
+- **Cost target:** under **$15** for the whole hackathon from your ~$173 credits. **Corrected 2026-11-19:** the $10/month alert is **no longer a console step** — `backend/template.yaml` now holds an `AWS::Budgets::Budget`, so `sam deploy --guided` creates it and will ask for `BudgetAlertEmail`. It is inert until that deploy, and the account still holds no Panthiya resources. **Corrected again 2026-11-20:** the AgentCore harness is now mandatory rather than optional — the rules name the service — so its cost is no longer a maybe. The whole re-costed window (to 2027-01-29) comes to **~$2.60 typical, ~$10.21 ceiling** on the harness path (~$2.50 / ~$9.80 without it), leaving **~$4.79 of headroom at the ceiling**. See `docs/COST-MODEL.md`.
 - **Audit log:** every money or marks change is written to `audit_log` with who, when and the before/after values. Judges love this, and real teachers will need it.
 
 ## 4. Install & tools
@@ -86,7 +98,7 @@ API Gateway (HTTP API)
    ```
 2. **Kiro IDE**: https://kiro.dev (free tier), then sign in.
 3. **AWS access for Kiro:** create an **IAM user** (not root) named `panthiya-dev` with these managed policies only: `AmazonBedrockFullAccess`, `AWSLambda_FullAccess`, `AmazonDynamoDBFullAccess`, `AmazonAPIGatewayAdministrator`, `AmazonCognitoPowerUser`, `AWSCloudFormationFullAccess`, `AmazonTranscribeFullAccess`, `IAMFullAccess` (needed for SAM to create roles — remove after the hackathon). Create an access key and install the AWS CLI + SAM CLI. Kiro's deploy tasks need them. *(This is the one place where a CLI is worth it: deploying a real backend from a browser alone is painful.)*
-4. **No model-access step exists any more.** That console page has been retired; serverless foundation models auto-enable on first invoke. **Do not region-shop for Bedrock Agents Classic:** `CreateAgent` fails on this account in both `ap-south-1` and `us-east-1`, because the maintenance-mode allowlist is per-account and there is no exception process. Which region to deploy in follows from which agent layer is chosen — see `docs/NEXT-SESSION.md` §0. `ap-south-1` serves AgentCore and our own `Converse` loop; **Bedrock Managed Agents (BMA, powered by OpenAI) is preview-only in `us-east-1`, `us-west-2` and `us-east-2`**.
+4. **No model-access step exists any more.** That console page has been retired; serverless foundation models auto-enable on first invoke. **Do not region-shop for Bedrock Agents Classic:** `CreateAgent` fails on this account in both `ap-south-1` and `us-east-1`, because the maintenance-mode allowlist is per-account and there is no exception process. **Settled 2026-11-20: the region is `ap-south-1`**, because the agent layer is settled — AgentCore is GA there and it is ~40 ms from Colombo. The us-east-1 contingency existed for the case where the challenge turned out to require **Bedrock Managed Agents (BMA, powered by OpenAI)**, which is preview-only in `us-east-1`, `us-west-2` and `us-east-2`; the rules accept **either** BMA **or** the AgentCore harness, so that case does not arise and the whole stack stays in one region.
 5. Create the folder `C:\Projects\panthiya` and copy **this whole starter pack into it** (including the hidden `.kiro` folder). Open the folder in Kiro.
 
 ## 5. Kiro workflow (this also earns the "Kiro write-up" points)
@@ -105,9 +117,10 @@ API Gateway (HTTP API)
 > 1. **"one Bedrock Managed Agent … with three role-scoped action groups"** cannot be created on this
 >    account: `CreateAgent` → `AccessDeniedException`, Agents Classic is in maintenance mode, and
 >    there is no exception process. **Bedrock Managed Agents (BMA, powered by OpenAI)** is a
->    different service — different endpoint, model family, and MCP tools instead of action groups —
->    and whether the challenge means that one is the open question at the top of
->    `docs/NEXT-SESSION.md` §0a. What replaces that box is tracked in `README.md` § Architecture.
+>    different service — different endpoint, model family, and MCP tools instead of action groups.
+>    **Answered 2026-11-20:** the rules accept **either** BMA **or** the AgentCore managed harness, so
+>    the question of which one was meant stopped mattering — the harness qualifies on both readings,
+>    and it is the one this account can actually create. What replaces that box is tracked in `README.md` § Architecture.
 > 2. **"a live Blocked / Leaked scoreboard"** was built, deliberately, as something else. A two-number
 >    tally would score a case `blocked` on the strength of the agent's own refusal, which no code
 >    read. The page shipped with per-layer attribution from `totals.byLayer` plus `needsEye` and
@@ -168,7 +181,7 @@ Build **Panthiya**, an AI assistant for Sri Lankan tuition classes, for two hack
 | Date | Milestone | Done when |
 |---|---|---|
 | Nov 16–17 | Install + IAM user + M0 | Live Amplify URL opens on your phone — **not done: task 0.15 is still open and nothing is deployed** |
-| **Nov 18** | Join Bedrock challenge officially; read rules | Double-submit question answered |
+| ~~**Nov 18**~~ **Nov 20** | Join Bedrock challenge officially; read rules | **Half done.** The rules were read on the 20th and the double-submit question is answered — both submissions are on. **Joining has not happened**, and nothing can be submitted until it does |
 | Nov 18–20 | M1 teacher chat: attendance + fees | "Nimal paid 2500" updates the ledger |
 | Nov 21–22 | M2 roles + parent view | Parent sees only their child |
 | Nov 23–24 | M3 guardrail + policyCheck + audit log | First 10 red-team cases pass |
@@ -197,8 +210,9 @@ Build **Panthiya**, an AI assistant for Sri Lankan tuition classes, for two hack
 
 - [ ] Install Git + Kiro
 - [ ] Create IAM user `panthiya-dev`, access key, then `aws configure` — and install the SAM CLI. Checked on this machine 2026-11-18: the **AWS CLI is already installed** (2.36.49), the **SAM CLI is not**, and `aws configure list` shows no credentials yet
-- [ ] Decide the agent layer, and with it the region (`docs/NEXT-SESSION.md` §0) — there is no model-access step any more
+- [x] ~~Decide the agent layer, and with it the region~~ — **closed 2026-11-20 by the rules, not by preference:** the AgentCore harness in `ap-south-1`. See `docs/AGENTCORE-PLAN.md`
+- [ ] **Join the hackathon** — there is no submission surface until you do, and it is your own Builder Center profile, not an agent's
 - [ ] Copy this starter pack into `C:\Projects\panthiya`, open in Kiro
 - [ ] Paste §6 prompt into Spec mode → review → start M0
 - [ ] Create an empty public GitHub repo `panthiya` → tell me the URL; we connect Amplify together in Chrome
-- [ ] Nov 18: tell me, I'll read the Bedrock rules with you
+- [x] ~~Nov 18: tell me, I'll read the Bedrock rules with you~~ — **read 2026-11-20**, summarised in `docs/CHALLENGE-RULES-BEDROCK.md`. One sentence on that page is still worth your own eyes: does *“the AgentCore managed harness”* mean the `CreateHarness` product, or AgentCore generally? Our path satisfies both readings, so this confirms rather than blocks

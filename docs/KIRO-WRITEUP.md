@@ -3,7 +3,7 @@
 > What the spec-driven workflow actually did, and where it did nothing.
 
 This is a process document. At the time of writing, **nothing in Panthiya has been deployed to AWS
-and nothing has been spent** — 587 unit tests pass offline (counted 2026-11-19; re-check with `npm test`), and not one line has met a live Bedrock
+and nothing has been spent** — 779 unit tests pass offline (counted 2026-11-20; re-check with `npm test`), and not one line has met a live Bedrock
 agent. So nothing here is a claim about a running system. Everything here is a claim about how the
 code that exists was produced, and every claim points at a file in this repository.
 
@@ -107,6 +107,20 @@ session, so that requirement **cannot be met by configuration**. Rather than rew
 role as its first statement, and the Student action Lambda is given no DynamoDB permissions at all.
 That is in the build log's second row, written the day the design was written.
 
+**And then the ceiling held a second time, on a different service.** The orchestrator changed on
+2026-11-20 — the challenge rules require Bedrock Managed Agents or the **AgentCore managed
+harness**, so action groups became inline functions (`docs/AGENTCORE-PLAN.md`). The harness's
+`allowedTools` turns out to be **harness-wide**, not per-session, exactly as agent versions were:
+only the per-invocation `tools` list is scoped, and a list the model is handed is not a list the
+model cannot argue with. Whether `allowedTools` can *also* be narrowed per invocation is marked
+UNVERIFIED in `backend/agentcore/README.md` and cannot be settled without a live call — but it
+changes nothing here, because a per-invocation fence would be one more layer on top of the role
+gate rather than a replacement for it. So requirement 1.5 is unmeetable by configuration on **both**
+services, and the enforcement that `design.md` §3.3 moved into the Lambdas needed **zero lines
+changed** to survive the move. A ceiling recorded honestly in the spec is what
+made the orchestration swap cheap; a requirement reworded to look met would have had to be
+rediscovered.
+
 > **Screenshot placeholder — `spec-triad.png`:** the three spec files open in Kiro with
 > `requirements.md` showing its "Status: approved for build" line and one EARS criterion.
 
@@ -150,7 +164,7 @@ artefact where a text assertion really is the evidence.
 | `update-build-log.kiro.hook` | User-triggered | Appends one row to `docs/BUILD-LOG.md` — date, milestone and task number, what was built, what broke and how it was fixed — then ticks the task in `tasks.md`. "Do not rewrite earlier rows" |
 
 The suite is free to run on every save: it uses the Node.js built-in test runner, has **zero
-dependencies**, and touches no AWS service. 587 tests finish in about sixteen seconds.
+dependencies**, and touches no AWS service. 779 tests finish in about seventeen seconds.
 
 Two honest notes about the hooks.
 

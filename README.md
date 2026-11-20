@@ -6,21 +6,22 @@ Teachers record attendance, fees and marks just by speaking, in Sinhala, Tamil, 
 Parents get trusted updates about their own child, approved by the teacher first. Students get a
 past-paper tutor that gives hints and never the answer.
 
-Built by **Nishen Madawa Abedeera**, cybersecurity undergraduate at SLTC, Sri Lanka, for the AWS
-Bedrock agents build and **Kiroween 2026** (Frankenstein category).
+Built by **Nishen Madawa Abedeera**, cybersecurity undergraduate at SLTC, Sri Lanka, for **Agents,
+your rules: Bedrock Managed Agents build** on AWS Builder Center and **Kiroween 2026** (Frankenstein
+category).
 
 | | |
 |---|---|
 | Repository | [`github.com/nishenmadawa15-collab/panthiya`](https://github.com/nishenmadawa15-collab/panthiya) — public, MIT, `.kiro/` committed |
 | Live app | `TODO(nishen)` — paste the Amplify URL here once task 0.15 is done (Amplify Hosting → connect `main` → copy the branch URL) |
 | Demo video | `TODO(nishen)` — paste the YouTube link here after task 7.7 is recorded |
-| Build status | **587 of 587 tests pass, nothing skipped · 67 of 79 tasks done** — re-counted 2026-11-19, re-check before quoting it · nothing deployed, **$0 spent** |
+| Build status | **771 tests pass, nothing skipped · 67 of 79 tasks done** — counted 2026-11-20 with other lanes still writing code, re-check before quoting it · nothing deployed, **$0 spent** |
 | Branch you are reading | Active work is on `feat/m4-student-tutor`, **pushed to `origin` on 2026-11-19**. Whether it merges into `main` is still open, and `main` is **30 commits behind it** — so a clone of `main` shows an older project than this README describes, and Amplify watches `main`. Re-derive below |
 | Licence | [MIT](LICENSE) |
 
-> **How to re-check that status row.** Both numbers were counted on **2026-11-18 at 17:59 UTC**, while
-> other work was in flight — two lanes were adding tests that hour — and they move every session.
-> Re-run rather than trust them:
+> **How to re-check that status row.** Both numbers were counted on **2026-11-20**, while other work
+> was in flight — a lane was editing back-end code that hour — and they move every session. Re-run
+> rather than trust them:
 >
 > ```bash
 > npm test                                            # read the "pass" / "fail" tail
@@ -76,11 +77,12 @@ flowchart TD
     API --> VOICE["Lambda voice"]
     API --> RTL["Lambda redteam"]
 
-    CHAT -->|"role + sub out of band<br/>never from the message"| ORCH["Orchestration layer<br/>A or B — DECISION OPEN"]
+    CHAT -->|"role + sub out of band<br/>never from the message"| ORCH["Bedrock AgentCore harness<br/>AWS runs the loop · configured, not created"]
+    ORCH -.->|"inline function:<br/>the harness pauses and hands<br/>the tool call back to us"| CHAT
     ORCH --- GUARD["Bedrock Guardrail<br/>LAYER 2 · defined, not created"]
-    ORCH --> GT["Teacher tools<br/>addStudent · markAttendance<br/>recordFee · addMarks · draftParentUpdate"]
-    ORCH --> GP["Parent tool<br/>getMyChildSummary"]
-    ORCH --> GS["Student tools<br/>getHint · getSimilarExample"]
+    CHAT --> GT["Teacher tools<br/>addStudent · markAttendance<br/>recordFee · addMarks · draftParentUpdate"]
+    CHAT --> GP["Parent tool<br/>getMyChildSummary"]
+    CHAT --> GS["Student tools<br/>getHint · getSimilarExample"]
 
     CHAT -->|"every reply · fail closed"| POLICY["Lambda policyCheck<br/>LAYER 3"]
 
@@ -98,37 +100,43 @@ flowchart TD
     style POLICY fill:#fce4ec,stroke:#880e4f
 ```
 
-Everything scales to zero. There is no EC2, no NAT Gateway, no RDS and nothing billed by the hour.
+Everything scales to zero. There is no EC2, no NAT Gateway and no RDS, and nothing bills while idle:
+the harness carries no charge of its own and its session time bills by the second.
 
-### The orchestration layer is a live decision, not a diagram
+### The orchestrator was chosen by a rule, not by taste
 
-The box marked **A or B** is the one part of this architecture that is not settled, and saying so is
-more useful than drawing something that does not exist.
+The challenge requires the agent to run on either Bedrock Managed Agents or the AgentCore managed
+harness, and that check is pass/fail — the rules, read 2026-11-20, are summarised in
+[`docs/CHALLENGE-RULES-BEDROCK.md`](docs/CHALLENGE-RULES-BEDROCK.md).
 
-The original design called for a **Bedrock Managed Agent** with three role-scoped action groups.
-That is not available: `CreateAgent` returns `AccessDeniedException` on this account — *"Bedrock
-Agents is in Maintenance Mode. New agent creation is not available for accounts without prior
-service usage"* — in both `ap-south-1` and `us-east-1`. The allowlist is automatic and per-account,
-and AWS's own maintenance-mode page states that **there is no exception process**, so there is no
-ticket to file. Found by driving the console, not by reading the SDK; recorded in
+Managed Agents is impossible here: `CreateAgent` returns `AccessDeniedException` on this account —
+*"Bedrock Agents is in Maintenance Mode. New agent creation is not available for accounts without
+prior service usage"* — in both `ap-south-1` and `us-east-1`. The allowlist is automatic and
+per-account, and AWS's own maintenance-mode page states that **there is no exception process**, so
+there is no ticket to file. Found by driving the console, not by reading the SDK; recorded in
 [`docs/BUILD-LOG.md`](docs/BUILD-LOG.md) under 2026-11-17.
 
-Two paths remain, and both end at the same three Lambdas:
+So: the **AgentCore harness** — and the honest part is what that cost. Panthiya's own `Converse` +
+`toolConfig` tool loop is built, tested and the safer piece of engineering — and it is not an agent
+on either named service, so the rule disqualifies the thing that was already working. It stays in the
+tree as the documented fallback behind the same seam. The harness does not call the three Lambdas
+itself: it pauses and hands each tool call back to our chat Lambda (AWS calls these *inline
+functions*), which is why `backend/lib/auth.mjs` and the three action Lambdas change by **zero
+lines**. A Gateway target was the documented alternative and was declined: that path carries no
+`sessionAttributes`, so every teacher, parent and student action would be denied. The reasoning is in
+[`docs/AGENTCORE-PLAN.md`](docs/AGENTCORE-PLAN.md) and the configuration and handoff loop are in
+[`backend/agentcore/`](backend/agentcore/README.md).
 
-| | Path | What it is |
-|---|---|---|
-| **A** | **AgentCore harness** | AWS's named successor. Each action group becomes a gateway MCP tool over the existing Lambda; the guardrail attaches through gateway policy. AgentCore is fully available in `ap-south-1` |
-| **B** | **Our own tool loop** | `Converse` with `toolConfig`, dispatching to the same three Lambdas from `chat/orchestrate.mjs`. Two files change; the role never leaves our own Lambda, which makes the trust model in design §3.1 *simpler*, not weaker |
+**What the change does not touch**, and it is almost all of it: `chat/orchestrate.mjs` is already a
+pure function with the model call injected as `deps.invokeAgent`, so the harness drops in behind a
+seam that already exists. The role gate at the top of every action Lambda, the per-function IAM
+separation, the Bedrock guardrail, `policyCheck`, and all 36 red-team cases do not care which
+orchestrator calls the Lambdas. Identity reaches the tools out of band — the model can choose the
+tool and the arguments, but it can never choose who it is.
 
-`TODO(nishen)` — replace this table with the chosen path once the bounded spike on A has run
-(`docs/NEXT-SESSION.md` §0, step 3), and update the `ORCH` node label in the diagram above to match.
-
-**What does not change under either answer**, and it is almost all of it: `chat/orchestrate.mjs` is
-already a pure function with the model call injected as `deps.invokeAgent`, so the seam exists. The
-role gate at the top of every action Lambda, the per-function IAM separation, the Bedrock guardrail,
-`policyCheck`, and all 36 red-team cases do not care which orchestrator calls the Lambdas. Identity
-reaches the tools out of band in every version — the model can choose the tool and the arguments, but
-it can never choose who it is.
+**None of it has run.** `CreateHarness` has not been called, the harness has never been invoked, and
+several properties of its request body and its response stream are marked UNVERIFIED in
+[`backend/agentcore/README.md`](backend/agentcore/README.md) §2 until a live call settles them.
 
 ---
 
@@ -296,12 +304,15 @@ policy types in `backend/agent/guardrail.json` bill per 1,000 text units on the 
 the way out. It is the largest per-turn line in the project and it is **explicitly not on the cut
 list**: it is a defence layer, and a cheaper scoreboard is not the thing being built.
 
-**Three things would take this over $15, and not one is duration:** any **NAT gateway** ($77–$95 over
-the window, 5–6× the entire budget, before a single request); **option C's model** (a GPT-5-class
-OpenAI model at list prices is ~$0.0125 a turn, about **$27** for the same traffic — over budget on
-inference alone); and a **paid host for option C's exec server** (~$29, or $0 on a laptop that then
-has to stay on for judges, which is a rules problem rather than a cost one). Region is worth cents
-rather than dollars, so §0a's region decision should turn on availability and latency, not price.
+**What would take this over $15 is the harness's defaults, not duration.** Omit `model` on
+`CreateHarness` and the service default is an Opus-class model — roughly **$41** for the same traffic,
+nearly three times the whole budget. Omit `allowedTools` and the agent arrives with a shell, which
+bills tokens on every request and is indefensible in a project whose pitch is an agent that keeps its
+rules. Four guards, all mandatory, are set out in [`docs/AGENTCORE-PLAN.md`](docs/AGENTCORE-PLAN.md)
+§5.3, and `backend/agentcore/` encodes them as a test that fails on any setting nobody anticipated. A
+**NAT gateway** would still dwarf all of it ($77–$95 over the window, 5–6× the entire budget, before a
+single request) — the template creates no VPC and the harness needs none, so there is no NAT line to
+pay. Region is worth cents rather than dollars.
 
 What is actually in the code holding this down: **one flat `maxTokens: 1024`** on every turn
 (`backend/functions/chat/index.mjs` — not the 400-tutor / 250-teacher split the design asked for), a 2,000-character input limit, a TTL on `redteam_runs`, and an S3 lifecycle rule deleting voice
@@ -326,9 +337,10 @@ notes after one day. Two things named here before were not true and are worth st
 Two honest caveats, and the table above is built to survive both. **Every row is still an estimate
 against a system that has never run**, so the token counts are the design's assumptions rather than
 measurements — which is why there is a ceiling column, costed at the full 1,024-token output rather
-than the ~300 the old table assumed. And **the orchestration decision can still change the shape of
-this**: option A prices runtime, memory and gateway as separate consumption lines, and option C is
-one of the three ways listed above to go over budget. Re-check before the first long run, not after.
+than the ~300 the old table assumed. And **the table does not yet include the harness**, which adds
+its own consumption lines: about 10¢ typical and 40¢ at the ceiling, giving ~$2.60 and ~$10.21, costed
+in [`docs/AGENTCORE-PLAN.md`](docs/AGENTCORE-PLAN.md) §5. Re-check before the first long run, not
+after.
 `TODO(nishen)` — after the hackathon, record the amount actually spent here (task 7.9).
 
 ---
@@ -456,6 +468,8 @@ had already approved, and what Kiro's workflow did *not* do — is in
 | [`.kiro/specs/panthiya/tasks.md`](.kiro/specs/panthiya/tasks.md) | The M0–M7 plan, with `[human]` on every task that costs money |
 | [`docs/RED-TEAM-CASES.md`](docs/RED-TEAM-CASES.md) | The 36 attacks and what a pass looks like |
 | [`backend/agent/README.md`](backend/agent/README.md) | Every case mapped to the layer that stops it, and where layer 1 alone would fail |
+| [`docs/CHALLENGE-RULES-BEDROCK.md`](docs/CHALLENGE-RULES-BEDROCK.md) | The challenge rules in our own words, and the qualification checklist against this repository |
+| [`docs/AGENTCORE-PLAN.md`](docs/AGENTCORE-PLAN.md) · [`backend/agentcore/README.md`](backend/agentcore/README.md) | The harness: why it, what it costs, what is still unverified |
 | [`docs/BUILD-LOG.md`](docs/BUILD-LOG.md) | What was built, what broke, how it was fixed |
 | [`docs/NEXT-SESSION.md`](docs/NEXT-SESSION.md) | Current state, what needs AWS access, and the next lanes |
 | [`docs/KIRO-WRITEUP.md`](docs/KIRO-WRITEUP.md) | How steering, specs and hooks were actually used |

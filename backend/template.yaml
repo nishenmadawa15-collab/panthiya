@@ -40,6 +40,25 @@ Parameters:
     Default: TSTALIASID
     Description: Agent alias id. TSTALIASID is the working draft alias Bedrock creates for you.
 
+  HarnessId:
+    Type: String
+    Default: REPLACEME00
+    Description: >-
+      AgentCore harness id (docs/AGENTCORE-PLAN.md Track A), from the `create-harness` call a human
+      runs by hand — the harness is NOT a resource of this template, because the execution role has
+      to exist before the call and the call is the thing that spends money. While this is the
+      placeholder, chat/index.mjs selects the Converse fallback; set it and the harness path takes
+      over with no code change. It also scopes this stack's one `InvokeHarness` grant.
+
+  HarnessArn:
+    Type: String
+    Default: ""
+    Description: >-
+      The same harness, as the ARN `InvokeHarness` is addressed to
+      (arn:aws:bedrock-agentcore:REGION:ACCOUNT:harness/ID). Empty by default because it carries an
+      account id and this repo is public. An ARN that disagrees with HarnessId above is refused by
+      IAM rather than invoked, since the grant is built from the id.
+
   GuardrailId:
     Type: String
     Default: ""
@@ -525,14 +544,21 @@ Resources:
         Variables:
           BEDROCK_AGENT_ID: !Ref BedrockAgentId
           BEDROCK_AGENT_ALIAS_ID: !Ref BedrockAgentAliasId
+          # Track A. HARNESS_ID decides the orchestrator (index.mjs `orchestratorFor`); HARNESS_ARN
+          # is what the invoke is addressed to. Both, because the IAM below is scoped to an ARN
+          # built from the id, so an id/ARN mismatch is AccessDenied rather than a wrong invoke.
+          HARNESS_ID: !Ref HarnessId
+          HARNESS_ARN: !Ref HarnessArn
           GUARDRAIL_ID: !Ref GuardrailId
           GUARDRAIL_VERSION: !Ref GuardrailVersion
           POLICY_CHECK_FUNCTION: !Ref PolicyCheckFunction
-          # Option B (docs/NEXT-SESSION.md §0): the loop in chat/orchestrate.mjs dispatches each
-          # tool use to the action group that owns it, by Lambda invoke, so every group keeps its
-          # own IAM role (design §3.3). An in-process import would need all three sets of
-          # permissions on this one function. index.mjs still selects InvokeAgent when
-          # BEDROCK_AGENT_ID is a real id, so option A stays a parameter rather than a rewrite.
+          # Every orchestrator dispatches tool use to the action group that owns it by Lambda
+          # invoke, so each group keeps its own IAM role (design §3.3) — the harness hands an
+          # inline-function call back to chat/index.mjs, which invokes the same way the Converse
+          # loop does. An in-process import would need all three sets of permissions on this one
+          # function. Which orchestrator runs is these variables' decision and no code change:
+          # HARNESS_ID set picks the harness (the path the challenge rules require,
+          # docs/AGENTCORE-PLAN.md), else BEDROCK_AGENT_ID set picks option A, else the loop.
           ACTIONS_TEACHER_FUNCTION: !Ref ActionsTeacherFunction
           ACTIONS_PARENT_FUNCTION: !Ref ActionsParentFunction
           ACTIONS_STUDENT_FUNCTION: !Ref ActionsStudentFunction
@@ -546,6 +572,37 @@ Resources:
               Effect: Allow
               Action: bedrock:InvokeAgent
               Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/${BedrockAgentId}/${BedrockAgentAliasId}"
+            # Track A. One action, one harness. The ARN is built from HarnessId rather than taken
+            # from HarnessArn because HarnessArn defaults to "" (it carries an account id and this
+            # repo is public), and an IAM Resource of "" is a MalformedPolicyDocument at deploy
+            # time — the same reason ApplyGuardrail below uses a constructed ARN.
+            - Sid: InvokeTheOneHarness
+              Effect: Allow
+              Action: bedrock-agentcore:InvokeHarness
+              Resource: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:harness/${HarnessId}"
+            # DO NOT ADD `bedrock-agentcore:InvokeAgentRuntimeCommand` OR
+            #    `bedrock-agentcore:InvokeAgentRuntimeCommandShell` HERE.
+            #
+            # AWS: "allowedTools scopes LLM tool selection during InvokeHarness only. It does not
+            # affect InvokeAgentRuntimeCommand, which is a separate API with its own IAM action that
+            # executes commands directly without passing through the LLM. To prevent direct command
+            # execution, do not grant bedrock-agentcore:InvokeAgentRuntimeCommand in your IAM
+            # policies."
+            #
+            # Either one executes commands with the model out of the loop entirely, which routes
+            # around `allowedTools` in backend/agentcore/harness-config.mjs — the guard that stops a
+            # child-safety submission shipping a shell and filesystem write. It is written here
+            # because this is the line someone will pattern-match the `bedrock-agentcore:` prefix
+            # against in a hurry on deploy evening. tests/unit/chat-loop.test.mjs asserts the
+            # absence; backend/agentcore/execution-role-policy.json records the quote.
+            #
+            # ponytail: `bedrock:InvokeModel` and `bedrock:ApplyGuardrail` below STAY, and
+            # docs/AGENTCORE-PLAN.md §10 item 3 ("they move off this role onto the harness execution
+            # role") is therefore not followed as written. On the harness path they are indeed dead
+            # — the harness makes the model call under its own role — but the same deployment serves
+            # option B whenever HarnessId is still the placeholder, and option B's `Converse` call
+            # is made by THIS function. Removing them would break the documented fallback the moment
+            # the harness is unset. Remove them on the day option B is deleted, not before.
             - Sid: InvokeTheModelForTheToolLoop
               Effect: Allow
               Action: bedrock:InvokeModel

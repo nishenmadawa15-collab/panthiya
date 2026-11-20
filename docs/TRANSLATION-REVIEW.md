@@ -276,6 +276,41 @@ is not running; neither may claim it is.
 
 ---
 
+## Priority 1c — two notes that are true today and false after the deploy (found 2026-11-20)
+
+**This is a decision, not a translation task, and it is deliberately not pre-empted.**
+
+`parent.note` and `chat.mic_note` both state that nothing is deployed:
+
+- **`parent.note`** — *“The parent inbox is built and tested, but nothing is deployed yet, so
+  nothing here comes from a live class.”*
+- **`chat.mic_note`** — *“Voice is built but not deployed yet, so the transcript here comes
+  from a stand-in.”*
+
+Both are **true right now** and both go **false the moment the stack is deployed** — which happens
+before the demo video is recorded, with both strings on screen in beats 2–5 of
+`docs/DEMO-SCRIPT.md`. `teacher.note` and `student.note` had the same defect and were rewritten today
+(Priority 1b above), on the rule that *a false sentence in Sinhala on the screen a judge watches is
+worse than a true one in English*.
+
+**These two were not rewritten, because the cost is different.** Their Sinhala and Tamil are
+currently **correct and fluent**, and they are the two longest notes in the file — rewriting the
+English would put English on screen in two more places and add two more retranslations to this
+document. There are three ways out, and the choice is Nishen's:
+
+| | What | Cost |
+|---|---|---|
+| **A** | **Condition them on `MOCKING`** — the seam already exists (`const MOCKING = !configured();` in each page script). Show the “stand-in” sentence only while the page is answering from its own mock | A few lines of front-end code and **no translation at all**: the existing si/ta stay correct for the pre-deploy state, and the post-deploy state needs two new short keys |
+| **B** | **Rewrite the English** the way Priority 1b did, true before and after | Two more strings in English on screen until retranslated, and two more rows for you here |
+| **C** | **Leave them** | Two sentences that are false on camera, in the part of the demo a judge is most likely to replay |
+
+**A is the lazy answer and it is also the right one** — it is the only option that costs no
+translation and cannot go stale again. It is written down rather than done because it adds keys to
+all three `frontend/i18n/*.json` files, and whether to spend demo-week front-end time on it is a
+call about risk, not about code.
+
+---
+
 ## Priority 2 — terminology check
 
 These four words were chosen once and reused across the red-team and audit screens. Check each
@@ -1051,6 +1086,7 @@ where to pick up.
 - [ ] **`redteam.reason.content_filtered`** — a translation, not a review: si and ta are still English
 - [ ] **`redteam.reason.chat_crashed`** — same: a translation, added 2026-11-20
 - [ ] **Priority 1b** — `teacher.note` and `student.note`, rewritten in English on 2026-11-20
+- [ ] **Priority 1c** — decide A, B or C for `parent.note` and `chat.mic_note` (A needs no translation at all)
 - [ ] **Priority 2** — terminology (4 words)
 - [ ] `meta.*` (3)
 - [ ] `skip.*` (1)

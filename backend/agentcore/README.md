@@ -92,7 +92,18 @@ aws bedrock-agentcore-control list-agent-runtimes --region ap-south-1 --max-resu
 # 1. The guardrail must exist first — create-harness.json references it by id.
 #    From backend/agent/guardrail.json. Record the id and version.
 
-# 2. The execution role, from execution-role-policy.json (trust policy + permissions policy).
+# 2. The execution role, from execution-role-policy.json.
+#    ⚠️ That file is a DOCUMENT holding three policies plus PLACEHOLDERS, NOTE and
+#    DELIBERATELY_ABSENT keys. Passing it to IAM with file:// returns MalformedPolicyDocument.
+#    Extract the two it needs first (writes to the scratch names below, placeholders intact):
+node -e "const d=require('./backend/agentcore/execution-role-policy.json'),f=require('fs'); \
+  f.writeFileSync('trust.json',JSON.stringify(d.HarnessExecutionRole.TrustPolicy,null,2)); \
+  f.writeFileSync('perms.json',JSON.stringify(d.HarnessExecutionRole.PermissionsPolicy,null,2)); \
+  console.log('wrote trust.json + perms.json — now substitute REPLACE_* in both');"
+#    Then substitute every REPLACE_* value, create the role with trust.json, and attach
+#    perms.json as an inline policy. The third policy, ChatLambdaAdditions, is NOT applied by
+#    hand: backend/template.yaml already carries it as of 2026-11-20 (AGENTCORE-PLAN §10).
+#    Do not delete trust.json/perms.json into the repo — they will hold a real account id.
 
 # 3. Regenerate create-harness.json if anything in harness-config.mjs changed, then review it.
 node -e "import('./backend/agentcore/harness-config.mjs').then(({createHarnessBody})=>{ \

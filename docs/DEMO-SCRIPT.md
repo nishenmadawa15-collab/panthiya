@@ -20,13 +20,13 @@ Serial. Each step needs the one above it. The full list with commands is in
 | # | What | Why the recording breaks without it |
 |---|---|---|
 | 1 | Day-1 Sinhala gate (`scripts/test-sinhala.mjs`) | Beats 2 and 5 show Sinhala on screen. If the model answers Sinhala-shaped nonsense, those beats are unrecordable and the script changes, not the take |
-| 2 | Bedrock agent + three action groups + guardrail created, `sam deploy` done | Every beat after beat 1 |
+| 2 | **Revised 2026-11-20:** the **AgentCore harness** created with its three role-scoped tool sets as **inline functions**, the guardrail attached, `sam deploy` done. Not an agent with action groups — `CreateAgent` is denied on this account, and the challenge rules name Bedrock Managed Agents **or** the AgentCore managed harness. `docs/AGENTCORE-PLAN.md` has the call body; `backend/agentcore/README.md` §4 lists the six properties to read by eye before running it | Every beat after beat 1 |
 | 3 | `scripts/demo-users.mjs --apply` — three logins, grouped, permanent password | **Before the seed.** The seed writes these accounts' Cognito `sub`s into the data |
 | 4 | `backend/seed/seed.mjs --stack panthiya --apply` | With placeholder subs the teacher has no classes in scope and answers `out_of_scope` to everything, and the parent's own child is refused. The demo would look deployed and answer nothing |
 | 5 | **Parent updates about Kasun drafted and approved**, off camera — one is the minimum, two or three make it look like a thread | `demo-class.json` has no `messages` block and `seed.mjs` writes none, so after a clean seed the parent inbox is **empty**. Beat 3 has nothing to show until the teacher has put updates through `draftParentUpdate` and the approval gate |
 | 6 | Hosted-UI sign-in in the front-end (task 2.3) | The chat API takes the role from the verified token. Beats 3–6 each need a different role signed in |
-| 7 | The three **SWAP POINTs** taken: `frontend/assets/redteam.js` and `frontend/assets/student.js`, plus the teacher and parent mocks | Until then every page answers from a mock inside itself. `redteam.js` also shows a visible "not connected to the live agent" notice that must be gone |
-| 8 | The stale page notes rewritten: `teacher.note` ("the backend lands in M1"), `parent.note` ("connects to a real class in M4"), `student.note` ("not connected to a model yet"), `chat.mic_note` ("voice notes arrive in M6") | All four are on screen in beats 2–5 and all four now read as untrue |
+| 7 | **Revised 2026-11-20 — this is now a paste, not an edit.** Real `fetch` is the implementation on all four pages and `const MOCKING = !configured();` picks the mock, so the only step is pasting four stack outputs into `CONFIG` in `frontend/assets/auth.js` (`HostedUiDomain`, `UserPoolClientId`, `UserPoolId`, `ApiEndpoint`) and signing in on each page. There are no call sites left to edit | Until the four values are pasted every page answers from a mock inside itself, and `redteam.js` shows a visible "not connected to the live agent" notice that must be gone from the take |
+| 8 | **Revised 2026-11-20 — two of the four are done, and the other two have the opposite problem.** `teacher.note` and `student.note` were rewritten today to be true **before and after** the deploy (si/ta awaiting retranslation — `docs/TRANSLATION-REVIEW.md` Priority 1b). But `parent.note` still says *“nothing is deployed yet”* and `chat.mic_note` still says *“the transcript here comes from a stand-in”* — both **true today and false on camera**, since beats 2–5 are recorded after the deploy. Their Sinhala and Tamil are currently correct, so rewriting the English puts English on screen; `MOCKING` already exists in the front end as the seam to show them only when mocking. **Nishen chooses — recorded as Priority 1c in `docs/TRANSLATION-REVIEW.md`** | All four are on screen in beats 2–5 |
 | 9 | One live run of all 36 from `/redteam` and from `scripts/redteam-cli.mjs` (task 5.7) | Beat 6's narration reads numbers off the screen. You cannot write them in advance and you must not guess them |
 | 10 | Native review of the Sinhala and Tamil strings listed in `NEXT-SESSION.md` §3 | Anything on screen in Sinhala or Tamil is read by the audience |
 | 11 | *Optional, decides beat 2's shape:* microphone UI (task 6.4) | If 6.4 has not landed, the mic button is present and visibly disabled. Beat 2 is then typed Sinhala, not a voice note |
@@ -208,12 +208,12 @@ red-team table does not reflow on a phone.
 pink-and-orange nodes — guardrail, `policyCheck`, student action group — visible.
 
 **Said.**
-> Cognito for the role, API Gateway verifying the token, one Bedrock agent with three role-scoped
-> action groups, DynamoDB, and a policy check on every single reply that fails closed. No EC2, no
+> Cognito for the role, API Gateway verifying the token, one Bedrock AgentCore harness with three
+> role-scoped tool sets, DynamoDB, and a policy check on every single reply that fails closed. No EC2, no
 > NAT gateway, nothing billed by the hour — it all scales to zero, and the whole thing was built to a
 > fifteen-dollar budget. The student tutor Lambda has no database permissions at all.
 
-**Needs in advance.** Nothing. The diagram is in the README and renders without a deploy.
+**Needs in advance.** Nothing. The diagram is in the README and renders without a deploy — but **re-read it before the take**: the orchestrator node was relabelled on 2026-11-20 when the rules closed the A/B decision, and the narration above has to match what is on screen.
 
 ---
 

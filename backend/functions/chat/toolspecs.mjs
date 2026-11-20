@@ -1,8 +1,9 @@
 // The model-facing contract, read from the files that already define it.
 //
-// Option B (docs/NEXT-SESSION.md §0) runs the agent loop in our own Lambda rather than in the
-// Bedrock agent service. That moves two things that used to live in the agent configuration — the
-// tool list and the instruction — into this process. Neither is retyped here:
+// Neither the Converse loop (option B) nor the AgentCore harness (Track A, the path the challenge
+// rules require — docs/AGENTCORE-PLAN.md) keeps its tool list in the Bedrock agent service, so both
+// of them need the two things that used to live in the agent configuration — the tool list and the
+// instruction — in this process. Neither is retyped here:
 //
 //   - the tool specs are derived from `backend/agent/schemas/*.json`, the same OpenAPI files that
 //     would be pasted into an action group;
@@ -12,6 +13,13 @@
 // One source of truth each. A second hand-typed copy of either is how a tool description and a
 // handler drift apart, and in this project a drifted description is a safety rule that is no
 // longer in front of the model.
+//
+// And the most useful fact about this file: `toolsFor(role)` feeds BOTH orchestrators.
+// `backend/agentcore/harness-config.mjs` derives the harness's inline functions from it (unwrapping
+// `inputSchema.json`, which is the only difference between the two shapes), and all of it derives
+// from `backend/agent/schemas/*.json`. So one schema edit reaches the harness and the loop together
+// and there is no second copy to drift — which is why `backend/agent/schemas/` is still
+// load-bearing even though Agents Classic is dead on this account.
 //
 // Packaging: every function's `CodeUri` is the backend root (see the note in template.yaml), so
 // `agent/` ships in this bundle exactly as `lib/` does. No network and no SDK is involved, so this

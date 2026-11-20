@@ -505,8 +505,8 @@ so the hook can run them freely.
 | # | Question | Blocks | Needed by |
 |---|---|---|---|
 | 1 | Public GitHub repo URL for `panthiya` | Amplify connection, M0 go-live | M0 |
-| 2 | Confirm `ap-south-1` has Bedrock Managed Agents + the chosen model enabled; else us-east-1 | M1 | before first deploy |
+| 2 | ~~Confirm `ap-south-1` has Bedrock Managed Agents + the chosen model enabled~~ **Revised 2026-11-20:** confirm **AgentCore** + Nova Lite in `ap-south-1`. Two read-only commands, in `docs/AGENTCORE-PLAN.md` §4 — and an `AccessDenied` naming the **account** rather than the IAM identity is the one fatal answer, because both services the rules name would then be unreachable | M1 | before first deploy |
 | 3 | Day-1 Sinhala quality verdict on Nova Lite | model choice | before M1 merge |
 | 4 | Cognito: is self sign-up allowed for demo accounts, or does the teacher create all users? | M2 | M2 |
-| 5 | Nov 18 — do the Bedrock challenge rules permit submitting the same project to Kiroween? | submission plan | Nov 18 |
+| 5 | ~~Nov 18 — do the Bedrock challenge rules permit submitting the same project to Kiroween?~~ **Answered 2026-11-20: yes.** The agent must be original and not previously published, with one entry per person or team; nothing forbids entering it elsewhere. Both submissions are on | submission plan | — |
 | 6 | Real tuition-class fee amount and typical class size, for realistic demo figures | seed data | M1 |

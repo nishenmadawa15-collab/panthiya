@@ -8,11 +8,17 @@
 //   2. Every reply passes through policyCheck before a human reads it, and policyCheck failing is
 //      a block, not a pass (requirements 9.2, 9.4).
 //
-// Two orchestrators can sit behind `deps.invokeAgent`, and `handleChat` cannot tell them apart —
-// which is the point, because the choice between them is still open (docs/NEXT-SESSION.md §0):
+// Three orchestrators can sit behind `deps.invokeAgent`, and `handleChat` cannot tell them apart —
+// which is the point. The choice between them is NO LONGER open: as of 2026-11-20 the challenge
+// rules require an agent built on Managed Agents or the AgentCore managed harness
+// (docs/CHALLENGE-RULES-BEDROCK.md), so the harness is the path that qualifies and the loop below
+// is the documented fallback. Both stay in the tree. docs/AGENTCORE-PLAN.md has the whole decision.
 //
-//   A  Bedrock Agents Classic / AgentCore — one `InvokeAgent` call; the service runs the loop.
-//   B  `runToolLoop` below — Converse with `toolConfig`, and the loop runs here.
+//   A  Bedrock Agents Classic — one `InvokeAgent` call; the service runs the loop. `CreateAgent` is
+//      denied on this account, so it is wired and unreachable.
+//   B  `runToolLoop` below — Converse with `toolConfig`, and the loop runs here. Does not qualify.
+//   Track A  `runHarnessTurn` in backend/agentcore/handoff.mjs — the AgentCore harness runs the
+//      loop and hands each tool call back to us. The one the rules accept.
 //
 // Both return a reply string, and both signal a guardrail intervention by throwing an error whose
 // `guardrailAction` is `'INTERVENED'`. So the layer-2 and layer-3 paths in `handleChat` are shared,
@@ -206,8 +212,14 @@ function contentFiltered() {
   return err;
 }
 
-/** Fixed text sent back to the model when a tool did not run. Our words, never the error's. */
-const TOOL_FAILED =
+/**
+ * Fixed text sent back to the model when a tool did not run. Our words, never the error's.
+ *
+ * Exported for backend/agentcore/handoff.mjs, which sends the same sentence on the harness path.
+ * One definition on purpose: two copies of a safety sentence is how a rule stops being the rule
+ * (docs/AGENTCORE-PLAN.md §9). Nothing in this module's own behaviour changes.
+ */
+export const TOOL_FAILED =
   'This tool did not run and nothing was read or written. Do not retry it, and do not answer out '
   + 'of your own knowledge. Tell the user plainly that the system could not do it just now.';
 
@@ -218,7 +230,7 @@ const TOOL_FAILED =
  * invented a tool name to "ask their teacher" names the wrong person and reads as a refusal of
  * something they are in fact allowed to do. Our words either way, never the model's name back.
  */
-const toolUnavailable = (role) =>
+export const toolUnavailable = (role) =>
   'There is no such tool in this session. Nothing was read or written. Do not guess another name: '
   + (role === 'teacher'
     ? 'tell the user kindly that this is not something the app can do, '

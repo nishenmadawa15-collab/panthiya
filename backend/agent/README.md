@@ -16,6 +16,14 @@ what actually makes "I am the principal" useless.
 
 Nothing here has been deployed. These files are the intended input to M1 task 1.11, which a human runs.
 
+> **Read this before following §4 — dated 2026-11-20.**
+>
+> **Still the source of truth, and more load-bearing than before:** `instructions.md`, `guardrail.json`, and the three `schemas/*.json`. `backend/functions/chat/toolspecs.mjs` reads those schemas at runtime, and `backend/agentcore/harness-config.mjs` derives the harness's inline functions from `toolsFor(role)` — so the schemas feed **both** orchestrators from one file, and there is no second copy to drift. Rename a parameter here and it changes in the harness and in the tool loop together.
+>
+> **§4 cannot be run.** `create-agent-action-group` needs an agent, and `CreateAgent` returns `AccessDeniedException` on this account — Agents Classic is in maintenance mode with no exception process. The challenge rules read on 2026-11-20 (`docs/CHALLENGE-RULES-BEDROCK.md`) require **Bedrock Managed Agents or the AgentCore managed harness**, and the path chosen is the harness, where each action group becomes an **inline function** instead. The runbook you want is [`backend/agentcore/README.md`](../agentcore/README.md); the analysis is [`docs/AGENTCORE-PLAN.md`](../../docs/AGENTCORE-PLAN.md).
+>
+> §§1–9 are kept rather than deleted because the schemas, the instruction text and the guardrail body are unchanged by the move, and because the *reasoning* in §9 about which layer wins which attack is still what the red-team cases are scored against.
+
 ---
 
 ## 1. Order of operations
@@ -122,7 +130,9 @@ aws bedrock-agent update-agent \
 
 ---
 
-## 4. Create the three action groups
+## 4. Create the three action groups — ⚠️ not runnable on this account (2026-11-20)
+
+> Kept as the contract, not as a command. `CreateAgent` is denied here, so there is no agent to attach a group to. The same three groups exist as **inline functions** on the AgentCore harness, generated from these schemas by `backend/agentcore/harness-config.mjs`. The sentence below about parameter names is the part that still binds.
 
 One call per group. The parameter names in the schemas are the contract with the handler lane — do not
 rename them here.

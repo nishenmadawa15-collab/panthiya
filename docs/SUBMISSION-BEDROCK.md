@@ -1,24 +1,86 @@
 # Submission draft — AWS Bedrock agents challenge
 
-**Status: draft, not submitted.** Target submission date **Dec 1 2026**; the deadline recorded in
-`PANTHIYA_SETUP.md` §1 is **Dec 2, 11:59 PM PT** (Dec 3, 1:29 PM Sri Lanka). Everything below is
-written to be pasted into the submission form, section by section, with every unanswerable field
-marked `TODO(nishen)`.
+**Status: draft, not submitted.** Target submission date **Dec 1 2026**; the deadline is **Dec 2
+2026, 11:59 PM PT** (Dec 3, 1:29 PM Sri Lanka), read from the rules page itself on 2026-11-20. The
+submission is a **written project published on AWS Builder Center**, not a web form. Everything
+below is written to be pasted section by section, with every field only the live submission surface
+can name marked `TODO(nishen)`.
+
+Sections were written on 2026-11-18 and corrected on the 19th and 20th. **Where any two disagree,
+the latest dated correction wins.**
 
 ---
 
-## 0. Read this before pasting anything
+## 0. What the rules say — read 2026-11-20
 
-Three things are unverified, and the first one could change the submission entirely.
+This section carried three unverified things. **All three are answered.** The summary, with the URL,
+the nine qualification requirements and the judging criteria, is
+[`docs/CHALLENGE-RULES-BEDROCK.md`](CHALLENGE-RULES-BEDROCK.md), read from the live rules page on
+**2026-11-20**. Where that file and this one disagree, the later correction wins; where either
+disagrees with the page, the page wins.
 
-| # | Unverified | Why it matters | How to settle it |
-|---|---|---|---|
-| 1 | **The challenge's actual name, rules and form fields.** `PANTHIYA_SETUP.md` §1 records it as *"Agents, your rules"* on AWS Builder Center, with 5 × $1,000 AWS credits as the prize. A search found no event under that name, so the field list below is inferred from the deliverables in `PANTHIYA_SETUP.md` §6 and not copied from a form | Every heading in this file is a guess at what is being asked for | `TODO(nishen)` — paste the challenge URL or forward the invitation email. The rules publish **today, 2026-11-18**. Fifteen minutes with the real form replaces all of §1–§10's structure |
-| 2 | **Whether a Bedrock Managed Agent is required.** This account **cannot create one** — see §6. If the rules require Bedrock Agents Classic specifically, the project is ineligible as built and the honest move is to say so rather than to submit something that does not match | It is the difference between submitting and not | `TODO(nishen)` — answer from the rules in §1 |
-| 3 | **Whether the same project may also be submitted to Kiroween.** Unresolved — see `docs/SUBMISSION-KIROWEEN.md` §0 | Decides whether there are one or two submissions | `TODO(nishen)` — from the same rules |
+| Was open | Answer, 2026-11-20 |
+|---|---|
+| The challenge's name, rules and fields | The event is real and public: *Agents, your rules: Bedrock Managed Agents build*, on AWS Builder Center. Deadline **Dec 2, 11:59 PM PT**, confirmed rather than inferred. **Sri Lanka is eligible** — it is not on the exclusion list. 18+ and a Builder Center profile are required |
+| **Whether a Bedrock Managed Agent is required** | **Yes — or AgentCore.** The decisive requirement is an agent built on *"Amazon Bedrock Managed Agents or the Amazon Bedrock AgentCore managed harness"* (rules page, 2026-11-20) |
+| Whether the same project may also go to Kiroween | The rules require the agent to be original and not previously published, and allow one entry per person or team. **Nothing forbids entering the same project elsewhere**, which matches what the Kiroween rules already said. See `docs/SUBMISSION-KIROWEEN.md` §0 |
+
+**That middle row resolved in this project's favour and against this project's current build.**
+Bedrock Agents Classic cannot be created on this account — `CreateAgent` returns
+`AccessDeniedException`, and AWS publishes no exception process (§6). So **AgentCore is the only
+path that qualifies**. And the project's own `Converse` + `toolConfig` tool loop, built and green,
+**is not an agent built on either named service**. On its own it does not qualify. The qualification
+check is pass/fail with no exceptions, so a submission resting on that loop would not reach judging
+however good the rest of it is.
+
+> **Read the rest of this file with one thing in mind: the submission depends on the AgentCore
+> harness in `backend/agentcore/` being deployed — not on the tool loop that is currently green.**
+> That harness was written offline on 2026-11-20 and has never run against AWS. The plan, the cost
+> delta and the risks are in [`docs/AGENTCORE-PLAN.md`](AGENTCORE-PLAN.md).
+
+Three things are still open, and genuinely so:
+
+- **Whether AgentCore can be reached on this account at all.** Agents Classic cannot be. Nothing
+  read on the 20th says AgentCore is gated, and it is generally available in `ap-south-1` — but no
+  call has been made, because the build machine has no credentials. If `CreateHarness` and
+  `CreateAgentRuntime` are both closed here, then both services the rules name are unreachable and
+  this account cannot produce a qualifying entry (`docs/AGENTCORE-PLAN.md` §7.2). That goes to
+  Nishen the hour it is found, with the exact error text.
+- **The real field list.** The *Your project* tab offers only an invitation to join, so **the
+  submission surface does not exist until Nishen joins** under his own Builder Center account. The
+  headings below are therefore this repository's structure, not the event's. Stated once here rather
+  than repeated in every section: anything only the live surface can name stays `TODO(nishen)`.
+- **Everything about live behaviour.** Nothing in this project has run against AWS.
 
 Nothing in this file claims a running system. **Nothing has been deployed and $0 has been spent.** Every
 field that would be a measurement is marked rather than estimated.
+
+---
+
+## 0a. The nine qualification requirements, against where this project stands
+
+The qualification check is pass/fail: a submission missing any one of these does not reach judging,
+however good the project is. Each row has to be true **of the published project**, not merely of the
+code. Source: [`docs/CHALLENGE-RULES-BEDROCK.md`](CHALLENGE-RULES-BEDROCK.md) §3.
+
+| # | Required | Status | What closes it |
+|---|---|---|---|
+| 1 | A working agent on Bedrock Managed Agents or the AgentCore harness, doing **one defined job** | **Not yet met — this is the gap** | Credentials, then `CreateHarness` from `backend/agentcore/create-harness.json`, then the wiring listed in `docs/AGENTCORE-PLAN.md` §10. The submission text must also **name the one job**: the agent runs a tuition class under eight rules. The three roles are scoped tool sets of that one job, not three agents — one harness, with `tools` and `systemPrompt` passed per invocation from the verified role |
+| 2 | A written rule set in plain language: what it may access, what it must refuse, how it handles edge cases | **Written, not yet published** | §4 below, plus `backend/agent/instructions.md` and `backend/agent/README.md`. Closed by pasting it into the Builder Center project |
+| 3 | How **each** rule is enforced — guardrails, scoped IAM, tool limits, confirmation steps — with an architecture description or diagram | **Partly met** | The three layers, the per-function IAM separation and `policy-check/` exist and are described in §4. **The diagram does not exist** (task 7.1) |
+| 4 | A stress test of **at least five** adversarial prompts, at least one a prompt injection, each with what it tried and how the agent answered | **Not yet met as evidence** | 36 documented cases, tested offline, **never run live** (§5). The live run is task 5.7 and needs the deploy plus three demo logins. The answers are the evidence; estimates are not |
+| 5 | A project published **on AWS Builder Center** covering the agent, the job, the rules, the enforcement, the stress-test results, the build process, **and any rule that broke in testing and how it was fixed** | **Not yet met — human-only to publish** | This file is the draft. The "what broke" half is §10 plus `docs/BUILD-LOG.md`, which is the strongest material this repository owns |
+| 6 | A link to the code repository or a demo, **and at least one screenshot of the agent running** | **Partly met** | The repository is public (§11). The screenshot needs the deploy |
+| 7 | An original agent, not previously published | **Met** | First commit 2026-11-16; nothing published anywhere. Pre-existing material is disclosed at the end of this file |
+| 8 | A public repository under an approved OSI licence | **Met** | MIT, and GitHub reports it detected rather than merely present (`gh repo view`) |
+| 9 | A demo video, if one is given: public, no third-party trademarks or copyrighted music | **Not required here** | Kiroween requires a video; this challenge does not. One clean video serves both (task 7.7) |
+
+**Everything unmet is downstream of two things: no credentials, and no published project.**
+Requirements 1, 4 and 6 fall the moment the harness is deployed and the 36 cases run. Requirements
+2, 3 and 5 are writing plus one diagram. And three steps are **human-only** and nobody should take
+them on Nishen's behalf: joining the hackathon (which is what makes the submission surface exist at
+all), publishing the project, and stating the eligibility facts that are his — 18+, country of
+residence, not an Amazon employee.
 
 ---
 
@@ -28,7 +90,7 @@ field that would be a measurement is marked rather than estimated.
 
 > An AI assistant for Sri Lankan tuition classes — with rules it does not break.
 
-Alternative, if the form wants one line about the agent rather than the product:
+Alternative, if the submission wants one line about the agent rather than the product:
 
 > A tuition-class agent whose privacy, money and exam-answer rules are enforced three times in
 > independent places, and proved against 36 documented attacks.
@@ -133,7 +195,7 @@ dishonest version of each is easy:
 
 ---
 
-## 6. Architecture, and the one thing that is not settled
+## 6. Architecture, and the orchestration decision — settled 2026-11-20
 
 Full diagram and walkthrough: [`README.md`](../README.md) § Architecture, and
 [`.kiro/specs/panthiya/design.md`](../.kiro/specs/panthiya/design.md) §1.
@@ -145,45 +207,70 @@ with an S3 lifecycle rule deleting the audio after one day. No EC2, no NAT Gatew
 billed by the hour. Region `ap-south-1` (Mumbai — the nearest AWS region to Sri Lanka; no latency
 from Colombo has been measured, because nothing is deployed).
 
-**The orchestration layer is an open decision, and the submission should say so rather than describe
-something that does not exist.**
+**Corrected 2026-11-20: the orchestration layer is no longer an open decision.** Earlier drafts of
+this section described it as undecided and offered two options. The rules decide it, and the chosen
+path is the **Amazon Bedrock AgentCore managed harness**.
 
-The design called for a Bedrock Managed Agent with three role-scoped action groups. That is not
-available on this account: `CreateAgent` returns `AccessDeniedException` — *"Bedrock Agents is in
-Maintenance Mode. New agent creation is not available for accounts without prior service usage"* — in
-both `ap-south-1` and `us-east-1`. The allowlist is automatic and per-account, and AWS's own
+The design originally called for a Bedrock Managed Agent with three role-scoped action groups. That
+is not available on this account: `CreateAgent` returns `AccessDeniedException` — *"Bedrock Agents is
+in Maintenance Mode. New agent creation is not available for accounts without prior service usage"* —
+in both `ap-south-1` and `us-east-1`. The allowlist is automatic and per-account, and AWS's own
 maintenance-mode page states there is **no exception process**, so there is no ticket to file. Found by
 driving the console; nothing in the SDK, the template or the schemas says it.
 
-What survives is most of it: Guardrails are unaffected and still apply when the model is invoked
-through AgentCore, model inference is fully supported, and AgentCore is fully available in
-`ap-south-1`. Two paths remain, and both end at the same three Lambdas:
+The second candidate was our own tool loop — `Converse` with `toolConfig`, dispatching to the same
+three Lambdas. It works and it is green. **It also is not an agent built on either service the rules
+name, so it cannot be what is submitted** (§0). It was the right engineering choice while the rules
+were unread and the wrong submission once they were read.
 
-- **A — AgentCore harness.** AWS's named successor. Each action group becomes a gateway MCP tool over
-  the existing Lambda; the guardrail attaches through gateway policy.
-- **B — Our own tool loop.** `Converse` with `toolConfig`, dispatching to the same three Lambdas from
-  `chat/orchestrate.mjs`. The role never leaves our own Lambda, which makes the trust model *simpler*.
+So the harness it is, and most of the project survives the move (`docs/AGENTCORE-PLAN.md`):
 
-`chat/orchestrate.mjs` is already a pure function with the model call injected as `deps.invokeAgent`,
-so the seam exists and two files change either way. The role gate, the per-function IAM separation,
-the guardrail, `policyCheck` and all 36 cases do not care which orchestrator calls the Lambdas.
+- **The security model does not change at all.** The harness's documented *inline functions* pause
+  the loop and hand each tool call back to **our own** Lambda, which holds the verified JWT claims
+  and invokes the action Lambda with the same `sessionAttributes` payload as today. Design §3.1's
+  claim survives verbatim: **the role never leaves our own Lambda.** `backend/lib/auth.mjs` and the
+  three action Lambdas change by zero lines, and `requireRole` / `resolveScope` / `assertInScope`
+  run exactly as they do now.
+- **Role scoping survives.** `tools` and `systemPrompt` are overridable per invocation, so there is
+  one harness rather than three, and a student session is still never told that `recordFee` exists.
+- **Layer 2 attaches to the model call, not beside it.** `guardrail.json` is used unchanged, passed
+  as `guardrailConfig` inside the harness's model config, and the harness reports
+  `guardrail_intervened` as the stop reason — the same literal string the existing code already
+  matches, so layer-2 attribution in `handleChat` and `redteam/score.mjs` needs no change.
+- **No Gateway, no VPC, no managed Memory.** Inline functions reach the existing Lambdas directly, the
+  documented network default creates no VPC, and AgentCore Memory is deliberately turned off: our
+  loop is single-message by design, and putting children's conversations into AWS-managed long-term
+  memory is a retention decision this project has not taken.
 
-`TODO(nishen)` — replace the two bullets above with the chosen path and one sentence of why, once the
-bounded spike on A has run (`docs/NEXT-SESSION.md` §0, step 3). If the challenge rules require Bedrock
-Agents Classic specifically (§0 item 2), this section becomes the submission's central honesty
-paragraph instead.
+What the move costs, named plainly rather than skipped: the hand-written tool loop and its 23 tests
+are replaced by the harness's loop (the properties were re-proved against the new handoff loop, with
+one deliberately stricter — an unrecognised or absent stop reason now fails closed); the reply
+arrives as an event stream to reassemble rather than one response object; and each tool round trip is
+a separate call from the chat Lambda, which has 29 seconds because API Gateway caps at 30. That last
+one is measurable only live.
+
+One ambiguity remains, and it is a reading of the rules rather than of the documentation: whether
+*"the AgentCore managed harness"* means the `CreateHarness` product specifically or AgentCore
+generally. **The harness satisfies both readings** — it is the managed harness, and it runs inside
+AgentCore Runtime — which is the practical reason it was chosen over hosting our own loop in a
+container.
+
+`TODO(nishen)` — nothing in `backend/agentcore/` has met AWS. Confirm the harness can be created on
+this account (`docs/AGENTCORE-PLAN.md` §7.6), then replace this paragraph with the harness ID, the
+model actually set, and one line on what the first live invoke did.
 
 ---
 
 ## 7. AWS services used
 
-Every row below is **written into `backend/template.yaml` and not yet created**: no AWS resource for
-this project exists, and `aws configure list` on the build machine shows no credentials at all. Read
-the table as the stack the deploy will make, not as an inventory of a running account.
+Every row below is **declared in this repository and not yet created**: no AWS resource for this
+project exists, and `aws configure list` on the build machine shows no credentials at all. Read the
+table as the stack the deploy will make, not as an inventory of a running account.
 
 | Service | What for |
 |---|---|
 | Amazon Bedrock | Model inference, and the Guardrail that is defence layer 2 |
+| Amazon Bedrock AgentCore | **The agent itself** — one managed harness, with `tools` and `systemPrompt` passed per invocation from the verified role, and each tool call handed back to the chat Lambda as an inline function. Request body in `backend/agentcore/create-harness.json`, execution-role policy beside it. Added 2026-11-20; see §6. Not in `template.yaml` and not created |
 | AWS Lambda (Node.js 20) | Eight functions: chat orchestrator, read, voice, red-team runner, three role-scoped action groups, policyCheck |
 | Amazon DynamoDB | Eight on-demand tables, including the append-only `audit_log` |
 | Amazon Cognito | User pool with `teacher` / `parent` / `student` groups; hosted-UI sign-in, authorization code with PKCE |
@@ -194,7 +281,7 @@ the table as the stack the deploy will make, not as an inventory of a running ac
 | AWS SAM / CloudFormation | The whole stack except Amplify Hosting |
 | AWS Budgets | A $10/month alert, **created by the stack since 2026-11-19** — `AWS::Budgets::Budget` with the limit as a parameter (default $10, refused above $15) and three notifications: actual at 50% and 80%, forecast at 100%. The email is a parameter with no default, so no address is in this repository. Deliberately not filtered to this stack, because the agent, the guardrail and Amplify all bill outside it |
 
-`TODO(nishen)` — add AgentCore (Runtime, Gateway, Policy) to this table if option A is chosen in §6.
+No AgentCore Gateway, no AgentCore Memory and no VPC appear here on purpose — §6 says why for each.
 
 ---
 
@@ -214,7 +301,8 @@ with each row's price basis and the rows that could not be verified marked as su
 | Build period (~1,200 turns, 60 min Transcribe) | $1.34 | $5.30 |
 | Judging window (~1,000 judge turns, 30 min) | $1.10 | $3.92 |
 | **Submission → 2027-01-29, all in** | **~$2.50** | **~$9.80** |
-| **Headroom against $15** | **~$12.50** | ~$5.20 |
+| **+ the AgentCore harness, costed 2026-11-20** | **~$2.60** | **~$10.21** |
+| **Headroom against $15** | **~$12.40** | ~$4.79 |
 
 **Duration was never the risk.** Of those twenty-eight resources, **none bills per hour** — the two
 that were expected to do not: a Cognito prefix domain is not priced at all (billing is per monthly
@@ -222,13 +310,27 @@ active user, and the pool's default tier includes 10,000 free), and there is no 
 the template creates no VPC. The only line that grows with elapsed time alone is CloudWatch Logs,
 at one to seven cents over the window.
 
+**Corrected 2026-11-20 for the AgentCore path.** The harness adds about ten cents typical and forty
+ceiling, and it **retires** the largest threat the earlier model carried: the $77–95 NAT-gateway line
+belonged to a supplied CDK bundle, not to the service — AgentCore's documented network default
+creates no VPC at all. What replaces it is a different class of risk entirely: **the harness's
+defaults, not its rates.** Leave the model unset and the service picks an Opus-class one, which
+prices the same turns at roughly **$41** — 2.7× the whole budget. Leave `allowedTools` unset and the
+agent arrives with shell and filesystem tools, which for this project would be indefensible before it
+was expensive. Leave Memory on and children's conversations go into AWS-managed storage. Leave the
+session timeouts alone and one session can hold a provisioned 8 GB baseline at about **$2.44**, so ten
+forgotten ones clear $15 by themselves. Every one of those is what you get by *not setting a field*,
+which is why the request body in `backend/agentcore/create-harness.json` is meant to be read line by
+line before it is ever sent. The four guards are in `docs/AGENTCORE-PLAN.md` §5.3.
+
 **The budget is bound by the model price, and the guardrail is most of it.** A chat turn costs about
 **$0.0011**, of which the guardrail is **70–90%** — all four policy types in
 `backend/agent/guardrail.json` bill per 1,000 text units inbound and again outbound, so layer 2
 costs two to nine times what the model does. It is the largest per-turn line here and it is
-**explicitly not on the cut list.** The three things that would take this over $15 are a NAT gateway
-($77–$95, 5–6× the budget, before any traffic), option C's model (~$27 on inference alone at list
-prices), and a paid host for option C's exec server (~$29).
+**explicitly not on the cut list.** **Corrected 2026-11-20:** the three named ways over $15 that
+earlier drafts listed here all belonged to orchestration options that no longer exist, and the
+NAT-gateway line that headed them is retired. The ways over $15 are now the four harness defaults
+above.
 
 Held down, in the code as it stands, by **one flat `maxTokens: 1024`** on every turn
 (`backend/functions/chat/index.mjs`), a 2,000-character input limit, a TTL on `redteam_runs`, and the
@@ -253,10 +355,8 @@ matters to this table:
 
 Every row is still an estimate against a system that has never run, so these are the design's
 assumptions rather than measurements — which is what the ceiling column is for: it is costed at the
-full 1,024-token output rather than the ~300 the earlier table assumed. Option A in §6 prices
-runtime, memory and gateway as separate consumption lines, so the table needs re-checking if A is
-chosen, and option C is one of the three listed ways to go over budget. `TODO(nishen)` — replace the total with the amount
-actually spent before submitting, from Cost Explorer (task 7.9).
+full 1,024-token output rather than the ~300 the earlier table assumed. `TODO(nishen)` — replace the
+total with the amount actually spent before submitting, from Cost Explorer (task 7.9).
 
 ---
 
@@ -337,7 +437,7 @@ reply that scored as a pass. A green suite is a necessary condition. It was neve
 
 **Test and task evidence**, counted 2026-11-18 at 17:59 UTC and expected to move:
 
-- **587 of 587 unit and policy tests pass, nothing skipped.** Zero dependencies — the Node.js built-in
+- **779 of 779 unit and policy tests pass, nothing skipped** — counted 2026-11-20, 16.9 s. (Earlier drafts said 587 with three different dates between them; that figure predates the AgentCore work.) Zero dependencies — the Node.js built-in
   runner — and it touches no AWS service. Four runs that evening reported `duration_ms` between
   5.5 s and 8.9 s on the build machine, so "under ten seconds" is the honest figure; your hardware
   decides the rest.
@@ -355,17 +455,27 @@ were taken, so they were already slightly low when they were written.
 
 ## 12. Open questions only Nishen can close
 
-- [ ] The challenge URL, the real rules, and the real form fields (§0 item 1).
-- [ ] Whether a Bedrock Managed Agent is required, which decides eligibility (§0 item 2).
-- [ ] Whether the same project may also go to Kiroween (§0 item 3).
-- [ ] The orchestration decision, A or B (§6).
+- [x] The challenge URL and the real rules — **read 2026-11-20**, `docs/CHALLENGE-RULES-BEDROCK.md`.
+- [x] Whether a Bedrock Managed Agent is required — **yes, or AgentCore** (§0), which is why §6 now
+      names one path instead of two.
+- [x] Whether the same project may also go to Kiroween — **nothing in either rule set forbids it** (§0).
+- [x] The orchestration decision — **the AgentCore managed harness** (§6).
+- [ ] **Join the hackathon.** Until then there is no submission surface, so the real field list is
+      still unknown (§0).
+- [ ] **Whether AgentCore can be created on this account at all** (§0). If it cannot, neither service
+      the rules name is reachable here and that is a decision, not a build task.
+- [ ] Re-read the one rules sentence and confirm it is satisfied by the harness rather than only by
+      Bedrock Managed Agents (§6). Five minutes, and the harness was chosen because it reads as
+      satisfying both — but a judge's intent is not ours to assume.
+- [ ] The architecture diagram, which qualification requirement 3 asks for (task 7.1).
+- [ ] At least one screenshot of the agent running, which requirement 6 asks for.
 - [ ] The Amplify live URL (task 0.15).
 - [ ] The demo video link (task 7.7).
 - [ ] The live red-team score, read off the screen (task 5.7).
 - [ ] The amount actually spent (task 7.9).
-- [ ] Whether to submit at all if the rules require Bedrock Agents Classic. If they do, say so in the
-      submission rather than describing an agent that was never created — that is the one answer this
-      project cannot give dishonestly without undoing its own point.
+- [ ] Whether to submit at all if the harness cannot be created. If it cannot, say so rather than
+      describing an agent that was never created — that is the one answer this project cannot give
+      dishonestly without undoing its own point.
 
 ## Pre-existing material
 
@@ -374,9 +484,10 @@ repository grew from is **five documents and no application code** — the plan,
 steering files and the 36 attack cases — all dated 2026-11-16, the day of the first commit. Three of
 the five are byte-identical in the repo today.
 
-It is repeated here rather than cross-referenced only, because **this challenge's rules have not been
-read by anyone** (`docs/NEXT-SESSION.md` §0b) and a disclosure requirement is exactly the kind of
-clause that differs between events. If the form asks, the answer above is the whole answer.
+It is repeated here rather than cross-referenced only, because qualification requirement 7 is that
+the agent be original and not previously published, and the honest answer to *"did anything come from
+before?"* belongs in the submission text rather than behind a link. The answer above is the whole
+answer.
 
 ---
 

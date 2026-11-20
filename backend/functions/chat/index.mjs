@@ -4,6 +4,11 @@
 import { claimsFromEvent } from '../../lib/auth.mjs';
 import { handleChat, runToolLoop, MAX_TOOL_TURNS } from './orchestrate.mjs';
 import { toolsFor, instructionFor } from './toolspecs.mjs';
+// Track A (docs/AGENTCORE-PLAN.md): the AgentCore managed harness runs the agent loop, and hands
+// each tool call back to this file to execute. Both modules are under backend/, which is the
+// packaged CodeUri, so they ship with this function (see the packaging note in template.yaml).
+import { runHarnessTurn } from '../../agentcore/handoff.mjs';
+import { invocationOverrides } from '../../agentcore/harness-config.mjs';
 // Layer 3 owns the wellbeing wording as well as the blocking checks, so the chat path imports it
 // rather than keeping a second copy that could drift. Both functions package the whole backend
 // root (see the packaging note in template.yaml), so this import ships.
@@ -12,6 +17,13 @@ import { classify, distressReply } from '../policy-check/distress.mjs';
 const AGENT_ID = process.env.BEDROCK_AGENT_ID;
 const AGENT_ALIAS_ID = process.env.BEDROCK_AGENT_ALIAS_ID;
 const POLICY_CHECK_FUNCTION = process.env.POLICY_CHECK_FUNCTION;
+
+// Track A config. `HARNESS_ID` is what decides the path (it is the id a human records after running
+// `create-harness` by hand); `HARNESS_ARN` is what the invoke is addressed to. Two variables for one
+// resource because the template scopes the IAM to an ARN built from the id, so an id and an ARN that
+// disagree fail closed with AccessDenied rather than invoking something unintended.
+const HARNESS_ID = process.env.HARNESS_ID;
+const HARNESS_ARN = process.env.HARNESS_ARN;
 
 // Option B config. The model id and the guardrail are template parameters already (`ModelId`,
 // `GuardrailId`, `GuardrailVersion`); the region is the Lambda's own, which the SDK reads from
@@ -46,25 +58,51 @@ function maxTurnsFromEnv(raw) {
 }
 
 /**
- * Which orchestrator this deployment uses (docs/NEXT-SESSION.md §0).
- *
- * An agent id that is still the template's placeholder means no agent exists — which is the state
- * this account is stuck in, since `CreateAgent` is denied — so the Converse loop runs. Set a real
- * `BedrockAgentId` and option A takes over with no code change, which is why both paths are still
- * here: the decision is Nishen's, not this file's.
+ * The template's "not configured yet" default, in one place because two ids now use it.
+ * `BedrockAgentId` has carried it since M1 task 1.11; `HarnessId` follows the same pattern.
  */
-const USE_AGENT_SERVICE = Boolean(AGENT_ID) && AGENT_ID !== 'REPLACEME00';
+const PLACEHOLDER_ID = 'REPLACEME00';
+const configured = (id) => Boolean(id) && id !== PLACEHOLDER_ID;
 
 /**
- * The cap, read only on the path that uses it.
+ * Which orchestrator this deployment uses (docs/AGENTCORE-PLAN.md §10).
+ *
+ * Three paths, decided by environment so the choice stays a deploy-time one:
+ *
+ *   `harness` — Track A, the AgentCore managed harness. **First, because it is the only one of the
+ *               three the challenge rules accept** (docs/CHALLENGE-RULES-BEDROCK.md): the required
+ *               service is Managed Agents or the AgentCore harness, and a harness that is
+ *               configured and then not used would be a harness that does not count.
+ *   `agent`   — option A, Bedrock Agents Classic. Still wired; `CreateAgent` is denied on this
+ *               account, so it cannot be reached today without a different account.
+ *   `loop`    — option B, our own `Converse` + `toolConfig` loop. The documented fallback: it does
+ *               not qualify for the challenge, and it is what serves when nothing else is set.
+ *
+ * Pure and exported so each branch is testable without a deployment; `ORCHESTRATOR` below is what
+ * proves the deployed module actually asks it.
+ */
+export function orchestratorFor({ harnessId, agentId }) {
+  if (configured(harnessId)) return 'harness';
+  if (configured(agentId)) return 'agent';
+  return 'loop';
+}
+
+const ORCHESTRATOR = orchestratorFor({ harnessId: HARNESS_ID, agentId: AGENT_ID });
+
+/**
+ * The cap, read only on the paths that use it.
  *
  * Still at module scope, so a misconfigured cap is loud at cold start rather than wrong-but-serving
- * — but only on option B. `MAX_TURNS` is read by `invokeViaLoop` and by nothing else, and on option
- * A a typo in a variable that path never looks at used to brick the function at init: the client
- * gets a bare `500 {"message":"Internal Server Error"}`, which `score.mjs` has no branch for, so the
- * scoreboard would file a configuration mistake as `chat_error` instead of `chat_unavailable`.
+ * — but only where it is read. `MAX_TURNS` is read by `invokeViaLoop` and by `invokeViaHarness`
+ * (the harness runs the model loop, but the handoff rounds are still ours to bound) and by nothing
+ * else. On the agent path, a typo in a variable that path never looks at used to brick the function
+ * at init: the client gets a bare `500 {"message":"Internal Server Error"}`, which `score.mjs` has
+ * no branch for, so the scoreboard would file a configuration mistake as `chat_error` instead of
+ * `chat_unavailable`. One `InvokeAgent` call has no rounds to cap, so that stays true here.
  */
-const MAX_TURNS = USE_AGENT_SERVICE ? undefined : maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
+const MAX_TURNS = ORCHESTRATOR === 'agent'
+  ? undefined
+  : maxTurnsFromEnv(process.env.MAX_TOOL_TURNS);
 
 /** Colombo is UTC+5:30 with no daylight saving, so "yesterday" is decided here, once, per request. */
 function todayInColombo(now = new Date()) {
@@ -196,6 +234,116 @@ const invokeViaLoop = ({ inputText, sessionAttributes }) => runToolLoop({
   deps: { converse, invokeTool, toolsFor, instructionFor },
 });
 
+// --- Track A: the AgentCore managed harness ----------------------------------------------------
+
+let agentcore;
+
+/**
+ * One `InvokeHarness` call, reduced to the event array `assembleStream` consumes.
+ *
+ * Same lazy-import, same `for await` as `invokeAgent` above, for the same two reasons: the SDK
+ * package exists only inside the Lambda runtime, and a cold start that never reaches this path
+ * should not pay to load it.
+ *
+ * UNVERIFIED, and deliberately all in this one function so that one edit settles it on deploy
+ * evening (backend/agentcore/README.md §2 lists these as inferred, with the page that decides
+ * each). There are **no credentials on the machine this was written on**, so none of it could be
+ * checked against the live service:
+ *
+ *   - the SDK client/command names `BedrockAgentCoreClient` / `InvokeHarnessCommand` and the
+ *     package `@aws-sdk/client-bedrock-agentcore`;
+ *   - the request field names `harnessArn`, `runtimeSessionId`, `messages`, `tools` — taken from
+ *     the boto3 examples on `harness-tools.html`, whose snake_case params imply these wire names;
+ *   - the response field holding the event stream (`stream`).
+ *
+ * How to settle it: `API_InvokeHarness.html` for the field names, `npm view
+ * @aws-sdk/client-bedrock-agentcore` (or the runtime's own bundled SDK) for the client name, and
+ * one live invoke for the stream field. A wrong name here throws on the first invoke, which
+ * `handleChat` reports as 502 `agent_unavailable` — loud, and the right direction to be wrong in.
+ */
+async function invokeHarness({ runtimeSessionId, body }) {
+  const { BedrockAgentCoreClient, InvokeHarnessCommand } =
+    await import('@aws-sdk/client-bedrock-agentcore');
+  agentcore ??= new BedrockAgentCoreClient({});
+
+  const response = await agentcore.send(new InvokeHarnessCommand({
+    harnessArn: HARNESS_ARN,
+    runtimeSessionId,
+    ...body,
+  }));
+
+  // Collected rather than streamed on: `assembleStream` is pure over an array, which is what lets
+  // the whole handoff loop be tested with plain objects and no AWS.
+  const events = [];
+  for await (const event of response.stream ?? []) events.push(event);
+  return events;
+}
+
+/**
+ * `runtimeSessionId` has a 33-character minimum.
+ *
+ * `${sub}-${today}` is ~47 with a real Cognito sub (a 36-character UUID), so the deployed path is
+ * comfortably over — but `handler` builds that id with a `claims?.sub ?? 'anon'` fallback, and
+ * `anon-2026-11-20` is 15. That fallback is unreachable today: `handleChat` returns 401 before it
+ * invokes anything when there is no `sub`, so a request with no identity never gets this far. It is
+ * checked anyway, and it throws rather than padding, because padding is the version that keeps
+ * working: a padded id is a *valid* session id for a session nobody can account for, and two
+ * anonymous callers padded the same way would share one harness session.
+ *
+ * UNVERIFIED that 33 is the harness's own floor — it is the documented AgentCore Runtime
+ * `runtimeSessionId` constraint, and `API_InvokeHarness.html` is where it is settled. Being wrong
+ * high costs nothing here; being wrong low would be a ValidationException on the first invoke.
+ */
+const MIN_RUNTIME_SESSION_ID = 33;
+function runtimeSessionIdOf(sessionId) {
+  if (typeof sessionId !== 'string' || sessionId.length < MIN_RUNTIME_SESSION_ID) {
+    throw new Error(`runtimeSessionId must be at least ${MIN_RUNTIME_SESSION_ID} characters`);
+  }
+  return sessionId;
+}
+
+/**
+ * Track A behind option A's signature, so `handleChat` still cannot tell which one it got.
+ *
+ * The injected `invokeTool` is **the same function option B uses, unchanged**, and that is the
+ * point of the whole lane: `backend/lib/auth.mjs` and the three action Lambdas are at zero lines
+ * changed, so the files 36 red-team cases were proved against are the files that run.
+ *
+ * The per-invocation overrides are built once per request from the VERIFIED role, not once per
+ * round: they are the same every round, and building them here means a bad role or an unconfigured
+ * guardrail fails before the first model call rather than after it. `invocationOverrides` throws
+ * when `guardrailId` is empty, which is correct on this path — layer 2 is attached to the harness's
+ * model block, so a harness deployment with no guardrail has no layer 2 and must not serve.
+ */
+function invokeViaHarness({ sessionId, inputText, sessionAttributes }) {
+  const runtimeSessionId = runtimeSessionIdOf(sessionId);
+  const overrides = invocationOverrides({
+    role: sessionAttributes?.role,
+    modelId: MODEL_ID,
+    guardrailId: GUARDRAIL_ID,
+    guardrailVersion: GUARDRAIL_VERSION,
+  });
+
+  return runHarnessTurn({
+    inputText,
+    sessionAttributes,
+    maxTurns: MAX_TURNS,
+    deps: {
+      // `turn` is `{ messages, tools }` and is spread last on purpose: the loop resends `tools`
+      // every round because the resume contract requires it, and that copy is the one that counts.
+      invokeHarness: (turn) => invokeHarness({ runtimeSessionId, body: { ...overrides, ...turn } }),
+      invokeTool,
+    },
+  });
+}
+
+/** The three orchestrators, by the name `orchestratorFor` returns. */
+const ORCHESTRATORS = {
+  harness: invokeViaHarness,
+  agent: invokeAgent,
+  loop: invokeViaLoop,
+};
+
 async function policyCheck(payload) {
   const { LambdaClient, InvokeCommand } = await import('@aws-sdk/client-lambda');
   const lambda = new LambdaClient({});
@@ -222,7 +370,7 @@ export async function handler(event) {
     claims,
     body,
     deps: {
-      invokeAgent: USE_AGENT_SERVICE ? invokeAgent : invokeViaLoop,
+      invokeAgent: ORCHESTRATORS[ORCHESTRATOR],
       policyCheck,
       // design §7.3: checked before the agent is invoked at all, so a student in difficulty costs
       // no tokens and a jailbreak has nothing to steer.
@@ -240,4 +388,9 @@ export async function handler(event) {
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
-export const __test__ = { todayInColombo, maxTurnsFromEnv };
+// `orchestrator` is the choice this module made under the environment it was loaded with. Exported
+// because testing `orchestratorFor` alone proves nothing about the deployment: the cap defect of
+// 2026-11-19 was exactly a validated function left exported, tested and unused at its call site.
+export const __test__ = {
+  todayInColombo, maxTurnsFromEnv, orchestrator: ORCHESTRATOR, runtimeSessionIdOf,
+};

@@ -10,10 +10,13 @@
 //   - the three action Lambdas               — zero lines. They get the same action-group event,
 //                                              with the same `sessionAttributes`, from the same
 //                                              `invokeTool`.
-//   - `handleChat` / `orchestrate.mjs`       — zero lines. `runHarnessTurn` has `runToolLoop`'s
+//   - `handleChat` / `orchestrate.mjs`       — no behaviour. `runHarnessTurn` has `runToolLoop`'s
 //                                              signature and throws `runToolLoop`'s error shapes,
 //                                              so it drops in behind `deps.invokeAgent` as the
 //                                              third orchestrator that file was written to accept.
+//                                              Two `export` keywords were added there on
+//                                              2026-11-20 (§10 item 3) so the two refusal
+//                                              sentences below have ONE definition, not a copy.
 //   - `toolsFor` / `instructionFor`          — reused, through harness-config.mjs.
 //
 // TWO DELIBERATE DIFFERENCES FROM `runToolLoop`, both stricter, both reported rather than slipped
@@ -39,10 +42,14 @@
 // `toolResult`." So we never build an assistant turn at all — which retires `runToolLoop`'s "the
 // assistant turn we send back carries our role" property by removing the thing it guarded.
 
-import { MAX_TOOL_TURNS } from '../functions/chat/orchestrate.mjs';
+import { MAX_TOOL_TURNS, TOOL_FAILED, toolUnavailable } from '../functions/chat/orchestrate.mjs';
 import { inlineToolsFor, toolNamesOf, ROLES } from './harness-config.mjs';
 
-export { MAX_TOOL_TURNS };
+// Re-exported so this file stays the one place the handoff loop is imported from, and so the two
+// refusal sentences reach the tests through the same door the loop uses them by. They are
+// `orchestrate.mjs`'s definitions now, not copies of them: the duplicate that lived here until
+// 2026-11-20 is gone, and with it the drift test that stood in for this import.
+export { MAX_TOOL_TURNS, TOOL_FAILED, toolUnavailable };
 
 /** Thrown by the loop. Carries a code, never model- or user-supplied text. */
 export class HandoffError extends Error {
@@ -86,27 +93,6 @@ function contentFiltered() {
   err.code = 'content_filtered';
   return err;
 }
-
-/**
- * Fixed text sent back to the model when a tool did not run.
- *
- * ponytail: duplicated from `orchestrate.mjs`, where it is module-private. A drift test in
- * tests/unit/agentcore-handoff.test.mjs reads that file and asserts these strings are still in it,
- * so the two cannot part company silently. Ceiling: it is still two copies of a safety sentence.
- * Upgrade path, one line in a file this lane does not own — export `TOOL_FAILED` and
- * `toolUnavailable` from `backend/functions/chat/orchestrate.mjs` and import them here.
- */
-export const TOOL_FAILED =
-  'This tool did not run and nothing was read or written. Do not retry it, and do not answer out '
-  + 'of your own knowledge. Tell the user plainly that the system could not do it just now.';
-
-/** Role-branched, so a teacher is never told to ask their teacher. */
-export const toolUnavailable = (role) =>
-  'There is no such tool in this session. Nothing was read or written. Do not guess another name: '
-  + (role === 'teacher'
-    ? 'tell the user kindly that this is not something the app can do, '
-    : 'tell the user kindly that only their teacher can do this, ')
-  + 'and continue with what they can have.';
 
 // --- the stream ---------------------------------------------------------------------------------
 

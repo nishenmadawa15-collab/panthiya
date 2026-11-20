@@ -1,4 +1,9 @@
-// Option B — the Converse tool loop (docs/NEXT-SESSION.md §0).
+// Option B — the Converse tool loop. Since 2026-11-20 it is the documented FALLBACK rather than a
+// candidate: the challenge rules require an agent on Managed Agents or the AgentCore harness
+// (docs/CHALLENGE-RULES-BEDROCK.md, docs/AGENTCORE-PLAN.md), and this loop is neither. It stays
+// supported and these properties stay proved, because it is what serves when no harness is
+// configured — and because the harness loop in tests/unit/agentcore-handoff.test.mjs was written
+// by re-proving every one of them. The orchestrator selection itself is at the end of this file.
 //
 // The point of building it offline is that every property that matters can be proved with
 // `node --test`, no credentials and no network. What is pinned here:
@@ -28,7 +33,7 @@ import {
   handleChat, runToolLoop, LoopError, MAX_TOOL_TURNS,
 } from '../../backend/functions/chat/orchestrate.mjs';
 import { toolsFor, toolNamesFor, instructionFor } from '../../backend/functions/chat/toolspecs.mjs';
-import { __test__ as chatIndex } from '../../backend/functions/chat/index.mjs';
+import { __test__ as chatIndex, orchestratorFor } from '../../backend/functions/chat/index.mjs';
 import { layerOfTurn, scoreCase } from '../../backend/functions/redteam/score.mjs';
 
 const BACKEND = new URL('../../backend/', import.meta.url);
@@ -969,4 +974,168 @@ test('the chat Lambda never imports an action group in process, which would coll
       `index.mjs imports ${spec}: dispatch must be a Lambda invoke, because design §3.3 narrows `
       + 'what each group could do by IAM and an in-process call would need all of it here');
   }
+});
+
+// --- the three-way orchestrator selection (docs/AGENTCORE-PLAN.md §10) -------------------------
+//
+// The selection is not a preference any more. The challenge rules require an agent built on
+// Managed Agents or the AgentCore managed harness, so a deployment with a harness configured and
+// not used would be a harness that does not count. That makes "the harness wins when it is
+// configured" a rule to pin rather than an ordering to remember, and the placeholder cases are
+// where it would be lost: `REPLACEME00` is a *set* variable, so any `Boolean(HARNESS_ID)` test
+// selects the harness on a stack that has none and every message 502s.
+
+test('orchestratorFor picks the harness, then the agent, then the loop', () => {
+  const pick = (harnessId, agentId) => orchestratorFor({ harnessId, agentId });
+
+  // The harness, including over a real agent id: it is the only one of the three that qualifies.
+  assert.equal(pick('panthiya_harness_01', undefined), 'harness');
+  assert.equal(pick('panthiya_harness_01', 'AGENT12345'), 'harness');
+
+  // Option A, only when the harness is absent or still the placeholder.
+  assert.equal(pick(undefined, 'AGENT12345'), 'agent');
+  assert.equal(pick('REPLACEME00', 'AGENT12345'), 'agent',
+    'a placeholder harness id is not a harness — this is the shape that 502s every message');
+  assert.equal(pick('', 'AGENT12345'), 'agent');
+
+  // The fallback, and the state this account is actually in: no harness created, CreateAgent denied.
+  assert.equal(pick(undefined, undefined), 'loop');
+  assert.equal(pick('REPLACEME00', 'REPLACEME00'), 'loop', 'both placeholders means neither exists');
+  assert.equal(pick('', ''), 'loop');
+  assert.equal(pick(null, null), 'loop');
+
+  // Both ids use the one placeholder spelling, so the template's defaults are what they look like.
+  const template = readFileSync(new URL('../../backend/template.yaml', import.meta.url), 'utf8');
+  for (const name of ['BedrockAgentId', 'HarnessId']) {
+    const block = new RegExp(`^  ${name}:\\n(?:[ ]{4}.*\\n)+`, 'm').exec(template);
+    assert.ok(block, `${name} is not a parameter of the template`);
+    assert.match(block[0], /Default:\s*REPLACEME00/,
+      `${name} must default to the placeholder this file treats as "unset"`);
+  }
+});
+
+test('the selection the deployed module makes is the one orchestratorFor describes', async () => {
+  // Per branch, through the module's own top level — because `orchestratorFor` tested alone proves
+  // nothing about the deployment. That is the 2026-11-19 cap defect exactly: a validated function
+  // left exported, tested, and not used at its call site.
+  const cases = [
+    ['harness', { HARNESS_ID: 'panthiya_harness_01' }],
+    ['harness', { HARNESS_ID: 'panthiya_harness_01', BEDROCK_AGENT_ID: 'AGENT12345' }],
+    ['agent', { HARNESS_ID: 'REPLACEME00', BEDROCK_AGENT_ID: 'AGENT12345' }],
+    ['loop', { HARNESS_ID: 'REPLACEME00', BEDROCK_AGENT_ID: 'REPLACEME00' }],
+  ];
+
+  for (const [expected, env] of cases) {
+    const tag = `select-${expected}-${Object.keys(env).length}`;
+    const mod = await importChatIndex({ MAX_TOOL_TURNS: '4', ...env }, tag);
+    assert.equal(mod.__test__.orchestrator, expected, `env ${JSON.stringify(env)}`);
+  }
+
+  // And the ambient import at the top of this file, with neither id set, is the fallback.
+  assert.equal(chatIndex.orchestrator, 'loop');
+});
+
+test('the harness path reads the cap, and a bad one is loud at init there too', async () => {
+  // `MAX_TURNS` is read by `invokeViaLoop` and `invokeViaHarness` and by nothing else. The harness
+  // runs the MODEL loop, but the rounds of handing tool calls back are still ours to bound, so the
+  // cap has to reach `runHarnessTurn` — and a cap that is read must be validated where it is read.
+  await assert.rejects(
+    () => importChatIndex({ MAX_TOOL_TURNS: '0', HARNESS_ID: 'panthiya_harness_01' }, 'harness-cap-zero'),
+    /MAX_TOOL_TURNS/,
+    'MAX_TOOL_TURNS=0 was accepted at init on the harness path',
+  );
+  const good = await importChatIndex({ MAX_TOOL_TURNS: '4', HARNESS_ID: 'panthiya_harness_01' }, 'harness-cap-four');
+  assert.equal(typeof good.handler, 'function');
+  assert.equal(good.__test__.orchestrator, 'harness');
+
+  // The property the comment on MAX_TURNS claims, still true: the agent path never looks at it.
+  const agent = await importChatIndex(
+    { MAX_TOOL_TURNS: 'nonsense', HARNESS_ID: 'REPLACEME00', BEDROCK_AGENT_ID: 'AGENT12345' },
+    'agent-cap-nonsense-with-harness-placeholder',
+  );
+  assert.equal(agent.__test__.orchestrator, 'agent');
+});
+
+test('a runtimeSessionId shorter than 33 characters throws rather than being padded', () => {
+  const { runtimeSessionIdOf } = chatIndex;
+
+  // The deployed id: a Cognito sub (36-character UUID) and the Colombo date.
+  const real = '3f2504e0-4f89-11d3-9a0c-0305e82c3301-2026-11-20';
+  assert.equal(runtimeSessionIdOf(real), real);
+  assert.ok(real.length >= 33);
+
+  // The `claims?.sub ?? 'anon'` fallback in `handler`. Unreachable — handleChat returns 401 before
+  // invoking when there is no `sub` — and loud anyway, because the alternative (padding) produces a
+  // valid session id that two anonymous callers would share.
+  assert.throws(() => runtimeSessionIdOf('anon-2026-11-20'), /at least 33/);
+  for (const bad of ['', 'x'.repeat(32), undefined, null, 42, {}]) {
+    assert.throws(() => runtimeSessionIdOf(bad), /at least 33/, `${JSON.stringify(bad)} was accepted`);
+  }
+  assert.equal(runtimeSessionIdOf('x'.repeat(33)), 'x'.repeat(33), 'exactly 33 is allowed');
+});
+
+test('chat/index.mjs wires the harness to the SAME invokeTool the loop uses', () => {
+  // The whole lane rests on this: auth.mjs and the three action Lambdas are at zero lines changed
+  // because the harness hands its tool calls back to the function that was already there. A second
+  // tool dispatcher for the harness path would be a second place for the role gate to be wrong.
+  const src = readBackend('functions/chat/index.mjs');
+
+  assert.match(src, /runHarnessTurn/, 'index.mjs must use the harness loop');
+  assert.match(src, /InvokeHarnessCommand/, 'the harness path must make a real InvokeHarness call');
+  assert.match(src, /invocationOverrides/, 'the per-invocation overrides come from harness-config.mjs');
+  assert.equal((src.match(/async function invokeTool/g) ?? []).length, 1,
+    'one tool dispatcher, shared by both loops');
+  assert.equal((src.match(/InvokeHarnessCommand\(/g) ?? []).length, 1,
+    'the UNVERIFIED SDK names must stay in one place, so one edit settles them on deploy evening');
+  assert.match(src, /UNVERIFIED/,
+    'the inferred InvokeHarness field names must say so — there are no credentials to check them with');
+
+  // The cap reaches the harness loop, not just the Converse one.
+  assert.match(src, /runHarnessTurn\(\{[\s\S]{0,200}maxTurns: MAX_TURNS/);
+
+  // The call site, not the declaration — the distinction this file already had to learn once.
+  // `__test__.orchestrator` reports the NAME the module chose, so a two-way
+  // `USE_AGENT_SERVICE ? invokeAgent : invokeViaLoop` reverted underneath it would still report
+  // 'harness' while handing `handleChat` the loop. The map and its single use are pinned instead.
+  assert.match(src, /invokeAgent: ORCHESTRATORS\[ORCHESTRATOR\]/,
+    'handleChat must be given the orchestrator the selection chose');
+  assert.match(
+    src,
+    /const ORCHESTRATORS = \{\s*harness: invokeViaHarness,\s*agent: invokeAgent,\s*loop: invokeViaLoop,/,
+    'each name must map to its own orchestrator',
+  );
+  // And the other two paths are not deleted: option B is the fallback, option A is still a parameter.
+  assert.match(src, /runToolLoop/);
+  assert.match(src, /InvokeAgentCommand/);
+});
+
+test('nothing grants the IAM action that executes commands with the model out of the loop', () => {
+  // AWS: "To prevent direct command execution, do not grant
+  // bedrock-agentcore:InvokeAgentRuntimeCommand in your IAM policies." It executes commands without
+  // passing through the LLM, so it routes around `allowedTools` in harness-config.mjs — the guard
+  // that keeps a shell and filesystem write out of a child-safety submission. Checked as a prefix,
+  // because `...CommandShell` is the same bypass with four more characters.
+  const template = readFileSync(new URL('../../backend/template.yaml', import.meta.url), 'utf8');
+  const code = template.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+
+  assert.ok(!/InvokeAgentRuntimeCommand/.test(code),
+    'template.yaml grants a direct command-execution action — see the comment by InvokeTheOneHarness');
+  assert.ok(!/InvokeAgentRuntimeCommand/.test(readBackend('functions/chat/index.mjs')));
+
+  // The grant that IS there: one action, scoped to one harness, with no wildcard.
+  const statement = /- Sid: InvokeTheOneHarness\n(?:[ ]{14}.*\n)+/.exec(code);
+  assert.ok(statement, 'the chat Lambda has no InvokeHarness grant, so the harness path cannot run');
+  assert.match(statement[0], /Action: bedrock-agentcore:InvokeHarness\s*$/m, 'one action, not a list');
+  const resource = /Resource:[ ]+(.*)$/m.exec(statement[0]);
+  assert.ok(resource, 'the grant has no Resource');
+  assert.ok(!/["\s]\*["\s]|:harness\/\*/.test(resource[1]),
+    `the InvokeHarness grant must be scoped to one harness, not ${resource[1]}`);
+  assert.match(resource[1], /\$\{HarnessId\}/,
+    'scope it to the harness this stack was deployed for, so an id/ARN mismatch fails closed');
+
+  // The model permissions option B needs are still here. §10 asked for them to move to the harness
+  // execution role; they cannot, while the same deployment also serves the Converse fallback, whose
+  // model call is made by THIS function. Removing them would break the fallback silently.
+  assert.match(code, /Action: bedrock:InvokeModel/);
+  assert.match(code, /Action: bedrock:ApplyGuardrail/);
 });

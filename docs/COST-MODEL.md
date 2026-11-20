@@ -114,7 +114,7 @@ gap between them is pure idle.
 | Answer | Figure |
 |---|---|
 | **Idle cost per month** | **$0.01–$0.26/month** (midpoint ~$0.05). The whole 71 days of required availability costs **under $0.60** |
-| **Submission → 2027-01-29 total** | **~$2.50 typical, ~$9.80 ceiling** |
+| **Submission → 2027-01-29 total** | **~$2.60 typical, ~$10.21 ceiling** on the harness path — which is the only path now, since the rules name the service (~$2.50 / ~$9.80 without it). **Corrected 2026-11-20:** this row still read the pre-harness figure while the table above it and the headroom row below it had both been updated |
 | **Headroom against US$15** | **~$12.40 typical, ~$4.79 at the ceiling** on the harness path (~$12.50 / ~$5.20 without it) |
 
 **The honest total does not exceed $15 — on the stack as it stands, on Nova Lite, in one region.**

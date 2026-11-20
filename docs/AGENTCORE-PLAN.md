@@ -769,7 +769,14 @@ Reported, not made. Three trees are live with other lanes.
    placeholder pattern, so the orchestrator choice stays a deploy-time decision.
 5. The harness execution role itself is **not** a template resource unless someone wants it to be —
    `CreateHarness` is run by hand on Nov 21 and the role has to exist first. `execution-role-policy.json`
-   is the body.
+   holds it. **Corrected 2026-11-20:** that file is **not** an IAM policy body and `file://` on it
+   returns `MalformedPolicyDocument` — it is a document carrying `HarnessExecutionRole.TrustPolicy`,
+   `HarnessExecutionRole.PermissionsPolicy` and `ChatLambdaAdditions` alongside `PLACEHOLDERS`, `NOTE`
+   and `DELIBERATELY_ABSENT` keys. `backend/agentcore/README.md` step 2 now carries the one-line
+   extraction. Items 1–4 of this section **are done** as of 2026-11-20 and are in `backend/template.yaml`;
+   item 3 is deliberately **not** done, and the template says why at that spot — option B still makes the
+   `Converse` call from the chat Lambda whenever `HarnessId` is the placeholder, so moving `bedrock:InvokeModel`
+   off it would break the documented fallback silently.
 
 ### `tests/unit/cost-guards.test.mjs` — one line
 

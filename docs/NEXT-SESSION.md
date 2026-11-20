@@ -9,6 +9,25 @@ the **2026-11-20 block of `docs/BUILD-LOG.md`**, then `docs/CHALLENGE-RULES-BEDR
 
 ## Where 2026-11-20 ended
 
+> **Added at the very end of the day — a second wave ran after the first four lanes closed, and it
+> was mostly about documents lying about artefacts.** Three lanes: the §10 wiring, the two
+> submission drafts, and `README.md`. Plus a sweep of the files no lane owned.
+>
+> | | |
+> |---|---|
+> | **§10 is wired** | The harness is now a **deploy-time choice**: `HarnessId` set → harness, else an agent id → option A, else the loop. Harness **first**, because it is the only path the rules accept. **779 tests pass**, and `backend/lib/auth.mjs` plus all four action/read Lambdas measure at **zero lines changed** |
+> | **The steering file was wrong** | `.kiro/steering/tech.md` is `inclusion: always` — read on every turn by the tool doing the building — and it still said *“Managed Agents with three role-scoped action groups”*. Corrected. This was the most expensive stale line in the repo and the cheapest to miss |
+> | **Three documents described artefacts they had not re-opened** | Yesterday's rules doc told requirement 3 the architecture diagram **does not exist** (it has existed in `README.md` all along). §10 called `execution-role-policy.json` *“the body”* (it is a document holding three policies; `file://` on it returns `MalformedPolicyDocument` — the runbook now carries the extraction). And the README's diagram drew the tool-group edges from the **orchestrator** rather than our Lambda, contradicting the README's own central security claim |
+> | **One wording problem that could fail qualification with every box green** | Requirement 1 wants an agent doing **one defined job**; we present **three roles**. It *is* one job and the build is already right — only the sentence is wrong. **Nishen's wording call**, in `SUBMISSION-BEDROCK.md` §0a |
+> | **New on Nishen's list** | `TRANSLATION-REVIEW.md` **Priority 1c**: `parent.note` and `chat.mic_note` say nothing is deployed, which is true today and false on camera. Option A (condition them on the `MOCKING` flag that already exists) **costs no translation at all** |
+> | **The submissions are no longer drafts against unknown rules** | `SUBMISSION-BEDROCK.md` §0 answers all three of its old unknowns and gains a nine-requirement qualification map. `SUBMISSION-KIROWEEN.md`'s dual-submission question is answered — as the **absence of a prohibition** in both rule sets as read, not as permission either organiser granted |
+>
+> **What the second wave did not change:** still $0 spent, still nothing deployed, still no
+> credentials, `main` still untouched. The `InvokeHarness` call has never been made, and every
+> inferred SDK name sits inside **one** function under one `UNVERIFIED` block so a single edit fixes
+> all of it.
+
+
 **The challenge rules were read in full, from the rules page, and they close the biggest open
 decision in the project — against the way the repo was leaning.** Still no AWS credentials, still
 nothing deployed, still $0 spent. Four lanes ran with no AWS at all.
@@ -643,9 +662,11 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 587 tests pass, nothing skipped. Nothing has been deployed and nothing has
-been spent.** (Counted 2026-11-18 at the end of the session. Re-derive rather than trust it:
-`npm test`, and `grep -c "^- \[x\]" .kiro/specs/panthiya/tasks.md`.)
+**67 of 79 tasks done. 779 tests pass, nothing skipped. Nothing has been deployed and nothing has
+been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 779/779 in
+16.9 s, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
+because every remaining task is behind the credentials gate or behind Nishen; the test count moved
+**587 → 779** in the same two days. Re-derive rather than trust either.)
 
 | Milestone | State |
 |---|---|
@@ -680,7 +701,7 @@ agent's to enter.
 > | 4 | 🚦 **The Sinhala gate**, and read the replies by eye. No automatic check can tell fluent Sinhala from Sinhala-shaped nonsense, and five milestones rest on it | ~5 min |
 > | 5 | **One sentence on the rules page**: does *“the AgentCore managed harness”* mean the `CreateHarness` product, or AgentCore generally? Track A satisfies both readings, so this confirms rather than blocks — but it is a reading of a judge's intent | ~5 min |
 > | 6 | **Approve AgentCore Memory being switched off.** On by default; it would put children's conversations into AWS-managed long-term memory. A data-retention decision about minors, not a cost choice | ~2 min |
-> | 7 | **`docs/TRANSLATION-REVIEW.md`** — Priority 0 is thirty seconds, Priority 1 is about twenty minutes, and it is now **four** strings awaiting translation rather than two. Still the only work in this project that nobody else can do at all | ~25 min |
+> | 7 | **`docs/TRANSLATION-REVIEW.md`** — Priority 0 is thirty seconds, Priority 1 is about twenty minutes, and it is now **four** strings awaiting translation rather than two. **Plus Priority 1c, which is a decision rather than a translation:** `parent.note` and `chat.mic_note` say nothing is deployed — true today, false on camera. Option A there costs **no translation at all**, so read that one first; it may remove work rather than add it. Still the only work in this project that nobody else can do at all | ~25 min |
 > | 8 | **Decide the Kiro write-up** (`docs/DECISION-KIRO-WRITEUP.md`), and **request the 4,000 Kiro credits before Dec 1, 12:00 PT** — one allotment, no second chance | — |
 > | 9 | Approve the deploy; decide the merge to `main`; record the demo video; submit | — |
 >
