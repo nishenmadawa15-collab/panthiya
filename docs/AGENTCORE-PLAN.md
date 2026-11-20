@@ -513,7 +513,7 @@ Unchanged from `docs/NEXT-SESSION.md` §0c except where marked **NEW**:
 
 | | | Why it is only Nishen's |
 |---|---|---|
-| 1 | **Sign in to AWS; `aws configure`; `winget install Amazon.SAM-CLI`** | Still the first row. Everything is behind it |
+| 1 | **Sign in to AWS; `aws login`; `winget install Amazon.SAM-CLI`** | Still the first row. Everything is behind it |
 | 2 | **NEW — re-read ONE sentence on the rules page** and decide whether "the AgentCore managed harness" means `CreateHarness` or AgentCore generally | **5 minutes, and it eliminates a 6-hour fork.** §7 risk 1. No agent can read a judge's intent |
 | 3 | **NEW — approve AgentCore Memory being off** (§5.3 guard 3) | It is a children's-data retention decision, not a cost one |
 | 4 | **NEW — Docker Desktop**, *only* if Track B is chosen | A Windows install an agent cannot approve. §7 risk 4 |

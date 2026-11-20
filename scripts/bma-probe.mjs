@@ -360,7 +360,7 @@ Re-run with --yes.`);
   } catch (err) {
     const message = String(err.stderr ?? err.message).split('\n')[0];
     console.error(`\nCould not read credentials from the AWS CLI: ${message}`);
-    console.error('Run `aws configure` first (PANTHIYA_SETUP.md §4). Nothing was sent.');
+    console.error('Run `aws login --region ap-south-1` first, as panthiya-dev (PANTHIYA_SETUP.md §4). Nothing was sent.');
     process.exitCode = 2;
     return;
   }

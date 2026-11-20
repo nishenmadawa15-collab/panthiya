@@ -249,7 +249,7 @@ is **not** forbidden, and *"insufficient use of Kiro will result in disqualifica
 |---|---|---|
 | 1 | **Sign in to AWS and to Kiro** in the Chrome window the extension is attached to | Both answered with a sign-in page on the 18th. Credentials are not the agent's to enter, and everything in the console is blocked behind this |
 | 2 | **The Bedrock challenge's invitation email or URL** | Still the blocker, but **2026-11-19 narrowed where to look: the event is on AWS Builder Center, not Devpost** (§0b). So the three Devpost searches were searching the wrong site. **Kiroween is currently still the only verified deadline this project has.** One read answers which service is required, whether this account is even eligible, and the other half of decision 7 |
-| 3 | `aws configure` (IAM user `panthiya-dev`) and `winget install Amazon.SAM-CLI` | The `aws` CLI is already installed — 2.36.49. Only credentials and SAM are missing. Then step 2a (the probe) and the Sinhala gate can both run |
+| 3 | `aws login` as IAM user `panthiya-dev` and `winget install Amazon.SAM-CLI` | The `aws` CLI is already installed — 2.36.49. Only credentials and SAM are missing. Then step 2a (the probe) and the Sinhala gate can both run |
 | 4 | **Decide what the Kiro write-up will say** | 20% of the Kiroween score is how thoroughly the project uses Kiro, and the rules disqualify insufficient use. The honest split between Kiro and other tools is not an agent's to choose, and `docs/KIRO-WRITEUP.md` is judged by people who can read this repository |
 | 5 | **Request the 4,000 Kiro credits before Dec 1, 12:00 PT** | One allotment, no second chance, and the form needs the Kiro user ID or AWS account ID |
 | 6 | **`docs/TRANSLATION-REVIEW.md`** — Priority 0 is thirty seconds, Priority 1 is about twenty minutes | Added 2026-11-19, and it is on this list because it is the only work in the project that **nobody else can do at all**. Priority 0 is two Sinhala words in the wellbeing check's medicine list, changed today by a lane that does not read the language. Priority 1 is the fourteen strings that carry the safety promises. Five milestones of UI are in two languages no one has checked |
@@ -354,7 +354,7 @@ only parallel work left is documentation.
 
 | By | What | Who | Blocked on |
 |---|---|---|---|
-| **Nov 20** | Sign in to AWS and Kiro; `aws configure`; `winget install Amazon.SAM-CLI`; find the challenge on Builder Center and paste the URL | **Nishen** | nothing. Everything below is behind this |
+| **Nov 20** | Sign in to AWS and Kiro; `aws login`; `winget install Amazon.SAM-CLI`; find the challenge on Builder Center and paste the URL | **Nishen** | nothing. Everything below is behind this |
 | **Nov 20** | `node scripts/bma-probe.mjs --yes` (free), then 🚦 the **Sinhala gate** against whichever model the rules and the probe point at | agent runs the probe; **Nishen runs the gate and reads the Sinhala by eye** | the row above |
 | **Nov 21** | The **A/B/C orchestration decision** (§0a), now a reading of the rules rather than of the code. B is built and tested | **Nishen decides** | the challenge URL |
 | **Nov 21** | The **Guardrail** from `backend/agent/guardrail.json`, and the **$10 budget alert before the first deploy** | Nishen, agent guides | credentials |
@@ -471,7 +471,7 @@ the new preview service than the one in maintenance mode.
   whether Agents Classic specifically is required (in which case this account is **ineligible**,
   and that is worth knowing on Nov 18 rather than Dec 1); and whether Kiroween may take the same
   project.
-- **One signed request to `bedrock-mantle.us-east-1.api.aws`, once `aws configure` is done.** It is
+- **One signed request to `bedrock-mantle.us-east-1.api.aws`, once `aws login` is done.** It is
   a script now: `node scripts/bma-probe.mjs --yes` — read-only, free, and it reads its own 403 for
   you, because a 403 here has two opposite meanings and only the wording separates them. An
   identity-shaped denial is our own IAM policy (`AmazonBedrockFullAccess` predates this service and
@@ -558,7 +558,7 @@ A URL or the invitation email settles both in five minutes.
 
 | # | Step | Who | Time | Cost |
 |---|---|---|---|---|
-| 1 | `aws configure` (IAM user `panthiya-dev`), then the SAM CLI — `winget install Amazon.SAM-CLI`. **Checked 2026-11-18: the `aws` CLI is already installed (2.36.49); only credentials and SAM are missing.** No model-access step exists any more — that console page has been retired and models auto-enable on first invoke | Nishen | ~15 min | $0 |
+| 1 | `aws login` as IAM user `panthiya-dev`, then the SAM CLI — `winget install Amazon.SAM-CLI`. **Checked 2026-11-18: the `aws` CLI is already installed (2.36.49); only credentials and SAM are missing.** No model-access step exists any more — that console page has been retired and models auto-enable on first invoke | Nishen | ~15 min | $0 |
 | 2 | 🚦 **The Sinhala gate** — `node scripts/test-sinhala.mjs --yes`, and read the Sinhala replies by eye | Nishen runs, agent reads | ~5 min | under 5¢ |
 | 2a | **Which service is this challenge about?** `node scripts/bma-probe.mjs --yes` — read-only, free, and it reads its own 403 for you: identity-shaped means our IAM policy, account-shaped means BMA is blocked too. Needs step 1 only | Agent runs, Nishen reads the verdict | ~2 min | $0 |
 | 3 | **The orchestration decision — now A, B or C** (§0a). **B is built**: 23 tests, deployable, the known quantity. So this is no longer a spike but a choice, and the challenge rules decide it more than the code does | Nishen decides; agent has already built B | ~15 min | $0 |
@@ -730,7 +730,7 @@ agent's to enter.
 >
 > | # | | Time |
 > |---|---|---|
-> | 1 | **Sign in to AWS**, then `aws configure` with IAM user `panthiya-dev` (never root). Everything else on this page is behind it | ~10 min |
+> | 1 | **Sign in to AWS**, then `aws login` as IAM user `panthiya-dev` (never root). Everything else on this page is behind it | ~10 min |
 > | 2 | **`winget install --id Amazon.SAM-CLI -e`, and answer the UAC prompt.** It was attempted today: the package resolved, the MSI downloaded and its hash verified, and the installer returned **1602, “you cancelled”**, because the elevation prompt went unanswered. It is one click | ~2 min |
 > | 3 | **Join the hackathon** at `builder.aws.com/build/hackathons/61c39fba-1383-37e7-bd5c-3f9d889d89fc/agents-your-rules-bedrock-managed-agents-build`. The *Your project* tab says only *“Join this hackathon to get started”* — **there is no submission surface until you join**, it needs a Builder Center profile, and it is your account, not an agent's | ~5 min |
 > | 4 | 🚦 **The Sinhala gate**, and read the replies by eye. No automatic check can tell fluent Sinhala from Sinhala-shaped nonsense, and five milestones rest on it | ~5 min |
@@ -745,7 +745,7 @@ agent's to enter.
 
 ```bash
 # 1. AWS credentials — IAM user panthiya-dev, never root (PANTHIYA_SETUP.md §4)
-aws configure
+aws login --region ap-south-1
 
 # 2. SAM CLI
 winget install Amazon.SAM-CLI
@@ -798,7 +798,7 @@ Dilmi's marks" would be a legitimate request from a parent who really is Dilmi's
 privacy half of the suite would be measuring nothing. The seed refuses to write if that is ever
 not true.
 
-### Tonight, in order, once `aws configure` is done
+### Tonight, in order, once `aws login` is done
 
 ```bash
 # a free look at what each step will do — neither of these touches AWS

@@ -235,7 +235,8 @@ sam build
 sam deploy --guided        # region: ap-south-1 (AgentCore and Guardrails are both available there)
 ```
 
-Prerequisites: AWS CLI and SAM CLI, and an IAM user (not root). **Bedrock model access no longer
+Prerequisites: AWS CLI (2.32.0 or newer) and SAM CLI, and the IAM user `panthiya-dev` (not root)
+signed in with `aws login` — short-lived credentials, **no access keys**. **Bedrock model access no longer
 needs enabling** — that console page has been retired and serverless foundation models auto-enable on
 first invoke, though a first-time user of an Anthropic model may still be asked for use-case details.
 Full steps are in [`PANTHIYA_SETUP.md`](PANTHIYA_SETUP.md) §4.

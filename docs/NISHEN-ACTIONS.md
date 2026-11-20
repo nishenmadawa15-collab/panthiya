@@ -16,61 +16,41 @@ judgement. Everything else I do.
 Four days have been lost at exactly this point. Once these are done, the deploy, the 36 live
 cases, the video and both submissions can all start.
 
-### 1.1 IAM user + access key — **browser** (10 min)
+### 1.1 Console sign-in for `panthiya-dev` — **browser** (3 min)
 
-You need a key before `aws configure` will do anything. Step 1.2 is impossible without it.
+**No access keys, ever.** Credentials come from `aws login`: short-lived, refreshed by the CLI,
+nothing long-term to leak. *(Changed 2026-11-20 — the old access-key steps are gone.)*
 
-1. AWS Console → **IAM** → **Users** → **Create user**
-2. Name: `panthiya-dev`  ← **never use the root account**
-3. *Permissions* → **Attach policies directly** → find and tick **all eight**:
+Already done by the agent: the user `panthiya-dev` exists, with the eight managed policies, the
+inline `panthiya-deploy-extra` (`docs/iam/panthiya-dev-extra.json`) and `SignInLocalDevelopmentAccess`
+(what `aws login` itself needs). It has **no access key**.
 
-```
-AmazonBedrockFullAccess
-AWSLambda_FullAccess
-AmazonDynamoDBFullAccess
-AmazonAPIGatewayAdministrator
-AmazonCognitoPowerUser
-AWSCloudFormationFullAccess
-AmazonTranscribeFullAccess
-IAMFullAccess
-```
+What only you can do — give it a console password:
 
-4. **Create user**
-5. Open the user → **Security credentials** tab → **Create access key**
-6. *Use case* → **Command Line Interface (CLI)** → tick the confirmation → **Create**
-7. Copy the **Access key ID** and the **Secret access key**
+1. AWS Console (as root, this once) → **IAM** → **Users** → **panthiya-dev**
+2. **Security credentials** tab → **Enable console access** → set a password
+3. Note the account's **IAM sign-in URL** shown there (`https://477013660512.signin.aws.amazon.com/console`)
 
-> ⚠️ **The secret is shown once.** Close that page and you cannot see it again — you would have to
-> create a new key.
->
-> ⚠️ **Do not send me either value.** I do not need them and will not ask for them.
->
-> `IAMFullAccess` is only there because SAM has to create roles. Remove it after the hackathon.
+### 1.2 `aws login` — in a **separate PowerShell window** (1 min)
 
-### 1.2 `aws configure` — in a **separate PowerShell window** (2 min)
-
-This command is **interactive** — it asks four questions. **It cannot be run inside Claude Code**;
-that is why you got `EOF when reading a line`. Windows search → **PowerShell** → open it, then:
+It opens a browser, so it **cannot run inside Claude Code**. Windows search → **PowerShell**:
 
 ```
-aws configure
+aws login --region ap-south-1
 ```
 
-| It asks | You type |
-|---|---|
-| `AWS Access Key ID` | the key ID from 1.1 |
-| `AWS Secret Access Key` | the secret from 1.1 — **nothing appears as you type, that is normal** |
-| `Default region name` | `ap-south-1` |
-| `Default output format` | `json` |
-
-Then check it worked:
+Sign in as **IAM user `panthiya-dev`** — **not root**. Then check:
 
 ```
 aws sts get-caller-identity
 ```
 
-If you get JSON mentioning `panthiya-dev`, it worked. **You can paste that output to me** — it
-contains no secret.
+The `Arn` must end in **`user/panthiya-dev`**. If it says `root`, sign out of the console in that
+browser and run `aws login` again. The session lasts up to 12 hours; when a command says the token
+has expired, run `aws login` again.
+
+> If a tool cannot read `aws login` credentials, a temporary session can be handed to it with
+> `aws configure export-credentials --format powershell` — still short-lived, still no key.
 
 ### 1.3 SAM CLI — **same PowerShell window** (2 min)
 
