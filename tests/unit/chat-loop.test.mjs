@@ -1074,6 +1074,80 @@ test('a runtimeSessionId shorter than 33 characters throws rather than being pad
   assert.equal(runtimeSessionIdOf('x'.repeat(33)), 'x'.repeat(33), 'exactly 33 is allowed');
 });
 
+test('harnessArnFor refuses an ARN that does not address the harness HARNESS_ID names', () => {
+  const { harnessArnFor } = chatIndex;
+  const id = 'panthiya_harness_01';
+  const real = `arn:aws:bedrock-agentcore:ap-south-1:123456789012:harness/${id}`;
+
+  assert.equal(harnessArnFor(id, real), real);
+  // An ARN is the half an operator pastes by hand, so a trailing newline is the normal case.
+  assert.equal(harnessArnFor(id, `${real}\n`), real, 'a pasted ARN must be trimmed, not refused');
+  assert.equal(harnessArnFor(id, `  ${real}  `), real);
+
+  const refused = [
+    [id, '', 'HarnessArn still at its empty default — the shape that 502s every message'],
+    [id, undefined, 'no HarnessArn at all'],
+    [id, '   ', 'whitespace is not an address'],
+    [id, 42, 'a non-string is not an address'],
+    [id, 'arn:aws:bedrock-agentcore:ap-south-1:123456789012:harness/some_other_harness',
+      'an ARN naming a DIFFERENT harness than the one the IAM grant is scoped to'],
+    [id, `${real}/extra`, 'a second ARN segment after the id'],
+
+    // THE SECURITY CASE. `HarnessId=*` resolved the IAM `Resource` !Sub to `…:harness/*` — a grant
+    // over every harness in the account — while `orchestratorFor` still returned 'harness',
+    // because `'*'` is truthy and is not `REPLACEME00`. The harness that then ran would be one
+    // this repo never created, so every careful default in harness-config.mjs (`allowedTools`
+    // without a shell, `memory: { disabled: {} }`, a 60 s idle timeout) would be bypassed by
+    // ADDRESSING A DIFFERENT HARNESS rather than by changing ours. template.yaml's AllowedPattern
+    // is the first half of the fix and this is the second: a wildcard id cannot match a real ARN.
+    ['*', real, 'a wildcard harness id, which widens the IAM grant to every harness in the account'],
+
+    [' ', real, 'a blank harness id'],
+    ['', real, 'an empty harness id, which would make any ARN ending in :harness/ pass'],
+    // `endsWith` is case-sensitive, and so is an ARN.
+    ['replaceme00', 'arn:aws:bedrock-agentcore:ap-south-1:123456789012:harness/REPLACEME00',
+      'a case-folded id against a correct-cased ARN'],
+  ];
+
+  for (const [harnessId, harnessArn, why] of refused) {
+    assert.throws(() => harnessArnFor(harnessId, harnessArn), /HARNESS_ARN must address/,
+      `harnessArnFor(${JSON.stringify(harnessId)}, ${JSON.stringify(harnessArn)}) was accepted — ${why}`);
+  }
+
+  // WHERE THIS CHECK STOPS, pinned so it is not mistaken for the whole fix. A wildcard on BOTH
+  // halves agrees with itself, so this function accepts it: `harnessArnFor` asks "do the two
+  // variables name the same harness?", which is a different question from "is that name a single
+  // harness?". The second question is answered only by template.yaml's `AllowedPattern` on
+  // `HarnessId`, which CloudFormation enforces before a stack is created — so that pattern is
+  // load-bearing rather than belt-and-braces, and the test above it is what keeps it there.
+  const bothWild = 'arn:aws:bedrock-agentcore:ap-south-1:123456789012:harness/*';
+  assert.equal(harnessArnFor('*', bothWild), bothWild,
+    'if this ever starts throwing, this file may stop relying on the template pattern — update both');
+});
+
+test('invokeViaHarness actually calls harnessArnFor, and the address beats the turn', () => {
+  // THE CALL SITE, not the declaration. The table above passes in full while `invokeViaHarness`
+  // never calls `harnessArnFor` at all — which is the 2026-11-19 `MAX_TOOL_TURNS` defect exactly:
+  // a validated, exported, well-tested function left unused at its call site, with 587 green.
+  const src = readBackend('functions/chat/index.mjs');
+
+  const body = /function invokeViaHarness\([^)]*\)\s*\{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(body, 'invokeViaHarness is no longer a function declaration — re-read this guard');
+  assert.match(body[1], /harnessArnFor\(HARNESS_ID, HARNESS_ARN\)/,
+    'invokeViaHarness must check the id/ARN agreement itself, on the path that uses them');
+
+  // Spread ORDER, which is the whole of the second fix and is invisible to a presence check:
+  // `{ ...overrides, ...turn }` compiles, runs, and lets anything the loop carries shadow the
+  // operator-set `systemPrompt`, model-and-guardrail block, `tools` and iteration caps.
+  assert.match(body[1], /body: \{ \.\.\.turn, \.\.\.overrides \}/,
+    'the per-invocation overrides must be spread LAST, so a key from the turn cannot shadow them');
+
+  // And one level further in: the address is set after the spread, so no key in `body` can
+  // redirect the invoke to another harness or another user's session.
+  assert.match(src, /\.\.\.body,\s*\n\s*harnessArn,\s*\n\s*runtimeSessionId,/,
+    'harnessArn and runtimeSessionId must be set after ...body, not before it');
+});
+
 test('chat/index.mjs wires the harness to the SAME invokeTool the loop uses', () => {
   // The whole lane rests on this: auth.mjs and the three action Lambdas are at zero lines changed
   // because the harness hands its tool calls back to the function that was already there. A second
@@ -1138,4 +1212,46 @@ test('nothing grants the IAM action that executes commands with the model out of
   // model call is made by THIS function. Removing them would break the fallback silently.
   assert.match(code, /Action: bedrock:InvokeModel/);
   assert.match(code, /Action: bedrock:ApplyGuardrail/);
+});
+
+// --- the cold-start log that makes the silent-fallback failure visible -------------------------
+//
+// AGENTCORE-PLAN §11.4: `loop` is a *supported* path, so a deployment that selected it by accident
+// serves correctly and looks healthy. `__test__.orchestrator` reaches no deployment, so CloudWatch
+// was the only place the truth could live and nothing wrote it there. This is behavioural on
+// purpose: the 2026-11-19 lesson in this file is that a source-text pin can match a declaration
+// instead of a call site, and this log line CAN be observed at import, so it is observed.
+test('req: the deployed module says which orchestrator it selected, once, at cold start', async () => {
+  const captured = [];
+  const real = console.log;
+  console.log = (...args) => captured.push(args.join(' '));
+
+  const cases = [
+    [{ HARNESS_ID: 'panthiya_harness_01', BEDROCK_AGENT_ID: 'ABC1234567' }, 'harness', 'log-h'],
+    [{ HARNESS_ID: 'REPLACEME00', BEDROCK_AGENT_ID: 'ABC1234567' }, 'agent', 'log-a'],
+    [{ HARNESS_ID: 'REPLACEME00', BEDROCK_AGENT_ID: 'REPLACEME00' }, 'loop', 'log-l'],
+  ];
+
+  try {
+    for (const [env, expected, tag] of cases) {
+      captured.length = 0;
+      const mod = await importChatIndex(env, tag);
+
+      const lines = captured
+        .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+        .filter((parsed) => parsed?.event === 'orchestrator_selected');
+
+      assert.equal(lines.length, 1, `exactly one selection line for ${expected}, not ${lines.length}`);
+      assert.equal(lines[0].orchestrator, expected, 'the line names the path that will serve');
+      // The line has to agree with the module's own choice, or it is decoration that could drift.
+      assert.equal(lines[0].orchestrator, mod.__test__.orchestrator, 'the log and the module agree');
+      // A resource id is not a credential, but nothing request-shaped belongs in a cold-start line.
+      assert.deepEqual(
+        Object.keys(lines[0]).sort(), ['event', 'harnessId', 'orchestrator'],
+        'no request data, no token, no sub — this runs before any request exists',
+      );
+    }
+  } finally {
+    console.log = real;
+  }
 });

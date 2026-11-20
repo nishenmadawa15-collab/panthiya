@@ -434,6 +434,50 @@ test('the harness is referenced by this template, never created by it', () => {
     + 'design §10 first, then add the type to COSTS_NOTHING_IDLE deliberately');
 });
 
+test('every parameter interpolated into an IAM Resource is constrained by an AllowedPattern', () => {
+  // The root cause, stated once, in the direction this file's other guards run: not "HarnessId has
+  // a pattern" — which is one fact about one parameter — but "a parameter that reaches an IAM ARN
+  // must be constrained", which catches the NEXT id parameter somebody adds without being told
+  // about it. `HarnessId` had no pattern, so `sam deploy --parameter-overrides HarnessId='*'`
+  // resolved `…:harness/${HarnessId}` to `…:harness/*`: one grant over every harness in the
+  // account, including one created elsewhere with `allowedTools: ["*"]` — a shell and a filesystem
+  // write — and `orchestratorFor` selected the harness path regardless, because `'*'` is truthy
+  // and is not `REPLACEME00`. A `/` does the same damage differently, by writing an extra segment
+  // into the ARN. CloudFormation refuses a parameter that fails its own AllowedPattern before any
+  // resource is created, which is why the pattern is the fix and not merely a hint.
+  const { entries, unreadable } = entriesOf(TEMPLATE, 'Parameters');
+  assert.deepEqual(unreadable, [], `unreadable Parameters entries: ${unreadable.join(', ')}`);
+
+  const subs = TEMPLATE.split('\n').map(uncomment).flatMap((line) => {
+    const m = /^\s*(?:-\s+)?Resource:[ ]+!Sub[ ]+(\S.*)$/.exec(line);
+    return m ? [unquote(m[1])] : [];
+  });
+  // A reader that found no ARNs would wave everything through, so it is counted rather than hoped.
+  assert.ok(subs.length >= 5, `found ${subs.length} !Sub resources — this guard is not reading the IAM`);
+
+  const interpolated = new Set();
+  for (const sub of subs) {
+    for (const m of sub.matchAll(/\$\{([^}]+)\}/g)) interpolated.add(m[1].trim());
+  }
+  // The pseudo-parameters (`AWS::Region`) and resource attributes (`VoiceBucket.Arn`) are not
+  // deploy inputs and are filtered out by being absent from `Parameters`. These three are the
+  // deploy inputs that DO reach an ARN today, so their presence here is the sentinel: if a later
+  // edit stops interpolating them, this guard has to be re-read rather than silently passing.
+  for (const name of ['HarnessId', 'BedrockAgentId', 'BedrockAgentAliasId']) {
+    assert.ok(interpolated.has(name),
+      `${name} is no longer interpolated into an IAM Resource — re-read this guard`);
+  }
+
+  const naked = [...interpolated]
+    .filter((name) => entries.has(name))
+    .filter((name) => valuesOf(entries.get(name), 'AllowedPattern').length === 0)
+    .sort();
+
+  assert.deepEqual(naked, [],
+    'a deploy input reaching an IAM ARN with no AllowedPattern can widen that grant with `*` or '
+    + `add a segment with \`/\`:\n  ${naked.join('\n  ')}`);
+});
+
 test('no parameter default commits an AWS account id', () => {
   // The same reasoning as the literal-address test above, for the other identifier a public repo
   // cannot carry. `HarnessArn` is the one that invites it — the real value is

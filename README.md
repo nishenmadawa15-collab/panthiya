@@ -240,7 +240,18 @@ needs enabling** — that console page has been retired and serverless foundatio
 first invoke, though a first-time user of an Anthropic model may still be asked for use-case details.
 Full steps are in [`PANTHIYA_SETUP.md`](PANTHIYA_SETUP.md) §4.
 
-Three sequencing facts that each cost an evening if met during the deploy rather than before it:
+Four sequencing facts that each cost an evening if met during the deploy rather than before it:
+
+- **The guardrail and the harness are created by hand, and both come *before* a deploy.**
+  `HarnessId`, `HarnessArn`, `GuardrailId` and `GuardrailVersion` are all **stack parameters**, and
+  the harness is deliberately not a template resource: its execution role has to exist before the
+  `CreateHarness` call, and that call is the thing that spends money. So the order is **guardrail →
+  execution role → `CreateHarness` → deploy** — `backend/agentcore/create-harness.json`
+  references the guardrail by id, so creating the harness first means creating it twice.
+  Deploy with `HarnessId` still at `REPLACEME00` and the stack comes up **working but on the
+  `Converse` fallback**, which is the one failure here that does not look like a failure: every page
+  answers, every test passes, and the orchestrator is the one the challenge rules do not accept. Set
+  the parameter and the harness path takes over with no code change.
 
 - **Sign-in needs two deploys.** Every hosted-UI callback URL is built from the `SiteOrigin`
   parameter and Cognito matches those URLs byte for byte — but the Amplify origin does not exist

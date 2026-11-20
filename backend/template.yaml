@@ -33,16 +33,29 @@ Parameters:
   BedrockAgentId:
     Type: String
     Default: REPLACEME00
+    # An id, never a pattern — see the note on HarnessId below. This one is interpolated into
+    # `agent-alias/${BedrockAgentId}/${BedrockAgentAliasId}`, so a `*` here widens that grant to
+    # every agent alias in the account, and a `/` writes a second segment into the ARN.
+    AllowedPattern: "^[A-Za-z0-9_-]+$"
     Description: Bedrock agent id from M1 task 1.11 (10-char id, e.g. ABC1234567).
 
   BedrockAgentAliasId:
     Type: String
     Default: TSTALIASID
+    AllowedPattern: "^[A-Za-z0-9_-]+$"
     Description: Agent alias id. TSTALIASID is the working draft alias Bedrock creates for you.
 
   HarnessId:
     Type: String
     Default: REPLACEME00
+    # An id, never a pattern. This value is interpolated straight into the one `InvokeHarness`
+    # Resource below, so `HarnessId=*` would turn "one action, one harness" into every harness in
+    # the account — including one somebody created with `allowedTools: ["*"]`, which is a shell and
+    # filesystem write. It also undoes the id/ARN agreement this template rests on ("refused by IAM
+    # rather than invoked"): a wildcard grant refuses nothing. The pattern is deliberately loose
+    # about the real id shape, which is UNVERIFIED, and strict about the two characters that widen
+    # an ARN: `*` and `/`. chat/index.mjs checks the agreement itself for the same reason.
+    AllowedPattern: "^[A-Za-z0-9_-]+$"
     Description: >-
       AgentCore harness id (docs/AGENTCORE-PLAN.md Track A), from the `create-harness` call a human
       runs by hand — the harness is NOT a resource of this template, because the execution role has

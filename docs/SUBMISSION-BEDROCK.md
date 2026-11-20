@@ -95,6 +95,16 @@ Alternative, if the submission wants one line about the agent rather than the pr
 > A tuition-class agent whose privacy, money and exam-answer rules are enforced three times in
 > independent places, and proved against 36 documented attacks.
 
+**Third option, added 2026-11-20 — the one that names the *job*,** which is what qualification
+requirement 1 is actually asking for (see the draft framing in §3):
+
+> One agent that runs a tuition class — attendance, fees, marks, parent updates and past-paper
+> tutoring — under eight rules it is not allowed to break, with each rule enforced in three
+> independent places and tested against 36 documented attacks.
+
+`TODO(nishen)` — pick one of the three. The third is the safest against the pass/fail
+qualification check; the first is the best line of English.
+
 ---
 
 ## 2. The problem
@@ -116,6 +126,28 @@ Panthiya is therefore built rules-first, and the demo is an attack demo.
 ---
 
 ## 3. What it does
+
+> **⚠️ DRAFT, awaiting Nishen's approval — written 2026-11-20. Qualification requirement 1
+> asks for an agent doing *one defined job*, and the table below, read cold, looks like three jobs.**
+> It is one. The paragraph is drafted here so that what is left is approving words rather than
+> writing them. Change it freely — but **something** saying this has to be in the submission,
+> because the check is pass/fail and the build is already right; only the sentence was missing.
+>
+> **The one job: Panthiya runs a tuition class — its attendance, its fees, its marks, its parent
+> updates and its past-paper tutoring — under eight rules it is not allowed to break.**
+>
+> The three roles are not three agents. They are **scoped tool sets of that one job**, and that is
+> literally how it is built: **one** harness, with the tool list and the system prompt passed **per
+> invocation** from the role on the verified Cognito token. A teacher's turn and a student's turn
+> reach the same agent, the same guardrail and the same policy check; what differs is which tools
+> exist for that turn. The model can choose the tool and the arguments. It can never choose who it
+> is — identity arrives out of band, never from the message.
+>
+> That is also why the job is one job rather than three: **the rules are what the agent is for.** A
+> fee is only a fee because only the teacher may record it; a hint is only a hint because the answer
+> is refused; an update only reaches a parent because a teacher approved it and it was built from
+> stored data. Split the roles into three agents and every rule that matters is a rule *between*
+> them, enforced nowhere.
 
 | Role | What they can do |
 |---|---|

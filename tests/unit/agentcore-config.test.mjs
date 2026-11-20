@@ -171,6 +171,22 @@ test('an omitted or unlisted model throws rather than defaulting', () => {
     assert.throws(() => assertModelId(bad), /is not a model/, bad);
   }
   for (const good of ALLOWED_MODELS) assert.equal(assertModelId(good), good);
+
+  // THE CALL SITES, not the declaration — the distinction this repo has now had to learn four
+  // times. Every assertion above holds while `modelBlock` has stopped calling `assertModelId` at
+  // all: put `modelId = modelId ?? 'apac.amazon.nova-lite-v1:0'` in its place and this file stayed
+  // green, `create-harness.json` stayed byte-identical, and `createHarnessBody({ ...ARGS, modelId:
+  // 'global.anthropic.claude-opus-5' })` built an Opus-class harness — ~$41 for 2,200 turns
+  // against a US$15 budget. A validated function tested, exported and not reached is exactly the
+  // 2026-11-19 `maxTurnsFromEnv` defect, so both entry points that reach `modelBlock` are
+  // exercised here rather than the validator on its own.
+  for (const bad of [undefined, null, '', {}, 'global.anthropic.claude-opus-5', 'openai.gpt-5.4']) {
+    const what = JSON.stringify(bad) ?? 'undefined';
+    assert.throws(() => createHarnessBody({ ...ARGS, modelId: bad }),
+      /must be given explicitly|is not a model/, `createHarnessBody accepted modelId ${what}`);
+    assert.throws(() => invocationOverrides({ role: 'teacher', ...ARGS, modelId: bad }),
+      /must be given explicitly|is not a model/, `invocationOverrides accepted modelId ${what}`);
+  }
 });
 
 test('the guardrail travels with the model request, not as a separate call', () => {

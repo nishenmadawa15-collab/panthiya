@@ -89,6 +89,14 @@ export function orchestratorFor({ harnessId, agentId }) {
 
 const ORCHESTRATOR = orchestratorFor({ harnessId: HARNESS_ID, agentId: AGENT_ID });
 
+// The only log line in this file, and it earns its place: `loop` is a *supported* path that behaves
+// correctly, so a deployment that silently selected it looks exactly like a working one — every page
+// answers, every test passes — while serving the orchestrator the challenge rules do not accept.
+// `__test__.orchestrator` is a test hook and reaches no deployment, so without this there is no way
+// to tell from CloudWatch which path served. Found 2026-11-20 while writing AGENTCORE-PLAN §11.4.
+// Once per cold start, no request data, nothing secret: `HARNESS_ID` is a resource id, not a credential.
+console.log(JSON.stringify({ event: 'orchestrator_selected', orchestrator: ORCHESTRATOR, harnessId: HARNESS_ID ?? null }));
+
 /**
  * The cap, read only on the paths that use it.
  *
@@ -261,15 +269,19 @@ let agentcore;
  * one live invoke for the stream field. A wrong name here throws on the first invoke, which
  * `handleChat` reports as 502 `agent_unavailable` — loud, and the right direction to be wrong in.
  */
-async function invokeHarness({ runtimeSessionId, body }) {
+async function invokeHarness({ harnessArn, runtimeSessionId, body }) {
   const { BedrockAgentCoreClient, InvokeHarnessCommand } =
     await import('@aws-sdk/client-bedrock-agentcore');
   agentcore ??= new BedrockAgentCoreClient({});
 
   const response = await agentcore.send(new InvokeHarnessCommand({
-    harnessArn: HARNESS_ARN,
-    runtimeSessionId,
+    // The address is set LAST, after the spread, so nothing in `body` can shadow it. `harnessArn` is which
+    // harness runs and `runtimeSessionId` is the per-user isolation key; a key arriving from the
+    // turn and winning over either of them is the shape this file should make unreachable rather
+    // than merely currently-absent. Neither key is in `body` today.
     ...body,
+    harnessArn,
+    runtimeSessionId,
   }));
 
   // Collected rather than streamed on: `assembleStream` is pure over an array, which is what lets
@@ -303,6 +315,34 @@ function runtimeSessionIdOf(sessionId) {
 }
 
 /**
+ * The two harness variables must name the SAME harness, checked here rather than rested on.
+ *
+ * `HARNESS_ID` scopes the IAM grant (template.yaml `InvokeTheOneHarness`); `HARNESS_ARN` is what
+ * the invoke is addressed to. The template says a disagreement "is refused by IAM rather than
+ * invoked" — true only while `HarnessId` is a literal id, which is now a parameter pattern there
+ * and a string check here, because a wildcard grant refuses nothing and the ARN is the half an
+ * operator pastes by hand.
+ *
+ * Also the shape that otherwise 502s every single message: `HarnessId` set with `HarnessArn` still
+ * at its empty default selects the harness path and then addresses nothing, which reaches the
+ * client as `agent_unavailable` — indistinguishable from a Bedrock outage, when it is a one-line
+ * deployment mistake. Checked per request rather than at init: the agent path's cold-start brick
+ * of 2026-11-19 is the reason this file reads each path's config only on the path that uses it.
+ *
+ * ponytail: the tail is checked, not the account or the region, so an ARN for the right harness id
+ * in the wrong account still passes here. That one IAM does refuse — the grant is built from
+ * `${AWS::AccountId}`/`${AWS::Region}` — and checking it here would mean carrying the account
+ * number in an env var, which docs/COST-MODEL.md's public-repo rule keeps out of this stack.
+ */
+function harnessArnFor(harnessId, harnessArn) {
+  const arn = typeof harnessArn === 'string' ? harnessArn.trim() : '';
+  if (!arn || !arn.endsWith(`:harness/${harnessId}`)) {
+    throw new Error('HARNESS_ARN must address the harness HARNESS_ID names');
+  }
+  return arn;
+}
+
+/**
  * Track A behind option A's signature, so `handleChat` still cannot tell which one it got.
  *
  * The injected `invokeTool` is **the same function option B uses, unchanged**, and that is the
@@ -316,6 +356,7 @@ function runtimeSessionIdOf(sessionId) {
  * model block, so a harness deployment with no guardrail has no layer 2 and must not serve.
  */
 function invokeViaHarness({ sessionId, inputText, sessionAttributes }) {
+  const harnessArn = harnessArnFor(HARNESS_ID, HARNESS_ARN);
   const runtimeSessionId = runtimeSessionIdOf(sessionId);
   const overrides = invocationOverrides({
     role: sessionAttributes?.role,
@@ -329,9 +370,16 @@ function invokeViaHarness({ sessionId, inputText, sessionAttributes }) {
     sessionAttributes,
     maxTurns: MAX_TURNS,
     deps: {
-      // `turn` is `{ messages, tools }` and is spread last on purpose: the loop resends `tools`
-      // every round because the resume contract requires it, and that copy is the one that counts.
-      invokeHarness: (turn) => invokeHarness({ runtimeSessionId, body: { ...overrides, ...turn } }),
+      // `turn` is `{ messages, tools }`; `overrides` is spread LAST so an operator-set key always
+      // beats a key that came from the turn. `turn.tools` is the same `inlineToolsFor(role)` value
+      // `overrides.tools` is, from the same verified role, so the resume contract ("include the
+      // inline tool again so the pending tool remains available") is satisfied either way — which
+      // is what makes this ordering free. What it buys: `systemPrompt`, the model-and-guardrail
+      // block, `tools` and the iteration caps cannot be shadowed by anything the loop carries,
+      // whatever a later edit adds to `turn`.
+      invokeHarness: (turn) => invokeHarness({
+        harnessArn, runtimeSessionId, body: { ...turn, ...overrides },
+      }),
       invokeTool,
     },
   });
@@ -392,5 +440,5 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 // because testing `orchestratorFor` alone proves nothing about the deployment: the cap defect of
 // 2026-11-19 was exactly a validated function left exported, tested and unused at its call site.
 export const __test__ = {
-  todayInColombo, maxTurnsFromEnv, orchestrator: ORCHESTRATOR, runtimeSessionIdOf,
+  todayInColombo, maxTurnsFromEnv, orchestrator: ORCHESTRATOR, runtimeSessionIdOf, harnessArnFor,
 };

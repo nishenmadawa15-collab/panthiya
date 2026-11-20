@@ -147,6 +147,8 @@ Alternative, if the form wants the product rather than the framing:
 
 ## 2. The Frankenstein framing — agent + voice + inbox + ledger + tutor
 
+> **Do not “correct” this section to match `docs/SUBMISSION-BEDROCK.md` §3, or that one to match this. Noted 2026-11-20.** The two write-ups frame the same project in opposite directions **on purpose**, and both framings are true. Kiroween's Frankenstein category rewards **five subsystems in different trust domains sewn into one body**; AWS qualification requirement 1 requires an agent doing **one defined job**, and a three-role table read cold looks like three jobs. They are compatible because they describe different axes — **one job, five subsystems, three scoped tool sets** — and nothing in either is a stretch. But a future edit that harmonises the wording would either make this section dull or fail that requirement, so each stays written for its own audience.
+
 Panthiya is not one feature with extras bolted on. It is five systems that have no business sharing a
 body, sewn into one, and the stitches are the interesting part.
 

@@ -571,6 +571,58 @@ this — *"if the first live runs show the round trip is slow, this is the numbe
 `platformVersion: V2`, which *"keeps cold-start latency consistent regardless of concurrency or
 image size"*. This risk trades directly against guard 4 — short sessions are cheap and cold.
 
+### 7.3a The decision rule, computed offline 2026-11-20 — so deploy evening is a lookup
+
+§7.3 says the ceiling is *“measurable only live”*, which is true of the **latency** and not of
+the **arithmetic**. One number has to be measured — the wall time of a single `InvokeHarness`
+round trip — and then `MAX_TOOL_TURNS` follows from it. Working it out at one in the morning, on
+the evening when the first invoke happens, is how a cap gets picked by vibe.
+
+**The budget**, from `backend/template.yaml` rather than from assumption:
+
+| | | |
+|---|---|---|
+| Chat Lambda timeout | **29 s** | API Gateway caps at 30 |
+| − `policyCheck` worst case | **5 s** | its own `Timeout: 5`, and it runs on **every** reply |
+| − margin | **2 s** | serialisation, the distress gate, and not landing exactly on the cap |
+| **= available to the loop** | **22 s** | |
+
+With `n` tool turns the loop makes **n + 1** `InvokeHarness` round trips and `n` tool
+invocations. Taking one warm action-Lambda call plus its DynamoDB write at **0.3 s**:
+
+> (n + 1) × T + n × 0.3 ≤ 22
+
+Which gives the **largest single-round-trip latency each cap can survive**:
+
+| `MAX_TOOL_TURNS` | Round trips | Max tolerable `InvokeHarness` latency |
+|---|---|---|
+| **4** | 5 | **4.2 s** |
+| **3** | 4 | **5.3 s** |
+| **2** | 3 | **7.1 s** |
+| **1** | 2 | **10.8 s** |
+
+**How to use it.** Make one live invoke, read the round-trip time, find the first row it fits, and
+set the cap to that. Nothing else to decide.
+
+- **Faster than ~4 s** — keep **4**. Nothing to do.
+- **4–5 s** — drop to **3**.
+- **5–7 s** — drop to **2**, which `backend/functions/chat/index.mjs` already anticipates in a
+  comment.
+- **7–11 s** — **1**, and a one-turn agent is a different product: it can answer, but it
+  cannot look something up and then act on it. Say so rather than shipping it quietly.
+- **Slower than ~11 s** — no cap saves it. That is an async problem (202 plus polling, or
+  WebSockets), which is a **day of work, not an evening's**, and it is the one outcome of the first
+  invoke that changes the schedule rather than a constant.
+
+**Three honest caveats.** The 0.3 s tool figure is an estimate and the table barely moves if it
+is wrong — at 1.0 s the `n=4` row only falls from 4.2 s to 3.6 s, because the round
+trips dominate. The numbers assume **warm**: a cold microVM start lands on the *first* round trip, so
+the first request of the day can breach a cap the rest of the day survives — which is what
+`idleRuntimeSessionTimeout` above zero is for (§7.3), and why a cold first call must not be the
+measurement you set the cap from. And `policyCheck` is budgeted at its **timeout**, not its expected
+time; if it is reliably fast, there are ~4 s more to spend, but budgeting a defence layer at its
+best case is how it becomes the thing that times out.
+
 ### 7.4 Risk 4 — ARM64 on Windows (Track B only)
 
 `docker buildx` on Windows 11 needs Docker Desktop, which is an install, a reboot and a licence
@@ -788,3 +840,74 @@ and should be checked. Named so it is not a surprise.
 
 The NAT-gateway row in §4 item 1 comes off the table on this path, and the "BMA preview access"
 availability risk in §5 does not apply to a GA service. Both already handed over.
+
+---
+
+## 11. The first live invoke — what each failure means (written 2026-11-20, offline)
+
+Everything unverified in this path **fails loud rather than quiet**, which was the design choice. It
+is only worth anything if the person reading the first error knows which guard spoke. That person
+will be tired, it will be late, and nothing here will have run before. So: the error text, the cause,
+and the fix — nothing else.
+
+**Run the two read-only probes first** (`§4`), because an account-level block makes the rest of
+this table moot.
+
+### 11.1 Before the model is ever reached — our own guards
+
+These throw inside our Lambda, before any AWS call, and every one of them is a **deployment mistake,
+not an AWS problem**. All surface to the client as `502 agent_unavailable`, and `score.mjs` files
+them as `chat_unavailable` — so **the HTTP status tells you nothing; read CloudWatch.**
+
+| The log line says | What is actually wrong | Fix |
+|---|---|---|
+| `harnessArn must end in :harness/<HarnessId>` | `HarnessId` and `HarnessArn` name **different harnesses**, or `HarnessArn` is still at its empty default while `HarnessId` is set. The empty default is deliberate — the real ARN carries an account id and this repo is public | Pass **both** on the same `sam deploy`. This is the single most likely first-invoke failure, because the two parameters are pasted by hand from two different places |
+| `harnessArn must end in :harness/<HarnessId>` **and `HarnessId` is `*`** | Someone used a wildcard to “make the IAM work”. `AllowedPattern` should have refused it at deploy time; if it got through, the template was edited | Use the literal id. A wildcard grant refuses nothing, which is the point of the pattern |
+| `runtimeSessionId must be at least 33 characters` | The Cognito `sub` is shorter than expected — a non-Cognito identity provider, or a changed token shape. It **throws rather than pads**, because a padded id is one two anonymous callers could *share* | Do not pad. Find out why the `sub` is short |
+| A throw naming `guardrailId` | `GuardrailId` was not passed, so layer 2 does not exist. **This is the guard working**: a harness deployment with no guardrail must not serve | Create the guardrail from `backend/agent/guardrail.json` **first** and pass its id and version |
+
+### 11.2 The call reaches AWS and is refused
+
+| The error | What it means | Fix |
+|---|---|---|
+| `AccessDeniedException` naming an **IAM identity** (`arn:aws:sts::...:assumed-role/...`) | **Our own policy.** Either the `InvokeHarness` grant did not deploy, or the harness ARN does not match the grant built from `HarnessId` — including right id, **wrong account or region** | Redeploy; check region. This case says **nothing** about the challenge |
+| `AccessDeniedException` naming the **account** | 🔴 **The fatal case.** AgentCore gated on this account the way Agents Classic is — and then **both** services the rules name are unreachable, which no region and no code change fixes | Goes to Nishen **the same hour**, with the exact error text. `§7.1` |
+| `ValidationException` on a **field name** | One of the UNVERIFIED request names is wrong (`harnessArn`, `runtimeSessionId`, `messages`, `tools`…) | `API_InvokeHarness.html`. They all live in **one** function in `chat/index.mjs` under one `UNVERIFIED` block, so this is a single edit |
+| `MalformedPolicyDocument`, while creating the role | `execution-role-policy.json` was passed straight to IAM. It is a **document holding three policies** plus `PLACEHOLDERS`/`NOTE`/`DELIBERATELY_ABSENT` keys | `backend/agentcore/README.md` step 2 has the one-line `node -e` that extracts them |
+| `AssumeRole` failing / the harness never starts | The trust policy's `ArnLike` is `...:*` deliberately; if it was narrowed to `harness/*` and AgentCore sends a runtime-scoped ARN instead, nothing starts | Widen it back. `§7` records why it was **not** narrowed offline |
+| A module-not-found at cold start | The AgentCore SDK package name is wrong — the one UNVERIFIED name that fails at **import**, not at call | `package.json` ships no dependencies by design; the SDK comes from the Lambda runtime |
+
+### 11.3 The call succeeds and the reply is refused by our own loop
+
+This is the **good** category: the service works and a shape assumption was wrong.
+
+| `reason` on the 200/502 | What it means | Fix |
+|---|---|---|
+| `unknown_stop_reason` | The harness spells its finish reason as something other than `end_turn`/`stop_sequence`. **Deliberately fails closed** — `§9` calls this the first thing to check | Add the real spelling to `FINISHED` in `handoff.mjs`. **Expect this one** |
+| `empty_reply` | Text is not under `delta.delta.text`. `textOf` returns `''` rather than inventing a reply | Correct the field in `assembleStream`. One place |
+| `tool_use_without_stop_reason` | A late `messageStop` overwrote an earlier `tool_use` — plausible with `maxIterations: 5` | Read the raw events before changing anything; this guard exists because it caught that shape |
+| `reply_truncated` | The reply hit `max_tokens`. Not a wiring fault | Raise the cap, or accept it. Fixed on 2026-11-20 so it is no longer **mis**named |
+| Timeout at ~29 s | The round trip is slower than `MAX_TOOL_TURNS` allows | **§7.3a is a lookup table.** Measure one round trip, read off the cap. Do not measure from a cold call |
+
+### 11.4 The one failure that does not look like one
+
+🔴 **`HarnessId` left at `REPLACEME00` and everything works.** The stack comes up, every page answers,
+every test passes — and `chat/index.mjs` has silently selected the **`Converse` fallback**, which
+is the orchestrator the challenge rules **do not accept**. There is no error, no warning and no
+failing test, because option B is a supported path and behaves correctly.
+
+**So the first thing to verify after the first deploy is not that chat works — it is which
+orchestrator answered.** A demo recorded against the loop is a demo of a disqualified project.
+
+**And right now there is no way to check that from a deployed Lambda.** `ORCHESTRATOR` is computed
+at module scope and reported on `__test__.orchestrator`, which is a **test hook, not an
+observability one** — `chat/index.mjs` contains no `console.*` at all, so CloudWatch will not say
+which path served. Found while writing this table on 2026-11-20. The fix is **one line** — a
+cold-start log naming the orchestrator — and until it lands the only check is indirect: read the
+stack's `HarnessId` parameter value, and confirm it is not `REPLACEME00`.
+
+Two cheaper confirmations that need no code: a harness invoke appears in the harness's own
+CloudWatch log group (`/aws/bedrock-agentcore/*`, which the execution role grants), and the loop
+path calls `bedrock:InvokeModel` **from the chat Lambda's** role while the harness path calls it
+from the **execution** role — so CloudTrail attributes the model call to different principals on
+the two paths.

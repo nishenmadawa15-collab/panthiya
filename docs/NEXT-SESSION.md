@@ -73,6 +73,27 @@ agent being handed a shell and filesystem write. They would be granted by someon
 a prefix in a hurry, on the one evening when everything is being written in a hurry. It is recorded
 here, in `docs/BUILD-LOG.md`, and in `backend/agentcore/execution-role-policy.json` itself.
 
+### 📖 Read this before the first `InvokeHarness`, not after it
+
+`docs/AGENTCORE-PLAN.md` gained two sections on 2026-11-20 whose whole purpose is to keep deploy
+evening from being a sequence of judgement calls made at one in the morning:
+
+- **§7.3a — the latency lookup.** Measure one round trip, read off the largest `MAX_TOOL_TURNS`
+  that survives it (≤4.1 s → keep 4; 5–7 s → 2; >11 s → no cap helps, it is an async problem and a
+  **day** of work). Do not take the measurement from a cold call.
+- **§11 — what each first-invoke failure means.** Every unverified name in this path fails loud by
+  design, which only helps if you know which guard spoke. The error text → the cause → the fix.
+  **§11.2 is the important one:** an `AccessDeniedException` naming the **IAM identity** is our own
+  policy and says nothing about the challenge; one naming the **account** is the fatal case and goes
+  to Nishen the same hour.
+
+🔴 **And §11.4 is the failure that does not look like one.** `HarnessId` left at `REPLACEME00`
+and *everything works*: the stack comes up, every page answers, every test passes — and the
+orchestrator silently selected is the `Converse` fallback, the one the rules **do not accept**. No
+error, no warning, no failing test, because option B is a supported path behaving correctly. **So
+the first thing to check after the first deploy is not that chat works — it is which orchestrator
+answered.** A demo recorded against the loop is a demo of a disqualified project.
+
 ### What the deploy evening inherits from today
 
 | | |
@@ -80,7 +101,7 @@ here, in `docs/BUILD-LOG.md`, and in `backend/agentcore/execution-role-policy.js
 | **A8 is a paste** | Four stack outputs into `CONFIG` in `frontend/assets/auth.js` — `HostedUiDomain`, `UserPoolClientId`, `UserPoolId`, `ApiEndpoint` — then sign in on each page. There are no call sites left to edit. Proven by pasting real-shaped values, running the suite green, and restoring the placeholders |
 | **The CSP needs three origins, not two** | API, Cognito domain, **and the voice bucket** (`VoiceBucketName`), because the microphone PUTs to a presigned S3 URL. Missing it looks like `mic.error` plus a console violation and nothing pointing at `customHttp.yml` |
 | **The seed writes 105 items** | Not the 99 three documents claimed until today. If it says **PARTLY written**, re-run it — that is now safe, because the audit rows are keyed by a fixed timestamp and a second run overwrites rather than doubles |
-| **Two new SWAP POINTs, and one retired** | **New:** the handoff loop fails closed on an unrecognised stop reason, so if the harness spells its finish reason as anything but `end_turn`/`stop_sequence`, **every turn fails loudly on the first live invoke** — that is deliberate, and it is the first thing to check. **New:** `InvokeHarness`'s latency against API Gateway's 29-second ceiling, with up to five round trips at `MAX_TOOL_TURNS=4`; the code already anticipates dropping to 2. **Retired:** the guardrail-vs-model coupling, since we stay on Nova through `Converse` |
+| **Two new SWAP POINTs, and one retired** | **New:** the handoff loop fails closed on an unrecognised stop reason, so if the harness spells its finish reason as anything but `end_turn`/`stop_sequence`, **every turn fails loudly on the first live invoke** — that is deliberate, and it is the first thing to check. **New:** `InvokeHarness`'s latency against API Gateway's 29-second ceiling, with up to five round trips at `MAX_TOOL_TURNS=4`. **This is now a lookup, not a judgement call:** `docs/AGENTCORE-PLAN.md` **§7.3a** has the budget computed from `template.yaml` and a table mapping the one number you measure — a single round trip — to the largest cap that survives it (≤4.1 s → keep 4; 5–7 s → drop to 2; >11 s → no cap helps, it is an async problem and a **day** of work). Do not take the measurement from a cold first call. **Retired:** the guardrail-vs-model coupling, since we stay on Nova through `Converse` |
 | **Six properties in the create body are marked UNVERIFIED** | `backend/agentcore/README.md` §4 names each one and how to settle it. The two that matter are the create-time `memory: {"disabled": {}}` wrapper and the `InvokeHarness` wire field names. **Read them by eye before running the file** — the guards check the module, and a human runs the JSON |
 | **`allowedTools` is harness-wide, `tools` is per invocation** | So `allowedTools` must be the **union** of all three roles' names. Safe — per-invocation `tools` decides what exists — but it is not what the plan's §3.1 first implied, and whether `allowedTools` is *also* overridable per invocation is unverifiable offline. If it is, tightening it per role is a free extra fence |
 | **Changes needed in files no lane owned** | `docs/AGENTCORE-PLAN.md` §10 has the full list: `invokeViaHarness` beside the two existing orchestrators in `chat/index.mjs` with the stream reader, exporting `TOOL_FAILED`/`toolUnavailable` from `orchestrate.mjs` (a duplicate with a drift test stands in meanwhile), moving `bedrock:InvokeModel`/`ApplyGuardrail` to the harness execution role, and `HarnessId`/`HarnessArn` parameters |
@@ -662,11 +683,18 @@ and the `template.yaml` lines its sign-in needs.
 
 ## Where we are
 
-**67 of 79 tasks done. 779 tests pass, nothing skipped. Nothing has been deployed and nothing has
-been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 779/779 in
-16.9 s, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
+**67 of 79 tasks done. 783 tests pass, nothing skipped. Nothing has been deployed and nothing has
+been spent.** (Both counted 2026-11-20 at the end of the session, by hand: `npm test` → 783/783, and `grep -c` on `tasks.md` → 67 done, 12 open. The task count has not moved in two days
 because every remaining task is behind the credentials gate or behind Nishen; the test count moved
-**587 → 779** in the same two days. Re-derive rather than trust either.)
+**587 → 783** in the same two days.
+
+> **Verification pass 4 ran at the end of the day: 41 mutations against production files, 38 red,
+> one surviving — and the surviving one was the *fourth* instance of this repo's signature
+> failure: a validated function, exported, tested, and **unreached at its call site**. Production was
+> correct; the test was the defect. All four were found by mutation and none by reading. **What it did
+> not cover is listed honestly in that pass's own report — `bma-probe`, `demo-users` and
+> `api-swap-frontend` were not mutated at all, and `agentcore.test.mjs` and `audit-mic-frontend` got
+> one mutation each out of ~20. That is where pass 5 starts.** Re-derive rather than trust either.)
 
 | Milestone | State |
 |---|---|
