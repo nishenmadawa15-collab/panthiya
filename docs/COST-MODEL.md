@@ -42,7 +42,7 @@ model answers a chat turn, and whether anything gets put in a VPC.
 | Resource | Count | Price basis |
 |---|---|---|
 | `AWS::DynamoDB::Table`, `PAY_PER_REQUEST`, SSE on, PITR off | 8 (+9 GSIs, all `ProjectionType: ALL`) | On-demand: no capacity charge at all while idle. Writes/reads billed per request unit |
-| `AWS::Serverless::Function`, nodejs20.x, arm64, 256 MB | 8 | $0.20/M requests + ~$0.0000133/GB-s (arm64, us-east-1). A chat turn is 3 invocations ≈ $0.00001 |
+| `AWS::Serverless::Function`, nodejs24.x, arm64, 256 MB | 8 | $0.20/M requests + ~$0.0000133/GB-s (arm64, us-east-1). A chat turn is 3 invocations ≈ $0.00001 |
 | `AWS::Serverless::HttpApi` + Cognito JWT authorizer, throttled 10 rps / 20 burst | 1 | $1.00 per million requests, first 300M (us-east-1) |
 | `AWS::Lambda::Permission` (Bedrock → the three action groups) | 3 | Free |
 | Bedrock model inference (out of template, `ModelId` parameter) | — | Nova Lite $0.06/M input, $0.24/M output **[unverified today — the Bedrock pricing page is JS-rendered and the fetch returned no Nova rows; these are the published figures the earlier estimate also used]** |

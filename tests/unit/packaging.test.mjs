@@ -87,7 +87,7 @@ test('every relative import stays inside the packaged CodeUri', () => {
 });
 
 test('no handler imports a package that is not in the Lambda runtime', () => {
-  // The repo has zero dependencies on purpose. Only the AWS SDK v3, which ships inside nodejs20.x,
+  // The repo has zero dependencies on purpose. Only the AWS SDK v3, which ships inside nodejs24.x,
   // and node: builtins may be imported by name.
   const allowed = /^(@aws-sdk\/|node:)/;
   const problems = [];
