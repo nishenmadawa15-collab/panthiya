@@ -290,6 +290,17 @@ rather than a bug.
 | 2026-11-20 | 🔒 **one IAM permission must never be granted, and it is one letter-run away from the one that must** | AWS, on the harness: *“To prevent direct command execution, do not grant `bedrock-agentcore:InvokeAgentRuntimeCommand` in your IAM policies.”* The chat Lambda needs **`bedrock-agentcore:InvokeHarness`**. `InvokeAgentRuntimeCommand` and `...CommandShell` execute commands **without passing through the model at all** | It routes around `allowedTools` entirely — the guard that stops the agent being handed a shell — and it would be granted by someone pattern-matching a prefix in a hurry on deploy evening, which is precisely when it will be read. Recorded here, in the handoff, and in the policy artefact's own comment, because a defence that exists in three places is harder to lose than one |
 | 2026-11-20 | 🛠️ **tooling, re-checked, and one twenty-minute mystery removed in advance** | `aws sts get-caller-identity` → `NoCredentials` for the third consecutive day. `winget install --id Amazon.SAM-CLI` resolved 1.173.0, downloaded the MSI and verified its hash, then returned **1602 — “You cancelled the installation”**: the UAC prompt was never answered. And `customHttp.yml`'s CSP note has said **TWO** `connect-src` origins since M0 — it needs **three**, because the microphone PUTs its recording straight to a presigned S3 URL, a different origin from the API | SAM stops being a missing package and becomes a one-click step, which matters on a plan whose first eight days are serial. The CSP third origin would have surfaced as `mic.error` plus a console violation — unfindable without knowing where to look, at the worst hour. Recorded with them: **`docs.aws.amazon.com` serves plain text if you append `.md` to the URL**; the HTML is JS-rendered and returns only a title to a fetcher. The AgentCore analysis rests on that, and without it the lane would have returned guesses |
 
+## 2026-11-20 (late) — first credentials, and the first signed request
+
+- `aws login` (console credentials, temporary). **Caller is the account root** —
+  `arn:aws:iam::477013660512:root`. Used for read-only calls only; nothing is deployed as root.
+- `node scripts/bma-probe.mjs --yes`, region `ap-south-1`, endpoint
+  `https://bedrock-mantle.ap-south-1.api.aws`: **`GET /v1/models → HTTP 200`**, 41 models. Verdict
+  `REACHABLE`. The account is not blocked from BMA.
+- `aws bedrock list-foundation-models --by-provider anthropic` in `ap-south-1` lists Claude models
+  (Haiku 4.5 through Opus 5.5). The `bedrock-agentcore-control` CLI namespace is present.
+- Still missing: SAM CLI, and a non-root identity to deploy with.
+
 ## Decisions still open
 
 | # | Decision | Needed by |
